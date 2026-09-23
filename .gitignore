@@ -1,6 +1,15 @@
 # Regenerable data — the pipeline in CLAUDE.md rebuilds all of it.
 # Raw PDFs alone are 26 GB; nothing here belongs in a git repo.
-data/
+data/*
+
+# …except data/interim, which carries the extraction outputs. Rebuilding
+# facts_*.jsonl needs an A100 that the local machines do not have, so those
+# files are effectively irreplaceable and belong in the repo. The parsed
+# full text does NOT: fulltext*.jsonl is 2.0 GB over seven files, every one
+# of them past GitHub's 100 MB per-file hard limit, and it is re-fetchable
+# from arXiv. It ships through the data bundle release instead.
+!data/interim/
+data/interim/fulltext*.jsonl
 run/
 reports/*
 !reports/chat.html
