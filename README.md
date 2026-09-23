@@ -30,7 +30,7 @@ Requirements beyond that: git and Python 3.10+.
 
 ```bash
 gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
-bellwether fetch-data --release data-20260909      # site + search index, ~450 MB
+bellwether fetch-data --release data-20260923      # site + search index, ~450 MB
 ```
 
 **Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
@@ -43,7 +43,7 @@ the LAN).
 The script installs into `~/.bellwether` (an app directory — everything in it,
 data included, stays inspectable), puts the `bellwether` command on PATH via its
 own venv, and fetches the search-engine binary and keys; the clone and the
-data bundle both go through gh's credentials. (`WNAI_RELEASE=data-20260909`
+data bundle both go through gh's credentials. (`WNAI_RELEASE=data-20260923`
 before the installer folds the fetch in; `WNAI_BUNDLE=<file>` unpacks a bundle
 you already have.) Then:
 
