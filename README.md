@@ -35,7 +35,10 @@ bellwether fetch-data --release data-20260909      # site + search index, ~450 M
 
 **Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
 open the Ubuntu terminal, and run the same lines. Everything below happens
-inside WSL; the browser on Windows reaches it at the printed address.
+inside WSL; the browser on Windows reaches it at the printed address (under
+WSL the server binds to the VM's interfaces rather than its loopback, since
+Windows' localhost relay cannot reach the latter; the VM's NAT keeps it off
+the LAN).
 
 The script installs into `~/.bellwether` (an app directory — everything in it,
 data included, stays inspectable), puts the `bellwether` command on PATH via its

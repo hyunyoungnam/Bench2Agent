@@ -59,6 +59,13 @@ def _port_open(port: int, host: str = "127.0.0.1") -> bool:
         return s.connect_ex((host, port)) == 0
 
 
+def _in_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text().lower()
+    except OSError:
+        return False
+
+
 def _meili_asset() -> str:
     sysname = platform.system()
     arch = platform.machine().lower()
@@ -354,8 +361,15 @@ def cmd_serve(args: argparse.Namespace) -> int:
     import signal
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
-    srv = server.make_server(port=args.port)
+    # Loopback only — except under WSL2, whose localhost relay from Windows
+    # does not reach a listener bound to the VM's own 127.0.0.1. There the
+    # bind is the VM's every interface, which its NAT keeps off the LAN, so
+    # the Windows browser gets in and nobody else does.
+    wsl = _in_wsl()
+    srv = server.make_server("0.0.0.0" if wsl else "127.0.0.1", args.port)
     print(f"\n  local:    http://127.0.0.1:{args.port}")
+    if wsl:
+        print("  (WSL: open that address in the Windows browser)")
     print("\nCtrl+C stops everything")
     try:
         srv.serve_forever()
