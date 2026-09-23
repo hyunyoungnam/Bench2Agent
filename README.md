@@ -21,44 +21,34 @@ NeurIPS 2024/2025, ICLR 2025/2026 — 29,605 papers in one cross-venue index.
 
 Runs entirely on your own machine — each reader installs their own copy and
 serves it on loopback, so the corpus, the search engine and the agent all stay
-local. Requirements: git and Python 3.10+.
+local. The repo is private: you need to be a collaborator (repo *Settings →
+Collaborators*, read access is enough) and to have the
+[gh CLI](https://cli.github.com) signed in once with `gh auth login`.
+Requirements beyond that: git and Python 3.10+.
 
-**Linux / macOS** — one line:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
-```
-
-**Private repo** — while this repo is private the line above is a 404 for
-everyone. A collaborator (repo *Settings → Collaborators*) installs the
-[gh CLI](https://cli.github.com), signs in once with `gh auth login`, then:
+**Linux / macOS** — two lines:
 
 ```bash
 gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
-bellwether fetch-data --release data-20260909
+bellwether fetch-data --release data-20260909      # site + search index, ~450 MB
 ```
 
-The clone and the 450 MB bundle both go through gh's credentials. (Set
-`WNAI_RELEASE=data-20260909` before the installer to fold the fetch in.)
-
 **Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
-open the Ubuntu terminal, and run the same line. Everything below happens
+open the Ubuntu terminal, and run the same lines. Everything below happens
 inside WSL; the browser on Windows reaches it at the printed address.
 
 The script installs into `~/.bellwether` (an app directory — everything in it,
 data included, stays inspectable), puts the `bellwether` command on PATH via its
-own venv, and fetches the search-engine binary and keys. Then:
+own venv, and fetches the search-engine binary and keys; the clone and the
+data bundle both go through gh's credentials. (`WNAI_RELEASE=data-20260909`
+before the installer folds the fetch in; `WNAI_BUNDLE=<file>` unpacks a bundle
+you already have.) Then:
 
 ```bash
-# the data bundle: site + search index for six editions, ~450 MB
-bellwether fetch-data --url https://github.com/hyunyoungnam/bellwether/releases/download/data-20260909/bellwether-data-20260909.tar.gz
 bellwether serve
 ```
 
-(Set `WNAI_BUNDLE=<file-or-url>` before running the installer to fold the
-`fetch-data` step in.)
-
-`bellwether serve` starts everything on one port and prints its address:
+which starts everything on one port and prints its address:
 
 ```
   local:    http://127.0.0.1:8001
@@ -67,12 +57,17 @@ bellwether serve
 The server binds to loopback only. It is not reachable from other machines,
 by design: a question asked on this page spawns a coding agent signed in on
 *this* machine, so an address anyone on the network could open would be that
-account handed out without a login.
+account handed out without a login. Each reader runs their own copy instead.
 
-Ctrl+C stops everything. `bellwether status` shows what is running and what data
-exists. Answers are English; Korean rendering is off by default and
-`WNAI_KO=1 bellwether serve` turns it on. The data bundle is produced by `bellwether bundle` on a build machine and
-published as a GitHub release.
+Ctrl+C stops everything. `bellwether status` shows what is running and what
+data exists. Answers are written in English; Korean rendering is off by
+default and `WNAI_KO=1 bellwether serve` turns it on.
+
+The data bundle is produced by `bellwether bundle` on a build machine and
+published as a GitHub release; a new release reaches an install with one
+`fetch-data --release <tag>`. (If the repo is ever made public, the one-line
+`curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash`
+and `fetch-data --url <release asset>` work without gh.)
 
 ### Connect a coding agent (no API key)
 
