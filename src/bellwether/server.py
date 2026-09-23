@@ -59,6 +59,10 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/chat.html"
         elif self.path.split("#")[0].split("?")[0] == "/browse":
             self.path = "/index.html"
+        elif self.path == "/features":
+            from . import translate
+            self._json(200, {"ko": translate.enabled()})
+            return
         elif self.path == "/agents":
             from . import chat
             try:

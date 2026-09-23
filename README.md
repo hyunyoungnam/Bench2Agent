@@ -58,7 +58,8 @@ by design: a question asked on this page spawns a coding agent signed in on
 account handed out without a login.
 
 Ctrl+C stops everything. `bellwether status` shows what is running and what data
-exists. The data bundle is produced by `bellwether bundle` on a build machine and
+exists. Answers are English; Korean rendering is off by default and
+`WNAI_KO=1 bellwether serve` turns it on. The data bundle is produced by `bellwether bundle` on a build machine and
 published as a GitHub release.
 
 ### Connect a coding agent (no API key)

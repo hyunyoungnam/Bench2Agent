@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bellwether</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='10' width='13' height='13' rx='4' fill='%23e88fa4'/%3E%3Crect x='9.5' y='10' width='13' height='13' rx='4' fill='%23e6b83f'/%3E%3Crect x='18' y='10' width='13' height='13' rx='4' fill='%236aa5e0'/%3E%3C/svg%3E">
@@ -216,6 +216,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .astat.off i{color:var(--mut)}
 
 /* ---- language toggle, top right ---- */
+.lang[hidden]{display:none}
 .lang{position:fixed;top:10px;right:12px;z-index:5;display:flex;background:var(--card);
   border:1px solid var(--ring);border-radius:8px;overflow:hidden}
 .lang button{font:inherit;font-size:12px;font-weight:650;letter-spacing:.03em;border:0;
@@ -268,7 +269,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
   <aside class="side" id="side"></aside>
 </div>
 <button class="menubtn" id="menubtn">☰</button>
-<div class="lang"><button data-l="ko">KO</button><button data-l="en">EN</button></div>
+<div class="lang" hidden><button data-l="ko">KO</button><button data-l="en">EN</button></div>
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -317,7 +318,16 @@ const STR={
      vTipF:(p,c)=>`${p} of ${c} figures matched the tool run again`,
      vTip:(p,c)=>`${p} of ${c} quotes found verbatim in the papers`,
      pubGrp:'Published'}};
-let LANG=localStorage.getItem('wn_lang')||'ko';
+// Korean is a server-side feature (WNAI_KO=1); until /features says it is
+// on, the page is English and the toggle stays hidden.
+let KO_ON=false;
+let LANG=localStorage.getItem('wn_lang')||'en';
+async function loadFeatures(){
+  try{ KO_ON=!!(await (await fetch('/features')).json()).ko; }catch(e){ KO_ON=false; }
+  $('.lang').hidden=!KO_ON;
+  if(!KO_ON&&LANG==='ko'){ LANG='en'; localStorage.setItem('wn_lang','en'); applyLang(); loadHist(); }
+  if($('.set'))showSettings();
+}
 const t=k=>STR[LANG][k];
 function applyLang(){
   document.documentElement.lang=LANG;
@@ -376,11 +386,11 @@ function showSettings(){
         <div class="seg" role="radiogroup">${['light','dark','system'].map(x=>
           `<button data-th="${x}" role="radio" aria-checked="${THEME===x}"
             class="${THEME===x?'on':''}">${t('s'+x[0].toUpperCase()+x.slice(1))}</button>`).join('')}</div></div>
-      <div class="srow"><div class="sl"><b>${t('sLang')}</b></div>
+      ${KO_ON?`<div class="srow"><div class="sl"><b>${t('sLang')}</b></div>
         <div class="seg" role="radiogroup"><button data-lg="ko" role="radio"
             aria-checked="${LANG==='ko'}" class="${LANG==='ko'?'on':''}">한국어</button>
           <button data-lg="en" role="radio" aria-checked="${LANG==='en'}"
-            class="${LANG==='en'?'on':''}">English</button></div></div>
+            class="${LANG==='en'?'on':''}">English</button></div></div>`:''}
     </div>
     <div class="sgrp">
       <div class="srow"><div class="sl"><b>${t('sCorpus')}</b><span>ICML 2025/26 · NeurIPS 2024/25 · ICLR 2025/26</span></div>
@@ -401,6 +411,7 @@ function showSettings(){
 // live stream — and applyLang has already relabelled everything standing.
 function setLang(l){
   if(l===LANG||!STR[l])return;
+  if(l==='ko'&&!KO_ON)return;
   LANG=l; localStorage.setItem('wn_lang',l);
   applyLang(); loadHist();
   if(BUSY)return;
@@ -881,5 +892,5 @@ function routeHash(boot){
   if(boot||CHAT)showEmpty();
 }
 window.addEventListener('hashchange',()=>{ if(!BUSY)routeHash(false); });
-applyTheme(); applyLang(); routeHash(true); loadHist();
+applyTheme(); applyLang(); loadFeatures(); routeHash(true); loadHist();
 </script></body></html>

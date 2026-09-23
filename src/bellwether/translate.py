@@ -37,6 +37,11 @@ from . import figures
 
 ROOT = Path(__file__).resolve().parents[2]
 TERMS = ROOT / "config" / "ko_terms.json"
+# Off unless asked for. The rendering is a second agent call per turn and the
+# reader sees "rendering Korean…" while it runs; while the English answer is
+# what is being tested, that wait and the mixed-language fallbacks are noise.
+# WNAI_KO=1 turns it on; nothing below is removed.
+ENABLED = os.environ.get("WNAI_KO", "0") == "1"
 MODEL = os.environ.get("WNAI_MT_AGENT_MODEL", "claude-haiku-4-5-20251001")
 TIMEOUT = float(os.environ.get("WNAI_MT_TIMEOUT", "240"))
 
@@ -73,6 +78,10 @@ def system_prompt() -> str:
         "unit it belongs to. Keep markdown as it is. "
         f"Use exactly these renderings: {gloss}. {rules}")
     return _SYSTEM
+
+
+def enabled() -> bool:
+    return ENABLED
 
 
 def up() -> bool:

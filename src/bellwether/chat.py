@@ -337,6 +337,8 @@ def translate_chat(cid: str, lang: str = "ko") -> dict:
     from . import translate
     if lang != "ko":
         return {"error": f"no renderer for {lang}"}
+    if not translate.enabled():
+        return {"error": "korean rendering is off (WNAI_KO=1 turns it on)"}
     if not translate.up():
         return {"error": "no translation engine", "engine": translate.ENDPOINT}
     p2 = _doc_path(cid)
