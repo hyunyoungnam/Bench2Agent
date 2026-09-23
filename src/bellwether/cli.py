@@ -392,6 +392,17 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_datasets(args: argparse.Namespace) -> int:
+    """Two CSVs: benchmarks each paper evaluated on (public ones), and
+    datasets/benchmarks papers released themselves. See bellwether.datasets."""
+    from . import datasets
+    out = Path(args.out).expanduser()
+    sm = datasets.write(out)
+    print(datasets.summary_text(sm))
+    print(f"-> {out / 'benchmarks_used.csv'}\n-> {out / 'datasets_released.csv'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="bellwether", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -413,6 +424,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a GitHub release tag, fetched through the signed-in gh CLI "
                         "(the way in while the repo is private)")
     f.set_defaults(fn=cmd_fetch)
+    d = sub.add_parser("datasets", help="CSVs: benchmarks used, datasets released (GitHub/Hub)")
+    d.add_argument("--out", default=".", help="directory for the two CSV files (default: cwd)")
+    d.set_defaults(fn=cmd_datasets)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
     m.set_defaults(fn=cmd_mcp)
     args = ap.parse_args(argv)

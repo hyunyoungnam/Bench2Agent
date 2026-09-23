@@ -59,6 +59,22 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/chat.html"
         elif self.path.split("#")[0].split("?")[0] == "/browse":
             self.path = "/index.html"
+        elif self.path.startswith("/datasets/"):
+            from . import datasets
+            name = self.path[len("/datasets/"):].partition("?")[0]
+            try:
+                used, rel, _ = datasets.build()
+                if name == "benchmarks_used.csv":
+                    out = datasets.to_csv(datasets.USED_COLS, used)
+                elif name == "datasets_released.csv":
+                    out = datasets.to_csv(datasets.RELEASED_COLS, rel)
+                else:
+                    self._json(404, {"error": "benchmarks_used.csv or datasets_released.csv"})
+                    return
+                self._file(out.encode(), "text/csv; charset=utf-8", name)
+            except Exception as exc:  # noqa: BLE001
+                self._json(500, {"error": f"{type(exc).__name__}: {exc}"[:200]})
+            return
         elif self.path == "/features":
             from . import translate
             self._json(200, {"ko": translate.enabled()})

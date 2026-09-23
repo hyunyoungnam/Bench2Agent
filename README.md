@@ -63,7 +63,11 @@ by design: a question asked on this page spawns a coding agent signed in on
 account handed out without a login. Each reader runs their own copy instead.
 
 Ctrl+C stops everything. `bellwether status` shows what is running and what
-data exists. Answers are written in English; Korean rendering is off by
+data exists. `bellwether datasets --out DIR` writes two CSVs — the public
+benchmarks each paper evaluated on, and the datasets/benchmarks papers released
+themselves (GitHub/Hub links, with the paper's own sentence as evidence); the
+running server serves the same two at `/datasets/benchmarks_used.csv` and
+`/datasets/datasets_released.csv`. Answers are written in English; Korean rendering is off by
 default and `WNAI_KO=1 bellwether serve` turns it on.
 
 The data bundle is produced by `bellwether bundle` on a build machine and
