@@ -29,6 +29,7 @@ BIN_DIR = ROOT / "bin"
 MEILI_DIR = ROOT / "data" / "meili"
 MEILI_VERSION = "v1.53.1"          # the version the index was built with
 MEILI_ADDR = os.environ.get("WNAI_MEILI_ADDR", "127.0.0.1:7700")
+GH_REPO = os.environ.get("WNAI_GH_REPO", "hyunyoungnam/bellwether")   # for --release
 
 # what a fresh install needs to SERVE (the pipeline that builds these never
 # runs on the user's machine): the site, the search index, and the processed
@@ -258,6 +259,30 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     import tarfile
     if args.file:
         src = Path(args.file)
+    elif getattr(args, "release", None):
+        # a private repo's release asset needs credentials, and the signed
+        # redirect it answers with rejects a forwarded Authorization header —
+        # gh already handles both, so the download is delegated to it
+        import shutil
+        if not shutil.which("gh"):
+            print("--release needs the gh CLI signed in (gh auth login); "
+                  "for a public release use --url", file=sys.stderr)
+            return 1
+        dest = ROOT / "dist"
+        dest.mkdir(exist_ok=True)
+        print(f"downloading release {args.release} of {GH_REPO} via gh ...")
+        r = subprocess.run(["gh", "release", "download", args.release, "-R", GH_REPO,
+                            "-p", "*.tar.gz", "-D", str(dest), "--skip-existing"])
+        if r.returncode != 0:
+            print("gh could not fetch it — is this account a collaborator, and "
+                  "does the tag exist? (gh release list -R " + GH_REPO + ")",
+                  file=sys.stderr)
+            return 1
+        hits = sorted(dest.glob("*.tar.gz"), key=lambda p: p.stat().st_mtime)
+        if not hits:
+            print("release carries no .tar.gz asset", file=sys.stderr)
+            return 1
+        src = hits[-1]
     elif args.url:
         dest = ROOT / "dist"
         dest.mkdir(exist_ok=True)
@@ -271,7 +296,8 @@ def cmd_fetch(args: argparse.Namespace) -> int:
                   file=sys.stderr)
             return 1
     else:
-        print("pass --file <bundle.tar.gz> or --url <https://...>", file=sys.stderr)
+        print("pass --file <bundle.tar.gz>, --url <https://...>, or --release <tag>",
+              file=sys.stderr)
         return 1
     print(f"unpacking {src.name} into {ROOT} ...")
     with tarfile.open(src) as tf:
@@ -369,6 +395,9 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("fetch-data", help="unpack a data bundle into this install")
     f.add_argument("--file", default=None)
     f.add_argument("--url", default=None)
+    f.add_argument("--release", default=None, metavar="TAG",
+                   help="a GitHub release tag, fetched through the signed-in gh CLI "
+                        "(the way in while the repo is private)")
     f.set_defaults(fn=cmd_fetch)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
     m.set_defaults(fn=cmd_mcp)

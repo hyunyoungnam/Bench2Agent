@@ -3,6 +3,15 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
 #
+# While the repo is PRIVATE that URL is a 404 for everyone; a collaborator
+# with the gh CLI signed in (gh auth login) runs instead:
+#
+#   gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
+#
+# and the clone below goes through gh's credentials. WNAI_RELEASE=<tag> then
+# fetches that release's bundle the same way (WNAI_BUNDLE is for a public
+# URL or a local file).
+#
 # What it does: clone the repo to ~/.bellwether, create a private venv (PEP 668
 # machines refuse bare pip), install the `bellwether` command onto PATH, fetch the
 # search-engine binary and keys. If WNAI_BUNDLE (a file path or URL) is set,
@@ -26,6 +35,12 @@ command -v python3 >/dev/null || { echo "python3 is required (3.10+)"; exit 1; }
 python3 - <<'EOF' || { echo "python 3.10+ is required"; exit 1; }
 import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)
 EOF
+
+# a private repo: git alone has no credentials, gh does. setup-git is
+# idempotent and only registers gh as a credential helper for github.com.
+if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+    gh auth setup-git >/dev/null 2>&1 || true
+fi
 
 if [ -d "$DIR/.git" ]; then
     say "updating existing install in $DIR"
@@ -57,7 +72,11 @@ esac
 say "fetching the search engine + keys"
 "$BIN/bellwether" setup
 
-if [ -n "${WNAI_BUNDLE:-}" ]; then
+if [ -n "${WNAI_RELEASE:-}" ]; then
+    say "fetching the data bundle (release $WNAI_RELEASE, via gh)"
+    "$BIN/bellwether" fetch-data --release "$WNAI_RELEASE"
+    say "done — run: bellwether serve"
+elif [ -n "${WNAI_BUNDLE:-}" ]; then
     say "fetching the data bundle"
     case "$WNAI_BUNDLE" in
         http*) "$BIN/bellwether" fetch-data --url "$WNAI_BUNDLE";;

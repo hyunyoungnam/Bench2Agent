@@ -29,6 +29,18 @@ local. Requirements: git and Python 3.10+.
 curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
 ```
 
+**Private repo** — while this repo is private the line above is a 404 for
+everyone. A collaborator (repo *Settings → Collaborators*) installs the
+[gh CLI](https://cli.github.com), signs in once with `gh auth login`, then:
+
+```bash
+gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
+bellwether fetch-data --release data-20260909
+```
+
+The clone and the 450 MB bundle both go through gh's credentials. (Set
+`WNAI_RELEASE=data-20260909` before the installer to fold the fetch in.)
+
 **Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
 open the Ubuntu terminal, and run the same line. Everything below happens
 inside WSL; the browser on Windows reaches it at the printed address.
