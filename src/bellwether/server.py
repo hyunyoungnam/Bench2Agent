@@ -61,17 +61,31 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = "/index.html"
         elif self.path.startswith("/datasets/"):
             from . import datasets
-            name = self.path[len("/datasets/"):].partition("?")[0]
+            from urllib.parse import parse_qs, urlsplit
+            parsed = urlsplit(self.path)
+            name = parsed.path[len("/datasets/"):]
             try:
-                used, rel, _ = datasets.build()
-                if name == "benchmarks_used.csv":
+                params = parse_qs(parsed.query)
+                gid = None
+                if "gid" in params:
+                    gid = int(params["gid"][0])
+                used, rel, intro, summary = datasets.build(gid=gid)
+                if name == "summary.json":
+                    self._json(200, summary)
+                    return
+                elif name == "benchmarks_used.csv":
                     out = datasets.to_csv(datasets.USED_COLS, used)
                 elif name == "datasets_released.csv":
                     out = datasets.to_csv(datasets.RELEASED_COLS, rel)
+                elif name == "benchmarks_introduced.csv":
+                    out = datasets.to_csv(datasets.INTRODUCED_COLS, intro)
                 else:
-                    self._json(404, {"error": "benchmarks_used.csv or datasets_released.csv"})
+                    self._json(404, {"error": "unknown dataset CSV"})
                     return
-                self._file(out.encode(), "text/csv; charset=utf-8", name)
+                self._file(out.encode(), "text/csv; charset=utf-8",
+                           f"{gid}-{name}" if gid is not None else name)
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)[:200]})
             except Exception as exc:  # noqa: BLE001
                 self._json(500, {"error": f"{type(exc).__name__}: {exc}"[:200]})
             return

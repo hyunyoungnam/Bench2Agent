@@ -214,6 +214,11 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .astat{font-size:13px;color:var(--mut);text-align:right}
 .astat i{font-style:normal;color:var(--ok);font-weight:700;margin-right:5px}
 .astat.off i{color:var(--mut)}
+.dlinks{display:flex;flex-wrap:wrap;gap:8px;padding:12px 0}
+.dlinks a{font-size:13px;color:var(--acc);text-decoration:none;
+  border:1px solid var(--ring);border-radius:8px;padding:6px 10px;background:var(--card)}
+.dlinks a:hover{border-color:var(--acc)}
+.dcov{font-size:12px;color:var(--mut);padding:0 0 12px}
 
 /* ---- language toggle, top right ---- */
 .lang[hidden]{display:none}
@@ -286,6 +291,9 @@ const STR={
      sTheme:'테마', sLight:'라이트', sDark:'다크', sSystem:'시스템',
      sLang:'언어', sProgram:'프로그램', sIn:'연결됨', sOut:'미설치',
      sDefault:'기본', sBeta:'베타', sCorpus:'코퍼스', sAddr:'주소',
+     sData:'데이터셋 CSV', sDataD:'논문·벤치마크·공개 위치와 근거를 담은 목록',
+     sUsed:'논문에 명시된 벤치마크', sReleased:'공개 데이터', sIntroduced:'새 벤치마크 후보',
+     sCounts:s=>`전체 ${s.papers.toLocaleString()}편 중 원문 확보 ${s.fulltext_papers.toLocaleString()}편 · 벤치마크 ${s.used_rows.toLocaleString()}행 · 공개 링크 ${s.rel_rows.toLocaleString()}행 · 새 벤치마크 후보 ${s.introduced_rows.toLocaleString()}행`,
      delQ:'이 대화를 삭제할까요?', renQ:'대화 이름', pubHd:'예시 대화',
      ph:'자율주행 연구는 지금 어떤 한계와 싸우고 있나요?', ph2:'이어서 질문하기',
      stop:'생성 중단', stopped:'중단했습니다', retry:'다시 시도',
@@ -306,6 +314,9 @@ const STR={
      sTheme:'Theme', sLight:'Light', sDark:'Dark', sSystem:'System',
      sLang:'Language', sProgram:'Program', sIn:'connected', sOut:'not installed',
      sDefault:'default', sBeta:'beta', sCorpus:'Corpus', sAddr:'Address',
+     sData:'Dataset CSVs', sDataD:'Paper, benchmark, source URL, and evidence inventories',
+     sUsed:'Benchmarks named', sReleased:'Released datasets', sIntroduced:'New benchmark candidates',
+     sCounts:s=>`${s.fulltext_papers.toLocaleString()} of ${s.papers.toLocaleString()} papers have full text · ${s.used_rows.toLocaleString()} benchmark rows · ${s.rel_rows.toLocaleString()} release links · ${s.introduced_rows.toLocaleString()} new benchmark candidates`,
      delQ:'Delete this conversation?', renQ:'Conversation name', pubHd:'Examples',
      ph:'What limitations is autonomous-driving research fighting right now?',
      ph2:'Ask a follow-up', stop:'Stop generating', stopped:'Stopped',
@@ -361,6 +372,14 @@ async function loadAgents(){
 }
 
 // ---- settings view (replaces the thread; New question leaves it)
+let DSUM=null;
+async function showDatasetSummary(){
+  if(!DSUM){
+    try{ DSUM=await (await fetch('/datasets/summary.json')).json(); }catch(e){ return; }
+  }
+  const el=$('#dcov');
+  if(el&&DSUM&&Number.isInteger(DSUM.papers))el.textContent=t('sCounts')(DSUM);
+}
 function showSettings(){
   if(AGENTS===null){ loadAgents(); }
   const A=AGENTS||{};
@@ -398,7 +417,14 @@ function showSettings(){
       <div class="srow"><div class="sl"><b>${t('sAddr')}</b></div>
         <span class="astat">${esc(location.origin)}</span></div>
     </div>
+    <div class="sgrp"><div class="srow"><div class="sl"><b>${t('sData')}</b><span>${t('sDataD')}</span></div></div>
+      <div class="dlinks">
+        <a href="/datasets/benchmarks_used.csv" download>${t('sUsed')} CSV ↓</a>
+        <a href="/datasets/datasets_released.csv" download>${t('sReleased')} CSV ↓</a>
+        <a href="/datasets/benchmarks_introduced.csv" download>${t('sIntroduced')} CSV ↓</a>
+      </div><div class="dcov" id="dcov"></div></div>
   </div></div>`;
+  showDatasetSummary();
   markHist();
   $('#main').querySelectorAll('[data-ag]').forEach(b=>b.onclick=()=>{
     AGENT=b.dataset.ag; localStorage.setItem('wn_agent',AGENT); showSettings(); });
@@ -487,6 +513,11 @@ function renderSide(){
       ${(d.novelty&&d.novelty.length>1)?frow('novelty_spans','<ul>'+d.novelty.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>'):''}
       ${(d.topics&&d.topics.length)?frow('topics',d.topics.map(t=>`<span class="tchip">${esc(t)}</span>`).join('')):''}
       ${d.abstract?`<details><summary>abstract</summary><p>${esc(d.abstract)}</p></details>`:''}
+      <div class="dlinks">
+        <a href="/datasets/benchmarks_used.csv?gid=${encodeURIComponent(d.gid)}" download>${t('sUsed')} CSV ↓</a>
+        <a href="/datasets/datasets_released.csv?gid=${encodeURIComponent(d.gid)}" download>${t('sReleased')} CSV ↓</a>
+        <a href="/datasets/benchmarks_introduced.csv?gid=${encodeURIComponent(d.gid)}" download>${t('sIntroduced')} CSV ↓</a>
+      </div>
     </div>`;
   el.querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{PACTIVE=+b.dataset.pt;renderSide();});
 }

@@ -393,13 +393,14 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_datasets(args: argparse.Namespace) -> int:
-    """Two CSVs: benchmarks each paper evaluated on (public ones), and
-    datasets/benchmarks papers released themselves. See bellwether.datasets."""
+    """CSV inventories of benchmarks used and paper-owned data releases."""
     from . import datasets
     out = Path(args.out).expanduser()
-    sm = datasets.write(out)
+    sm = datasets.write(out, gid=args.gid)
     print(datasets.summary_text(sm))
-    print(f"-> {out / 'benchmarks_used.csv'}\n-> {out / 'datasets_released.csv'}")
+    for name in ("benchmarks_used.csv", "datasets_released.csv",
+                 "benchmarks_introduced.csv"):
+        print(f"-> {out / name}")
     return 0
 
 
@@ -424,8 +425,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a GitHub release tag, fetched through the signed-in gh CLI "
                         "(the way in while the repo is private)")
     f.set_defaults(fn=cmd_fetch)
-    d = sub.add_parser("datasets", help="CSVs: benchmarks used, datasets released (GitHub/Hub)")
-    d.add_argument("--out", default=".", help="directory for the two CSV files (default: cwd)")
+    d = sub.add_parser("datasets", help="CSV inventories: benchmarks used and data released")
+    d.add_argument("--out", default=".", help="directory for the CSV files (default: cwd)")
+    d.add_argument("--gid", type=int, help="export one paper by gid")
     d.set_defaults(fn=cmd_datasets)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
     m.set_defaults(fn=cmd_mcp)
