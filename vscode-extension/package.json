@@ -1,0 +1,56 @@
+{
+  "name": "bellwether",
+  "displayName": "Bellwether",
+  "description": "Explore conference papers and their source-backed dataset links from VS Code.",
+  "version": "0.1.0",
+  "publisher": "bellwether-local",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "extensionKind": ["workspace"],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:bellwether.openChat",
+    "onCommand:bellwether.openBrowse",
+    "onCommand:bellwether.openBrowser",
+    "onCommand:bellwether.stop"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "bellwether.openChat", "title": "Bellwether: Open Chat" },
+      { "command": "bellwether.openBrowse", "title": "Bellwether: Explore Papers" },
+      { "command": "bellwether.openBrowser", "title": "Bellwether: Open in Browser" },
+      { "command": "bellwether.stop", "title": "Bellwether: Stop Local Server" }
+    ],
+    "configuration": {
+      "title": "Bellwether",
+      "properties": {
+        "bellwether.installPath": {
+          "type": "string",
+          "default": "",
+          "description": "Bellwether checkout or install directory. Leave empty to use the current workspace when ready, then ~/.bellwether."
+        },
+        "bellwether.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python 3.10+ executable. Leave empty to use the install's serving venv, then python3 (python on Windows)."
+        },
+        "bellwether.extraPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional executable directory for the Codex or Claude CLI when VS Code's extension host cannot find it."
+        },
+        "bellwether.useMeilisearch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the installed Meilisearch engine when available."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

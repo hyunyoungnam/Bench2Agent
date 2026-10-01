@@ -74,6 +74,16 @@ source links and evidence, not the external datasets' records. Answers are
 written in English; Korean rendering is off by
 default and `WNAI_KO=1 bellwether serve` turns it on.
 
+### VS Code prototype
+
+The [VS Code extension](vscode-extension/README.md) starts this same local
+service automatically and opens chat or paper exploration in an editor tab.
+Open the repository in VS Code, run **Run Bellwether Extension** with F5, then
+use **Bellwether: Open Chat** from the Command Palette in the new window.
+The processed data bundle is still required. The current CSV links are source
+inventories; exporting actual evaluation records is tracked in
+[the implementation plan](docs/evaluation-data-downloads.md).
+
 The data bundle is produced by `bellwether bundle` on a build machine and
 published as a GitHub release; a new release reaches an install with one
 `fetch-data --release <tag>`. (If the repo is ever made public, the one-line
