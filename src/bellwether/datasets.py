@@ -1,5 +1,5 @@
 """Three CSVs a reader opens in a spreadsheet: which public benchmarks each
-paper evaluated on, and which papers released a dataset or benchmark of
+paper's abstract names, and which papers released a dataset or benchmark of
 their own. Read-only over the processed corpus, and nothing here ranks —
 rows come out in corpus order (guardrail 1).
 
@@ -12,7 +12,11 @@ Two different facts from two different sources, and the boundary matters:
 
 * benchmarks_used — names the ABSTRACT states (card_terms `d`) joined to OUR
   registry (config/benchmarks.json). Only a name with a confirmed home
-  becomes a row; a name without one is counted in the summary.
+  becomes a row; a name without one is counted in the summary. A row says the
+  abstract NAMES the benchmark — not that the paper evaluated on it, trained
+  on it, or introduced it; the `relation` column carries exactly that, so the
+  file still says what it means once it leaves the page. The dedicated
+  full-text pass will add evaluates_on / trains_on / introduces.
 * datasets_released — the paper's OWN links on supported hosts. Third-party
   repositories never reach resources.json's link lists (they are `mentions`),
   so every candidate is already the paper's; a row needs one of two further
@@ -35,7 +39,7 @@ from pathlib import Path
 from .mcp import Store, dataset_fold
 
 USED_COLS = ["gid", "venue", "year", "title", "area", "benchmark", "as_written",
-             "registry_kind", "host", "where", "hf", "gh", "paper_code"]
+             "registry_kind", "host", "where", "hf", "gh", "paper_code", "relation"]
 RELEASED_COLS = ["gid", "venue", "year", "title", "area", "url", "host", "repo",
                  "link_kind", "signal", "section", "evidence", "later", "stars",
                  "downloads", "likes", "license", "pushed", "modified", "checked",
@@ -124,7 +128,7 @@ def build(S: Store | None = None, gid: int | None = None) -> tuple[list[list], l
         b = S.brief(gid)
         res = papers.get(str(gid)) or {}
         code = _code_url(res)
-        # ---- 1. existing benchmarks the abstract says it evaluated on
+        # ---- 1. existing benchmarks the abstract names
         bl = S.benchmarks_of(gid)
         if bl:
             sm["used_papers_naming"] += 1
@@ -132,7 +136,8 @@ def build(S: Store | None = None, gid: int | None = None) -> tuple[list[list], l
             if e.get("where") and e.get("host"):
                 used.append([gid, b["venue"], b["year"], b.get("title", ""), b.get("area") or "",
                              e["name"], e["as_written"], e.get("kind") or "", e["host"],
-                             e["where"], e.get("hf") or "", e.get("gh") or "", code])
+                             e["where"], e.get("hf") or "", e.get("gh") or "", code,
+                             "named_in_abstract"])
                 sm["used_rows"] += 1
                 if e["host"] == "web":
                     sm["used_web_only"] += 1
@@ -186,7 +191,8 @@ def summary_text(sm: dict) -> str:
     """Coverage, stated — the CSVs list what has an address, this says what does not."""
     return (
         f"benchmarks_used.csv: {sm['used_rows']} rows — a (paper, benchmark) pair where the "
-        f"benchmark has a registry home on the Hub, GitHub, or a website.\n"
+        f"abstract names the benchmark and it has a registry home on the Hub, GitHub, or a "
+        f"website. Named, not verified as evaluated on.\n"
         f"  {sm['used_papers_naming']} of {sm['papers']} papers name a benchmark in the abstract; "
         f"{sm['used_unmapped']} mentions are names with no confirmed location and "
         f"{sm['used_web_only']} rows live on a plain web page.\n"

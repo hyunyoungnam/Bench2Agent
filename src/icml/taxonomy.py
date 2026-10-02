@@ -223,12 +223,15 @@ def dataset_key(name: str) -> str:
     corpus/suite carry no identity. `+` DOES and is kept: HumanEval+ and MBPP+
     are extended sets, not respellings of HumanEval and MBPP.
     """
-    s = name.lower()
+    # Letters outside a-z are dropped below, so name-bearing symbols are spelled
+    # out first: otherwise "τ-bench" and "∞Bench" both fold to "bench".
+    s = name.lower().translate(_DS_SPELL)
     s = _re_ds_lead.sub("", s)
     s = _re_ds_tail.sub("", s)
     return _re_ds_keep.sub("", s)
 
 
+_DS_SPELL = str.maketrans({"τ": "tau", "∞": "inf", "²": "2", "³": "3"})
 _re_ds_lead = re.compile(r"^(the|a)\s+")
 _re_ds_tail = re.compile(r"\s+(benchmark|dataset|corpus|suite)s?$")
 _re_ds_keep = re.compile(r"[^a-z0-9+]")

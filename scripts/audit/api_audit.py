@@ -181,7 +181,8 @@ ARGS = {"verify_quote": {"gid": 19662, "quote": "the KV cache"},
 from icml.taxonomy import dataset_key as _dk_site   # noqa: E402
 _fold_ok = all(_dk_site(n) == mcp.dataset_fold(n) for n in
                ["GSM8K", "MATH-500", "the LIBERO benchmark", "AIME '24", "CIFAR 10",
-                "HumanEval+", "ImageNet 256x256", "MS-COCO dataset", "AlpacaEval 2.0"])
+                "HumanEval+", "ImageNet 256x256", "MS-COCO dataset", "AlpacaEval 2.0",
+                "τ-bench", "τ²-bench", "∞Bench"])
 check("mcp.dataset_fold mirrors taxonomy.dataset_key", _fold_ok)
 check("every declared tool is audited",
       {t["name"] for t in mcp.TOOLS} == set(ARGS),

@@ -54,13 +54,14 @@ def _papers_file(key: str) -> Path:
 # Mirror of icml.taxonomy.dataset_key — the serving layer ships without the
 # pipeline package. Keep the two in step; scripts/audit/api_audit.py checks
 # that they agree on a fixed sample.
+_DS_SPELL = str.maketrans({"τ": "tau", "∞": "inf", "²": "2", "³": "3"})
 _re_ds_lead = re.compile(r"^(the|a)\s+")
 _re_ds_tail = re.compile(r"\s+(benchmark|dataset|corpus|suite)s?$")
 _re_ds_keep = re.compile(r"[^a-z0-9+]")
 
 
 def dataset_fold(name: str) -> str:
-    s = (name or "").lower()
+    s = (name or "").lower().translate(_DS_SPELL)
     s = _re_ds_lead.sub("", s)
     s = _re_ds_tail.sub("", s)
     return _re_ds_keep.sub("", s)

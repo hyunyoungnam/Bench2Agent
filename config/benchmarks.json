@@ -1,5 +1,5 @@
 {
-  "_note": "OUR mapping from benchmark names as papers write them to where the artifact lives. Authored, like DOMAIN_FAMILIES: the names are data-derived (the extracted `datasets` field), the locations are ours and are marked as such in the interface. Every hf/gh id is checked against the Hub / GitHub API by `python3 -m icml.resources --registry`; an id that fails the check carries ok:false and shows no link. Matching is by taxonomy.dataset_key over name + aliases. not_a_dataset lists model names the extractor files under datasets; they never become benchmark chips with links.",
+  "_note": "OUR mapping from benchmark names as papers write them to where the artifact lives. Authored, like DOMAIN_FAMILIES: the names are data-derived (the extracted `datasets` field), the locations are ours and are marked as such in the interface. Every hf/gh id is checked against the Hub / GitHub API by `python3 -m icml.resources --registry`; an id that fails the check carries ok:false and shows no link. Matching is by taxonomy.dataset_key over name + aliases. not_a_dataset lists model names the extractor files under datasets; they never become benchmark chips with links. `id` is the benchmark's stable key (owner, 2026-10-02): a slug of its published name, assigned once and never reused. A benchmark is its published product name: aliases are spelling variants or forms the benchmark itself publishes; a differently named product (a subset, a version, a year) is its own entry, and a bare name is left unmapped so it is counted as written. Entries split out on 2026-10-02 carry no location yet.",
   "checked": "2026-09-17",
   "not_a_dataset": [
     "llama",
@@ -40,9 +40,9 @@
   ],
   "benchmarks": [
     {
+      "id": "imagenet-1k",
       "name": "ImageNet-1k",
       "aliases": [
-        "imagenet",
         "imagenet-1k",
         "imagenet1k",
         "ilsvrc-2012",
@@ -63,6 +63,7 @@
       }
     },
     {
+      "id": "tiny-imagenet",
       "name": "Tiny ImageNet",
       "aliases": [
         "tinyimagenet",
@@ -76,6 +77,7 @@
       }
     },
     {
+      "id": "imagenet-c",
       "name": "ImageNet-C",
       "aliases": [
         "imagenet-c"
@@ -87,6 +89,7 @@
       }
     },
     {
+      "id": "imagenet-r",
       "name": "ImageNet-R",
       "aliases": [
         "imagenet-r"
@@ -98,6 +101,7 @@
       }
     },
     {
+      "id": "cifar-10",
       "name": "CIFAR-10",
       "aliases": [
         "cifar-10",
@@ -112,6 +116,7 @@
       }
     },
     {
+      "id": "cifar-100",
       "name": "CIFAR-100",
       "aliases": [
         "cifar-100",
@@ -126,6 +131,7 @@
       }
     },
     {
+      "id": "mnist",
       "name": "MNIST",
       "aliases": [
         "mnist"
@@ -137,6 +143,7 @@
       }
     },
     {
+      "id": "fashion-mnist",
       "name": "Fashion-MNIST",
       "aliases": [
         "fashion-mnist",
@@ -152,6 +159,7 @@
       }
     },
     {
+      "id": "svhn",
       "name": "SVHN",
       "aliases": [
         "svhn"
@@ -163,6 +171,7 @@
       }
     },
     {
+      "id": "stl-10",
       "name": "STL-10",
       "aliases": [
         "stl-10",
@@ -176,6 +185,7 @@
       }
     },
     {
+      "id": "celeba",
       "name": "CelebA",
       "aliases": [
         "celeba"
@@ -188,6 +198,7 @@
       }
     },
     {
+      "id": "celeba-hq",
       "name": "CelebA-HQ",
       "aliases": [
         "celeba-hq",
@@ -200,6 +211,7 @@
       }
     },
     {
+      "id": "ffhq",
       "name": "FFHQ",
       "aliases": [
         "ffhq"
@@ -211,6 +223,7 @@
       }
     },
     {
+      "id": "coco",
       "name": "COCO",
       "aliases": [
         "coco",
@@ -231,6 +244,7 @@
       }
     },
     {
+      "id": "flickr30k",
       "name": "Flickr30k",
       "aliases": [
         "flickr30k",
@@ -243,18 +257,18 @@
       }
     },
     {
+      "id": "pascal-voc",
       "name": "Pascal VOC",
       "aliases": [
         "pascal voc",
-        "voc",
-        "pascal voc 2012",
-        "voc2012"
+        "voc"
       ],
       "kind": "dataset",
       "url": "http://host.robots.ox.ac.uk/pascal/VOC/",
       "ok": {}
     },
     {
+      "id": "ade20k",
       "name": "ADE20K",
       "aliases": [
         "ade20k"
@@ -267,6 +281,7 @@
       }
     },
     {
+      "id": "cityscapes",
       "name": "Cityscapes",
       "aliases": [
         "cityscapes"
@@ -276,6 +291,7 @@
       "ok": {}
     },
     {
+      "id": "lvis",
       "name": "LVIS",
       "aliases": [
         "lvis"
@@ -285,11 +301,10 @@
       "ok": {}
     },
     {
+      "id": "refcoco",
       "name": "RefCOCO",
       "aliases": [
-        "refcoco",
-        "refcoco+",
-        "refcocog"
+        "refcoco"
       ],
       "kind": "dataset",
       "hf": "lmms-lab-encoder/RefCOCO",
@@ -300,6 +315,7 @@
       }
     },
     {
+      "id": "domainnet",
       "name": "DomainNet",
       "aliases": [
         "domainnet"
@@ -309,6 +325,7 @@
       "ok": {}
     },
     {
+      "id": "ucf101",
       "name": "UCF101",
       "aliases": [
         "ucf101",
@@ -319,17 +336,18 @@
       "ok": {}
     },
     {
+      "id": "kinetics-400",
       "name": "Kinetics-400",
       "aliases": [
         "kinetics-400",
-        "kinetics400",
-        "kinetics"
+        "kinetics400"
       ],
       "kind": "dataset",
       "url": "https://github.com/cvdfoundation/kinetics-dataset",
       "ok": {}
     },
     {
+      "id": "ego4d",
       "name": "Ego4D",
       "aliases": [
         "ego4d"
@@ -342,6 +360,7 @@
       }
     },
     {
+      "id": "realestate10k",
       "name": "RealEstate10K",
       "aliases": [
         "realestate10k"
@@ -351,11 +370,11 @@
       "ok": {}
     },
     {
+      "id": "laion-400m",
       "name": "LAION-400M",
       "aliases": [
         "laion-400m",
-        "laion400m",
-        "laion"
+        "laion400m"
       ],
       "kind": "dataset",
       "hf": "laion/relaion400m",
@@ -365,6 +384,7 @@
       }
     },
     {
+      "id": "laion-5b",
       "name": "LAION-5B",
       "aliases": [
         "laion-5b",
@@ -375,6 +395,7 @@
       "ok": {}
     },
     {
+      "id": "cc3m",
       "name": "CC3M",
       "aliases": [
         "cc3m",
@@ -389,6 +410,7 @@
       }
     },
     {
+      "id": "cc12m",
       "name": "CC12M",
       "aliases": [
         "cc12m"
@@ -402,6 +424,7 @@
       }
     },
     {
+      "id": "geneval",
       "name": "GenEval",
       "aliases": [
         "geneval"
@@ -413,10 +436,10 @@
       }
     },
     {
+      "id": "t2i-compbench",
       "name": "T2I-CompBench",
       "aliases": [
-        "t2i-compbench",
-        "t2i-compbench++"
+        "t2i-compbench"
       ],
       "kind": "benchmark",
       "gh": "Karine-Huang/T2I-CompBench",
@@ -425,6 +448,7 @@
       }
     },
     {
+      "id": "dpg-bench",
       "name": "DPG-Bench",
       "aliases": [
         "dpg-bench",
@@ -437,6 +461,7 @@
       }
     },
     {
+      "id": "vbench",
       "name": "VBench",
       "aliases": [
         "vbench"
@@ -448,6 +473,7 @@
       }
     },
     {
+      "id": "mjhq-30k",
       "name": "MJHQ-30K",
       "aliases": [
         "mjhq-30k",
@@ -460,6 +486,7 @@
       }
     },
     {
+      "id": "nuscenes",
       "name": "nuScenes",
       "aliases": [
         "nuscenes"
@@ -472,6 +499,7 @@
       }
     },
     {
+      "id": "nuplan",
       "name": "nuPlan",
       "aliases": [
         "nuplan"
@@ -484,6 +512,7 @@
       }
     },
     {
+      "id": "kitti",
       "name": "KITTI",
       "aliases": [
         "kitti"
@@ -493,6 +522,7 @@
       "ok": {}
     },
     {
+      "id": "semantickitti",
       "name": "SemanticKITTI",
       "aliases": [
         "semantickitti",
@@ -503,9 +533,9 @@
       "ok": {}
     },
     {
+      "id": "waymo-open-dataset",
       "name": "Waymo Open Dataset",
       "aliases": [
-        "waymo",
         "waymo open dataset",
         "waymo open"
       ],
@@ -517,11 +547,11 @@
       }
     },
     {
+      "id": "argoverse-2",
       "name": "Argoverse 2",
       "aliases": [
         "argoverse 2",
-        "argoverse2",
-        "argoverse"
+        "argoverse2"
       ],
       "kind": "dataset",
       "gh": "argoverse/av2-api",
@@ -531,6 +561,7 @@
       }
     },
     {
+      "id": "bench2drive",
       "name": "Bench2Drive",
       "aliases": [
         "bench2drive"
@@ -542,6 +573,7 @@
       }
     },
     {
+      "id": "navsim",
       "name": "NAVSIM",
       "aliases": [
         "navsim"
@@ -553,6 +585,7 @@
       }
     },
     {
+      "id": "carla",
       "name": "CARLA",
       "aliases": [
         "carla"
@@ -564,6 +597,7 @@
       }
     },
     {
+      "id": "scannet",
       "name": "ScanNet",
       "aliases": [
         "scannet"
@@ -576,6 +610,7 @@
       }
     },
     {
+      "id": "scannet-plus-plus",
       "name": "ScanNet++",
       "aliases": [
         "scannet++",
@@ -586,6 +621,7 @@
       "ok": {}
     },
     {
+      "id": "scanobjectnn",
       "name": "ScanObjectNN",
       "aliases": [
         "scanobjectnn"
@@ -595,16 +631,17 @@
       "ok": {}
     },
     {
+      "id": "modelnet40",
       "name": "ModelNet40",
       "aliases": [
-        "modelnet40",
-        "modelnet"
+        "modelnet40"
       ],
       "kind": "dataset",
       "url": "https://modelnet.cs.princeton.edu",
       "ok": {}
     },
     {
+      "id": "shapenet",
       "name": "ShapeNet",
       "aliases": [
         "shapenet"
@@ -614,6 +651,7 @@
       "ok": {}
     },
     {
+      "id": "s3dis",
       "name": "S3DIS",
       "aliases": [
         "s3dis"
@@ -623,6 +661,7 @@
       "ok": {}
     },
     {
+      "id": "replica",
       "name": "Replica",
       "aliases": [
         "replica"
@@ -634,6 +673,7 @@
       }
     },
     {
+      "id": "dtu",
       "name": "DTU",
       "aliases": [
         "dtu"
@@ -643,10 +683,10 @@
       "ok": {}
     },
     {
+      "id": "objaverse",
       "name": "Objaverse",
       "aliases": [
-        "objaverse",
-        "objaverse-xl"
+        "objaverse"
       ],
       "kind": "dataset",
       "hf": "allenai/objaverse",
@@ -656,6 +696,7 @@
       }
     },
     {
+      "id": "gsm8k",
       "name": "GSM8K",
       "aliases": [
         "gsm8k",
@@ -668,6 +709,7 @@
       }
     },
     {
+      "id": "math",
       "name": "MATH",
       "aliases": [
         "math",
@@ -683,6 +725,7 @@
       }
     },
     {
+      "id": "math-500",
       "name": "MATH-500",
       "aliases": [
         "math500",
@@ -696,9 +739,9 @@
       }
     },
     {
+      "id": "aime-2024",
       "name": "AIME 2024",
       "aliases": [
-        "aime",
         "aime24",
         "aime 24",
         "aime2024",
@@ -712,6 +755,7 @@
       }
     },
     {
+      "id": "aime-2025",
       "name": "AIME 2025",
       "aliases": [
         "aime25",
@@ -727,9 +771,9 @@
       }
     },
     {
+      "id": "amc-2023",
       "name": "AMC 2023",
       "aliases": [
-        "amc",
         "amc23",
         "amc 23",
         "amc 2023",
@@ -742,10 +786,10 @@
       }
     },
     {
+      "id": "minerva-math",
       "name": "Minerva Math",
       "aliases": [
-        "minerva math",
-        "minerva"
+        "minerva math"
       ],
       "kind": "benchmark",
       "hf": "math-ai/minervamath",
@@ -754,6 +798,7 @@
       }
     },
     {
+      "id": "olympiadbench",
       "name": "OlympiadBench",
       "aliases": [
         "olympiadbench",
@@ -768,6 +813,7 @@
       }
     },
     {
+      "id": "omni-math",
       "name": "Omni-MATH",
       "aliases": [
         "omni-math",
@@ -780,9 +826,9 @@
       }
     },
     {
+      "id": "hmmt-2025",
       "name": "HMMT 2025",
       "aliases": [
-        "hmmt",
         "hmmt25",
         "hmmt 2025",
         "hmmt feb 2025"
@@ -794,6 +840,7 @@
       }
     },
     {
+      "id": "minif2f",
       "name": "miniF2F",
       "aliases": [
         "minif2f",
@@ -807,6 +854,7 @@
       }
     },
     {
+      "id": "proofnet",
       "name": "ProofNet",
       "aliases": [
         "proofnet"
@@ -818,6 +866,7 @@
       }
     },
     {
+      "id": "putnambench",
       "name": "PutnamBench",
       "aliases": [
         "putnambench",
@@ -830,6 +879,7 @@
       }
     },
     {
+      "id": "deepscaler",
       "name": "DeepScaleR",
       "aliases": [
         "deepscaler",
@@ -842,6 +892,7 @@
       }
     },
     {
+      "id": "openr1-math",
       "name": "OpenR1-Math",
       "aliases": [
         "openr1-math",
@@ -855,10 +906,10 @@
       }
     },
     {
+      "id": "numinamath",
       "name": "NuminaMath",
       "aliases": [
         "numinamath",
-        "numinamath-cot",
         "numina math"
       ],
       "kind": "dataset",
@@ -868,11 +919,11 @@
       }
     },
     {
+      "id": "dapo-math-17k",
       "name": "DAPO-Math-17k",
       "aliases": [
         "dapo-math-17k",
-        "dapo-math",
-        "dapo"
+        "dapo-math"
       ],
       "kind": "dataset",
       "hf": "BytedTsinghua-SIA/DAPO-Math-17k",
@@ -881,6 +932,7 @@
       }
     },
     {
+      "id": "countdown",
       "name": "Countdown",
       "aliases": [
         "countdown",
@@ -894,6 +946,7 @@
       }
     },
     {
+      "id": "mmlu",
       "name": "MMLU",
       "aliases": [
         "mmlu"
@@ -905,6 +958,7 @@
       }
     },
     {
+      "id": "mmlu-pro",
       "name": "MMLU-Pro",
       "aliases": [
         "mmlu-pro",
@@ -917,12 +971,10 @@
       }
     },
     {
+      "id": "gpqa",
       "name": "GPQA",
       "aliases": [
-        "gpqa",
-        "gpqa diamond",
-        "gpqa-diamond",
-        "gpqa-d"
+        "gpqa"
       ],
       "kind": "benchmark",
       "hf": "Idavidrein/gpqa",
@@ -931,6 +983,7 @@
       }
     },
     {
+      "id": "hle",
       "name": "HLE",
       "aliases": [
         "hle",
@@ -944,6 +997,7 @@
       }
     },
     {
+      "id": "bbh",
       "name": "BBH",
       "aliases": [
         "bbh",
@@ -960,13 +1014,11 @@
       }
     },
     {
+      "id": "arc-challenge",
       "name": "ARC-Challenge",
       "aliases": [
         "arc-challenge",
-        "arc-c",
-        "ai2 arc",
-        "arc-easy",
-        "arc-e"
+        "arc-c"
       ],
       "kind": "benchmark",
       "hf": "allenai/ai2_arc",
@@ -975,6 +1027,7 @@
       }
     },
     {
+      "id": "hellaswag",
       "name": "HellaSwag",
       "aliases": [
         "hellaswag"
@@ -986,6 +1039,7 @@
       }
     },
     {
+      "id": "winogrande",
       "name": "WinoGrande",
       "aliases": [
         "winogrande"
@@ -997,6 +1051,7 @@
       }
     },
     {
+      "id": "piqa",
       "name": "PIQA",
       "aliases": [
         "piqa"
@@ -1008,6 +1063,7 @@
       }
     },
     {
+      "id": "boolq",
       "name": "BoolQ",
       "aliases": [
         "boolq"
@@ -1019,6 +1075,7 @@
       }
     },
     {
+      "id": "commonsenseqa",
       "name": "CommonsenseQA",
       "aliases": [
         "commonsenseqa",
@@ -1031,6 +1088,7 @@
       }
     },
     {
+      "id": "openbookqa",
       "name": "OpenBookQA",
       "aliases": [
         "openbookqa",
@@ -1043,6 +1101,7 @@
       }
     },
     {
+      "id": "truthfulqa",
       "name": "TruthfulQA",
       "aliases": [
         "truthfulqa"
@@ -1054,6 +1113,7 @@
       }
     },
     {
+      "id": "ifeval",
       "name": "IFEval",
       "aliases": [
         "ifeval"
@@ -1065,6 +1125,7 @@
       }
     },
     {
+      "id": "glue",
       "name": "GLUE",
       "aliases": [
         "glue"
@@ -1076,6 +1137,7 @@
       }
     },
     {
+      "id": "superglue",
       "name": "SuperGLUE",
       "aliases": [
         "superglue"
@@ -1087,6 +1149,7 @@
       }
     },
     {
+      "id": "squad",
       "name": "SQuAD",
       "aliases": [
         "squad",
@@ -1100,6 +1163,7 @@
       }
     },
     {
+      "id": "squad-2-0",
       "name": "SQuAD 2.0",
       "aliases": [
         "squad 2.0",
@@ -1114,6 +1178,7 @@
       }
     },
     {
+      "id": "triviaqa",
       "name": "TriviaQA",
       "aliases": [
         "triviaqa"
@@ -1125,11 +1190,11 @@
       }
     },
     {
+      "id": "natural-questions",
       "name": "Natural Questions",
       "aliases": [
         "natural questions",
         "nq",
-        "nq-open",
         "natural questions (nq)"
       ],
       "kind": "benchmark",
@@ -1139,6 +1204,7 @@
       }
     },
     {
+      "id": "hotpotqa",
       "name": "HotpotQA",
       "aliases": [
         "hotpotqa",
@@ -1151,6 +1217,7 @@
       }
     },
     {
+      "id": "2wikimultihopqa",
       "name": "2WikiMultiHopQA",
       "aliases": [
         "2wikimultihopqa",
@@ -1164,6 +1231,7 @@
       }
     },
     {
+      "id": "musique",
       "name": "MuSiQue",
       "aliases": [
         "musique"
@@ -1177,6 +1245,7 @@
       }
     },
     {
+      "id": "strategyqa",
       "name": "StrategyQA",
       "aliases": [
         "strategyqa"
@@ -1188,6 +1257,7 @@
       }
     },
     {
+      "id": "ms-marco",
       "name": "MS MARCO",
       "aliases": [
         "ms marco",
@@ -1201,6 +1271,7 @@
       }
     },
     {
+      "id": "beir",
       "name": "BEIR",
       "aliases": [
         "beir"
@@ -1212,6 +1283,7 @@
       }
     },
     {
+      "id": "mteb",
       "name": "MTEB",
       "aliases": [
         "mteb"
@@ -1223,6 +1295,7 @@
       }
     },
     {
+      "id": "humaneval",
       "name": "HumanEval",
       "aliases": [
         "humaneval",
@@ -1238,6 +1311,7 @@
       }
     },
     {
+      "id": "mbpp",
       "name": "MBPP",
       "aliases": [
         "mbpp"
@@ -1249,10 +1323,9 @@
       }
     },
     {
+      "id": "evalplus",
       "name": "EvalPlus",
       "aliases": [
-        "humaneval+",
-        "mbpp+",
         "evalplus"
       ],
       "kind": "benchmark",
@@ -1262,6 +1335,7 @@
       }
     },
     {
+      "id": "livecodebench",
       "name": "LiveCodeBench",
       "aliases": [
         "livecodebench",
@@ -1276,6 +1350,7 @@
       }
     },
     {
+      "id": "bigcodebench",
       "name": "BigCodeBench",
       "aliases": [
         "bigcodebench"
@@ -1289,6 +1364,7 @@
       }
     },
     {
+      "id": "apps",
       "name": "APPS",
       "aliases": [
         "apps"
@@ -1300,6 +1376,7 @@
       }
     },
     {
+      "id": "codecontests",
       "name": "CodeContests",
       "aliases": [
         "codecontests",
@@ -1312,6 +1389,7 @@
       }
     },
     {
+      "id": "ds-1000",
       "name": "DS-1000",
       "aliases": [
         "ds-1000",
@@ -1324,6 +1402,7 @@
       }
     },
     {
+      "id": "cruxeval",
       "name": "CRUXEval",
       "aliases": [
         "cruxeval"
@@ -1337,6 +1416,7 @@
       }
     },
     {
+      "id": "swe-bench",
       "name": "SWE-bench",
       "aliases": [
         "swe-bench",
@@ -1352,6 +1432,7 @@
       }
     },
     {
+      "id": "swe-bench-verified",
       "name": "SWE-bench Verified",
       "aliases": [
         "swe-bench verified",
@@ -1365,6 +1446,7 @@
       }
     },
     {
+      "id": "swe-bench-lite",
       "name": "SWE-bench Lite",
       "aliases": [
         "swe-bench lite",
@@ -1377,6 +1459,7 @@
       }
     },
     {
+      "id": "spider",
       "name": "Spider",
       "aliases": [
         "spider",
@@ -1389,6 +1472,7 @@
       }
     },
     {
+      "id": "bird",
       "name": "BIRD",
       "aliases": [
         "bird",
@@ -1403,10 +1487,10 @@
       }
     },
     {
+      "id": "aider-polyglot",
       "name": "Aider Polyglot",
       "aliases": [
-        "aider polyglot",
-        "aider"
+        "aider polyglot"
       ],
       "kind": "benchmark",
       "gh": "Aider-AI/aider",
@@ -1415,6 +1499,7 @@
       }
     },
     {
+      "id": "terminal-bench",
       "name": "Terminal-Bench",
       "aliases": [
         "terminal-bench",
@@ -1427,6 +1512,7 @@
       }
     },
     {
+      "id": "longbench",
       "name": "LongBench",
       "aliases": [
         "longbench"
@@ -1440,6 +1526,7 @@
       }
     },
     {
+      "id": "longbench-v2",
       "name": "LongBench v2",
       "aliases": [
         "longbench v2",
@@ -1453,6 +1540,7 @@
       }
     },
     {
+      "id": "ruler",
       "name": "RULER",
       "aliases": [
         "ruler"
@@ -1464,6 +1552,7 @@
       }
     },
     {
+      "id": "needle-in-a-haystack",
       "name": "Needle-in-a-Haystack",
       "aliases": [
         "needle-in-a-haystack",
@@ -1477,6 +1566,7 @@
       }
     },
     {
+      "id": "infinitebench",
       "name": "InfiniteBench",
       "aliases": [
         "infinitebench",
@@ -1492,6 +1582,7 @@
       }
     },
     {
+      "id": "babilong",
       "name": "BABILong",
       "aliases": [
         "babilong"
@@ -1503,6 +1594,7 @@
       }
     },
     {
+      "id": "zeroscrolls",
       "name": "ZeroSCROLLS",
       "aliases": [
         "zeroscrolls",
@@ -1515,6 +1607,7 @@
       }
     },
     {
+      "id": "pg-19",
       "name": "PG-19",
       "aliases": [
         "pg-19",
@@ -1527,6 +1620,7 @@
       }
     },
     {
+      "id": "mt-bench",
       "name": "MT-Bench",
       "aliases": [
         "mt-bench",
@@ -1542,14 +1636,11 @@
       }
     },
     {
+      "id": "alpacaeval",
       "name": "AlpacaEval",
       "aliases": [
         "alpacaeval",
-        "alpacaeval 2",
-        "alpacaeval 2.0",
-        "alpacaeval2",
-        "alpaca eval",
-        "alpacaeval-2"
+        "alpaca eval"
       ],
       "kind": "benchmark",
       "hf": "tatsu-lab/alpaca_eval",
@@ -1560,6 +1651,7 @@
       }
     },
     {
+      "id": "arena-hard",
       "name": "Arena-Hard",
       "aliases": [
         "arena-hard",
@@ -1574,6 +1666,7 @@
       }
     },
     {
+      "id": "chatbot-arena",
       "name": "Chatbot Arena",
       "aliases": [
         "chatbot arena",
@@ -1588,6 +1681,7 @@
       }
     },
     {
+      "id": "wildbench",
       "name": "WildBench",
       "aliases": [
         "wildbench"
@@ -1599,10 +1693,10 @@
       }
     },
     {
+      "id": "ultrafeedback",
       "name": "UltraFeedback",
       "aliases": [
-        "ultrafeedback",
-        "ultrafeedback binarized"
+        "ultrafeedback"
       ],
       "kind": "dataset",
       "hf": "openbmb/UltraFeedback",
@@ -1611,6 +1705,7 @@
       }
     },
     {
+      "id": "hh-rlhf",
       "name": "HH-RLHF",
       "aliases": [
         "hh-rlhf",
@@ -1625,6 +1720,7 @@
       }
     },
     {
+      "id": "pku-saferlhf",
       "name": "PKU-SafeRLHF",
       "aliases": [
         "pku-saferlhf",
@@ -1639,6 +1735,7 @@
       }
     },
     {
+      "id": "rewardbench",
       "name": "RewardBench",
       "aliases": [
         "rewardbench",
@@ -1653,6 +1750,7 @@
       }
     },
     {
+      "id": "alpaca",
       "name": "Alpaca",
       "aliases": [
         "alpaca"
@@ -1664,6 +1762,7 @@
       }
     },
     {
+      "id": "lmsys-chat-1m",
       "name": "LMSYS-Chat-1M",
       "aliases": [
         "lmsys-chat-1m",
@@ -1676,6 +1775,7 @@
       }
     },
     {
+      "id": "sharegpt",
       "name": "ShareGPT",
       "aliases": [
         "sharegpt"
@@ -1687,12 +1787,9 @@
       }
     },
     {
+      "id": "tulu-3-sft",
       "name": "Tulu 3 SFT",
-      "aliases": [
-        "tulu 3",
-        "tulu3",
-        "tulu-3"
-      ],
+      "aliases": [],
       "kind": "dataset",
       "hf": "allenai/tulu-3-sft-mixture",
       "ok": {
@@ -1700,6 +1797,7 @@
       }
     },
     {
+      "id": "advbench",
       "name": "AdvBench",
       "aliases": [
         "advbench"
@@ -1713,6 +1811,7 @@
       }
     },
     {
+      "id": "harmbench",
       "name": "HarmBench",
       "aliases": [
         "harmbench"
@@ -1724,6 +1823,7 @@
       }
     },
     {
+      "id": "jailbreakbench",
       "name": "JailbreakBench",
       "aliases": [
         "jailbreakbench",
@@ -1738,6 +1838,7 @@
       }
     },
     {
+      "id": "wmdp",
       "name": "WMDP",
       "aliases": [
         "wmdp"
@@ -1749,12 +1850,11 @@
       }
     },
     {
+      "id": "muse",
       "name": "MUSE",
       "aliases": [
         "muse",
-        "muse benchmark",
-        "muse-news",
-        "muse-books"
+        "muse benchmark"
       ],
       "kind": "benchmark",
       "hf": "muse-bench/MUSE-News",
@@ -1765,6 +1865,7 @@
       }
     },
     {
+      "id": "tofu",
       "name": "TOFU",
       "aliases": [
         "tofu"
@@ -1778,6 +1879,7 @@
       }
     },
     {
+      "id": "realtoxicityprompts",
       "name": "RealToxicityPrompts",
       "aliases": [
         "realtoxicityprompts",
@@ -1790,6 +1892,7 @@
       }
     },
     {
+      "id": "toxigen",
       "name": "ToxiGen",
       "aliases": [
         "toxigen"
@@ -1801,6 +1904,7 @@
       }
     },
     {
+      "id": "xstest",
       "name": "XSTest",
       "aliases": [
         "xstest"
@@ -1812,6 +1916,7 @@
       }
     },
     {
+      "id": "bbq",
       "name": "BBQ",
       "aliases": [
         "bbq"
@@ -1825,6 +1930,7 @@
       }
     },
     {
+      "id": "mmmu",
       "name": "MMMU",
       "aliases": [
         "mmmu"
@@ -1836,6 +1942,7 @@
       }
     },
     {
+      "id": "mathvista",
       "name": "MathVista",
       "aliases": [
         "mathvista"
@@ -1847,6 +1954,7 @@
       }
     },
     {
+      "id": "mathverse",
       "name": "MathVerse",
       "aliases": [
         "mathverse"
@@ -1858,6 +1966,7 @@
       }
     },
     {
+      "id": "mathvision",
       "name": "MathVision",
       "aliases": [
         "mathvision",
@@ -1871,6 +1980,7 @@
       }
     },
     {
+      "id": "mmbench",
       "name": "MMBench",
       "aliases": [
         "mmbench"
@@ -1884,6 +1994,7 @@
       }
     },
     {
+      "id": "mme",
       "name": "MME",
       "aliases": [
         "mme"
@@ -1895,6 +2006,7 @@
       }
     },
     {
+      "id": "mmstar",
       "name": "MMStar",
       "aliases": [
         "mmstar"
@@ -1906,6 +2018,7 @@
       }
     },
     {
+      "id": "seed-bench",
       "name": "SEED-Bench",
       "aliases": [
         "seed-bench",
@@ -1918,6 +2031,7 @@
       }
     },
     {
+      "id": "pope",
       "name": "POPE",
       "aliases": [
         "pope"
@@ -1931,6 +2045,7 @@
       }
     },
     {
+      "id": "hallusionbench",
       "name": "HallusionBench",
       "aliases": [
         "hallusionbench"
@@ -1942,6 +2057,7 @@
       }
     },
     {
+      "id": "textvqa",
       "name": "TextVQA",
       "aliases": [
         "textvqa"
@@ -1953,6 +2069,7 @@
       }
     },
     {
+      "id": "vqav2",
       "name": "VQAv2",
       "aliases": [
         "vqav2",
@@ -1966,6 +2083,7 @@
       }
     },
     {
+      "id": "gqa",
       "name": "GQA",
       "aliases": [
         "gqa"
@@ -1977,6 +2095,7 @@
       }
     },
     {
+      "id": "docvqa",
       "name": "DocVQA",
       "aliases": [
         "docvqa"
@@ -1988,6 +2107,7 @@
       }
     },
     {
+      "id": "chartqa",
       "name": "ChartQA",
       "aliases": [
         "chartqa"
@@ -1999,6 +2119,7 @@
       }
     },
     {
+      "id": "scienceqa",
       "name": "ScienceQA",
       "aliases": [
         "scienceqa"
@@ -2010,6 +2131,7 @@
       }
     },
     {
+      "id": "ai2d",
       "name": "AI2D",
       "aliases": [
         "ai2d"
@@ -2021,6 +2143,7 @@
       }
     },
     {
+      "id": "ocrbench",
       "name": "OCRBench",
       "aliases": [
         "ocrbench"
@@ -2032,6 +2155,7 @@
       }
     },
     {
+      "id": "video-mme",
       "name": "Video-MME",
       "aliases": [
         "video-mme",
@@ -2045,6 +2169,7 @@
       }
     },
     {
+      "id": "longvideobench",
       "name": "LongVideoBench",
       "aliases": [
         "longvideobench"
@@ -2056,6 +2181,7 @@
       }
     },
     {
+      "id": "mlvu",
       "name": "MLVU",
       "aliases": [
         "mlvu"
@@ -2069,6 +2195,7 @@
       }
     },
     {
+      "id": "lvbench",
       "name": "LVBench",
       "aliases": [
         "lvbench"
@@ -2082,6 +2209,7 @@
       }
     },
     {
+      "id": "egoschema",
       "name": "EgoSchema",
       "aliases": [
         "egoschema"
@@ -2093,6 +2221,7 @@
       }
     },
     {
+      "id": "vsi-bench",
       "name": "VSI-Bench",
       "aliases": [
         "vsi-bench",
@@ -2105,6 +2234,7 @@
       }
     },
     {
+      "id": "msrvtt",
       "name": "MSRVTT",
       "aliases": [
         "msrvtt",
@@ -2115,6 +2245,7 @@
       "ok": {}
     },
     {
+      "id": "gaia",
       "name": "GAIA",
       "aliases": [
         "gaia"
@@ -2126,6 +2257,7 @@
       }
     },
     {
+      "id": "webarena",
       "name": "WebArena",
       "aliases": [
         "webarena"
@@ -2137,6 +2269,7 @@
       }
     },
     {
+      "id": "visualwebarena",
       "name": "VisualWebArena",
       "aliases": [
         "visualwebarena"
@@ -2148,6 +2281,7 @@
       }
     },
     {
+      "id": "webshop",
       "name": "WebShop",
       "aliases": [
         "webshop"
@@ -2159,6 +2293,7 @@
       }
     },
     {
+      "id": "mind2web",
       "name": "Mind2Web",
       "aliases": [
         "mind2web"
@@ -2172,6 +2307,7 @@
       }
     },
     {
+      "id": "osworld",
       "name": "OSWorld",
       "aliases": [
         "osworld"
@@ -2183,6 +2319,7 @@
       }
     },
     {
+      "id": "androidworld",
       "name": "AndroidWorld",
       "aliases": [
         "androidworld",
@@ -2195,6 +2332,7 @@
       }
     },
     {
+      "id": "alfworld",
       "name": "ALFWorld",
       "aliases": [
         "alfworld"
@@ -2206,6 +2344,7 @@
       }
     },
     {
+      "id": "scienceworld",
       "name": "ScienceWorld",
       "aliases": [
         "scienceworld"
@@ -2217,6 +2356,7 @@
       }
     },
     {
+      "id": "agentbench",
       "name": "AgentBench",
       "aliases": [
         "agentbench"
@@ -2228,14 +2368,13 @@
       }
     },
     {
+      "id": "tau-bench",
       "name": "tau-bench",
       "aliases": [
         "tau-bench",
         "τ-bench",
         "taubench",
-        "tau bench",
-        "τ²-bench",
-        "tau2-bench"
+        "tau bench"
       ],
       "kind": "benchmark",
       "gh": "sierra-research/tau-bench",
@@ -2244,6 +2383,7 @@
       }
     },
     {
+      "id": "toolbench",
       "name": "ToolBench",
       "aliases": [
         "toolbench"
@@ -2255,6 +2395,7 @@
       }
     },
     {
+      "id": "bfcl",
       "name": "BFCL",
       "aliases": [
         "bfcl",
@@ -2267,6 +2408,7 @@
       }
     },
     {
+      "id": "browsecomp",
       "name": "BrowseComp",
       "aliases": [
         "browsecomp"
@@ -2278,6 +2420,7 @@
       }
     },
     {
+      "id": "simpleqa",
       "name": "SimpleQA",
       "aliases": [
         "simpleqa"
@@ -2291,6 +2434,7 @@
       }
     },
     {
+      "id": "fever",
       "name": "FEVER",
       "aliases": [
         "fever"
@@ -2302,6 +2446,7 @@
       }
     },
     {
+      "id": "locomo",
       "name": "LoCoMo",
       "aliases": [
         "locomo"
@@ -2313,6 +2458,7 @@
       }
     },
     {
+      "id": "theoremqa",
       "name": "TheoremQA",
       "aliases": [
         "theoremqa"
@@ -2324,6 +2470,7 @@
       }
     },
     {
+      "id": "sciq",
       "name": "SciQ",
       "aliases": [
         "sciq"
@@ -2335,6 +2482,7 @@
       }
     },
     {
+      "id": "medqa",
       "name": "MedQA",
       "aliases": [
         "medqa",
@@ -2347,6 +2495,7 @@
       }
     },
     {
+      "id": "pubmedqa",
       "name": "PubMedQA",
       "aliases": [
         "pubmedqa"
@@ -2358,6 +2507,7 @@
       }
     },
     {
+      "id": "medmcqa",
       "name": "MedMCQA",
       "aliases": [
         "medmcqa"
@@ -2369,6 +2519,7 @@
       }
     },
     {
+      "id": "mimic-iv",
       "name": "MIMIC-IV",
       "aliases": [
         "mimic-iv",
@@ -2380,6 +2531,7 @@
       "ok": {}
     },
     {
+      "id": "mimic-iii",
       "name": "MIMIC-III",
       "aliases": [
         "mimic-iii",
@@ -2391,6 +2543,7 @@
       "ok": {}
     },
     {
+      "id": "cnn-dailymail",
       "name": "CNN/DailyMail",
       "aliases": [
         "cnn/dailymail",
@@ -2405,6 +2558,7 @@
       }
     },
     {
+      "id": "xsum",
       "name": "XSum",
       "aliases": [
         "xsum"
@@ -2416,13 +2570,10 @@
       }
     },
     {
+      "id": "wikitext",
       "name": "WikiText",
       "aliases": [
-        "wikitext",
-        "wikitext2",
-        "wikitext-2",
-        "wikitext-103",
-        "wikitext103"
+        "wikitext"
       ],
       "kind": "dataset",
       "hf": "Salesforce/wikitext",
@@ -2431,6 +2582,7 @@
       }
     },
     {
+      "id": "openwebtext",
       "name": "OpenWebText",
       "aliases": [
         "openwebtext"
@@ -2442,6 +2594,7 @@
       }
     },
     {
+      "id": "c4",
       "name": "C4",
       "aliases": [
         "c4"
@@ -2453,6 +2606,7 @@
       }
     },
     {
+      "id": "the-pile",
       "name": "The Pile",
       "aliases": [
         "the pile",
@@ -2465,6 +2619,7 @@
       }
     },
     {
+      "id": "fineweb",
       "name": "FineWeb",
       "aliases": [
         "fineweb"
@@ -2476,6 +2631,7 @@
       }
     },
     {
+      "id": "fineweb-edu",
       "name": "FineWeb-Edu",
       "aliases": [
         "fineweb-edu"
@@ -2487,10 +2643,10 @@
       }
     },
     {
+      "id": "redpajama",
       "name": "RedPajama",
       "aliases": [
         "redpajama",
-        "redpajama-v2",
         "redpajama-1t"
       ],
       "kind": "dataset",
@@ -2500,6 +2656,7 @@
       }
     },
     {
+      "id": "slimpajama",
       "name": "SlimPajama",
       "aliases": [
         "slimpajama"
@@ -2511,10 +2668,10 @@
       }
     },
     {
+      "id": "dclm",
       "name": "DCLM",
       "aliases": [
-        "dclm",
-        "dclm-baseline"
+        "dclm"
       ],
       "kind": "dataset",
       "hf": "mlfoundations/dclm-baseline-1.0",
@@ -2523,6 +2680,7 @@
       }
     },
     {
+      "id": "dolma",
       "name": "Dolma",
       "aliases": [
         "dolma"
@@ -2534,6 +2692,7 @@
       }
     },
     {
+      "id": "wikipedia",
       "name": "Wikipedia",
       "aliases": [
         "wikipedia"
@@ -2545,6 +2704,7 @@
       }
     },
     {
+      "id": "bookcorpus",
       "name": "BookCorpus",
       "aliases": [
         "bookcorpus"
@@ -2556,6 +2716,7 @@
       }
     },
     {
+      "id": "d4rl",
       "name": "D4RL",
       "aliases": [
         "d4rl"
@@ -2567,6 +2728,7 @@
       }
     },
     {
+      "id": "ogbench",
       "name": "OGBench",
       "aliases": [
         "ogbench"
@@ -2578,6 +2740,7 @@
       }
     },
     {
+      "id": "mujoco",
       "name": "MuJoCo",
       "aliases": [
         "mujoco"
@@ -2589,6 +2752,7 @@
       }
     },
     {
+      "id": "deepmind-control-suite",
       "name": "DeepMind Control Suite",
       "aliases": [
         "deepmind control suite",
@@ -2606,11 +2770,10 @@
       }
     },
     {
+      "id": "atari",
       "name": "Atari",
       "aliases": [
         "atari",
-        "atari 100k",
-        "atari-100k",
         "atari games",
         "atari 2600",
         "ale"
@@ -2622,6 +2785,7 @@
       }
     },
     {
+      "id": "procgen",
       "name": "Procgen",
       "aliases": [
         "procgen"
@@ -2633,6 +2797,7 @@
       }
     },
     {
+      "id": "minigrid",
       "name": "MiniGrid",
       "aliases": [
         "minigrid"
@@ -2644,6 +2809,7 @@
       }
     },
     {
+      "id": "crafter",
       "name": "Crafter",
       "aliases": [
         "crafter"
@@ -2655,10 +2821,10 @@
       }
     },
     {
+      "id": "minedojo",
       "name": "MineDojo",
       "aliases": [
-        "minedojo",
-        "minecraft"
+        "minedojo"
       ],
       "kind": "benchmark",
       "gh": "MineDojo/MineDojo",
@@ -2667,6 +2833,7 @@
       }
     },
     {
+      "id": "meta-world",
       "name": "Meta-World",
       "aliases": [
         "meta-world",
@@ -2680,11 +2847,10 @@
       }
     },
     {
+      "id": "gymnasium",
       "name": "Gymnasium",
       "aliases": [
-        "gymnasium",
-        "openai gym",
-        "gym"
+        "gymnasium"
       ],
       "kind": "benchmark",
       "gh": "Farama-Foundation/Gymnasium",
@@ -2693,6 +2859,7 @@
       }
     },
     {
+      "id": "smac",
       "name": "SMAC",
       "aliases": [
         "smac",
@@ -2705,6 +2872,7 @@
       }
     },
     {
+      "id": "smacv2",
       "name": "SMACv2",
       "aliases": [
         "smacv2",
@@ -2717,6 +2885,7 @@
       }
     },
     {
+      "id": "overcooked",
       "name": "Overcooked",
       "aliases": [
         "overcooked",
@@ -2729,6 +2898,7 @@
       }
     },
     {
+      "id": "melting-pot",
       "name": "Melting Pot",
       "aliases": [
         "melting pot",
@@ -2741,6 +2911,7 @@
       }
     },
     {
+      "id": "humanoidbench",
       "name": "HumanoidBench",
       "aliases": [
         "humanoidbench"
@@ -2752,6 +2923,7 @@
       }
     },
     {
+      "id": "libero",
       "name": "LIBERO",
       "aliases": [
         "libero"
@@ -2763,6 +2935,7 @@
       }
     },
     {
+      "id": "calvin",
       "name": "CALVIN",
       "aliases": [
         "calvin"
@@ -2774,6 +2947,7 @@
       }
     },
     {
+      "id": "rlbench",
       "name": "RLBench",
       "aliases": [
         "rlbench"
@@ -2785,6 +2959,7 @@
       }
     },
     {
+      "id": "simplerenv",
       "name": "SimplerEnv",
       "aliases": [
         "simplerenv",
@@ -2798,6 +2973,7 @@
       }
     },
     {
+      "id": "robomimic",
       "name": "robomimic",
       "aliases": [
         "robomimic"
@@ -2809,6 +2985,7 @@
       }
     },
     {
+      "id": "robocasa",
       "name": "RoboCasa",
       "aliases": [
         "robocasa"
@@ -2820,11 +2997,10 @@
       }
     },
     {
+      "id": "maniskill",
       "name": "ManiSkill",
       "aliases": [
-        "maniskill",
-        "maniskill2",
-        "maniskill3"
+        "maniskill"
       ],
       "kind": "benchmark",
       "gh": "mani-skill/ManiSkill",
@@ -2833,6 +3009,7 @@
       }
     },
     {
+      "id": "open-x-embodiment",
       "name": "Open X-Embodiment",
       "aliases": [
         "open x-embodiment",
@@ -2846,18 +3023,18 @@
       }
     },
     {
+      "id": "bridgedata-v2",
       "name": "BridgeData V2",
       "aliases": [
         "bridgedata v2",
-        "bridge v2",
-        "bridgedata",
-        "bridge data"
+        "bridge v2"
       ],
       "kind": "dataset",
       "url": "https://rail-berkeley.github.io/bridgedata/",
       "ok": {}
     },
     {
+      "id": "droid",
       "name": "DROID",
       "aliases": [
         "droid"
@@ -2867,6 +3044,7 @@
       "ok": {}
     },
     {
+      "id": "habitat",
       "name": "Habitat",
       "aliases": [
         "habitat"
@@ -2878,12 +3056,11 @@
       }
     },
     {
+      "id": "isaac-gym",
       "name": "Isaac Gym",
       "aliases": [
         "isaac gym",
-        "isaacgym",
-        "isaac lab",
-        "isaaclab"
+        "isaacgym"
       ],
       "kind": "simulator",
       "gh": "isaac-sim/IsaacLab",
@@ -2892,6 +3069,7 @@
       }
     },
     {
+      "id": "qm9",
       "name": "QM9",
       "aliases": [
         "qm9"
@@ -2904,27 +3082,27 @@
       }
     },
     {
+      "id": "md17",
       "name": "MD17",
       "aliases": [
-        "md17",
-        "rmd17"
+        "md17"
       ],
       "kind": "dataset",
       "url": "http://quantum-machine.org/datasets/",
       "ok": {}
     },
     {
+      "id": "zinc",
       "name": "ZINC",
       "aliases": [
-        "zinc",
-        "zinc250k",
-        "zinc 250k"
+        "zinc"
       ],
       "kind": "dataset",
       "url": "https://zinc.docking.org",
       "ok": {}
     },
     {
+      "id": "moleculenet",
       "name": "MoleculeNet",
       "aliases": [
         "moleculenet"
@@ -2937,13 +3115,11 @@
       }
     },
     {
+      "id": "ogb",
       "name": "OGB",
       "aliases": [
         "ogb",
-        "open graph benchmark",
-        "ogbn-arxiv",
-        "ogbg-molhiv",
-        "ogbn-products"
+        "open graph benchmark"
       ],
       "kind": "benchmark",
       "gh": "snap-stanford/ogb",
@@ -2953,6 +3129,7 @@
       }
     },
     {
+      "id": "pdbbind",
       "name": "PDBBind",
       "aliases": [
         "pdbbind"
@@ -2962,6 +3139,7 @@
       "ok": {}
     },
     {
+      "id": "crossdocked2020",
       "name": "CrossDocked2020",
       "aliases": [
         "crossdocked2020",
@@ -2976,11 +3154,11 @@
       }
     },
     {
+      "id": "geom-drugs",
       "name": "GEOM-Drugs",
       "aliases": [
         "geom-drugs",
-        "geom drugs",
-        "geom"
+        "geom drugs"
       ],
       "kind": "dataset",
       "gh": "learningmatter-mit/geom",
@@ -2989,17 +3167,17 @@
       }
     },
     {
+      "id": "materials-project",
       "name": "Materials Project",
       "aliases": [
-        "materials project",
-        "mp-20",
-        "mp20"
+        "materials project"
       ],
       "kind": "dataset",
       "url": "https://materialsproject.org",
       "ok": {}
     },
     {
+      "id": "cora",
       "name": "Cora",
       "aliases": [
         "cora",
@@ -3010,10 +3188,9 @@
       "ok": {}
     },
     {
+      "id": "planetoid",
       "name": "Planetoid",
       "aliases": [
-        "citeseer",
-        "pubmed",
         "planetoid"
       ],
       "kind": "dataset",
@@ -3023,6 +3200,7 @@
       }
     },
     {
+      "id": "uci",
       "name": "UCI",
       "aliases": [
         "uci",
@@ -3035,16 +3213,17 @@
       "ok": {}
     },
     {
+      "id": "openml",
       "name": "OpenML",
       "aliases": [
-        "openml",
-        "openml-cc18"
+        "openml"
       ],
       "kind": "dataset",
       "url": "https://www.openml.org",
       "ok": {}
     },
     {
+      "id": "tabzilla",
       "name": "TabZilla",
       "aliases": [
         "tabzilla"
@@ -3056,13 +3235,10 @@
       }
     },
     {
+      "id": "ett",
       "name": "ETT",
       "aliases": [
-        "ett",
-        "etth1",
-        "etth2",
-        "ettm1",
-        "ettm2"
+        "ett"
       ],
       "kind": "dataset",
       "gh": "zhouhaoyi/ETDataset",
@@ -3071,6 +3247,7 @@
       }
     },
     {
+      "id": "monash-forecasting",
       "name": "Monash Forecasting",
       "aliases": [
         "monash",
@@ -3081,18 +3258,18 @@
       "ok": {}
     },
     {
-      "name": "UEA/UCR archive",
+      "id": "ucr-archive",
+      "name": "UCR archive",
       "aliases": [
         "ucr",
-        "uea",
-        "ucr archive",
-        "uea archive"
+        "ucr archive"
       ],
       "kind": "dataset",
       "url": "https://www.timeseriesclassification.com",
       "ok": {}
     },
     {
+      "id": "librispeech",
       "name": "LibriSpeech",
       "aliases": [
         "librispeech"
@@ -3104,6 +3281,7 @@
       }
     },
     {
+      "id": "audioset",
       "name": "AudioSet",
       "aliases": [
         "audioset"
@@ -3113,10 +3291,10 @@
       "ok": {}
     },
     {
+      "id": "vtab-1k",
       "name": "VTAB-1k",
       "aliases": [
-        "vtab-1k",
-        "vtab"
+        "vtab-1k"
       ],
       "kind": "benchmark",
       "gh": "google-research/task_adaptation",
@@ -3125,6 +3303,7 @@
       }
     },
     {
+      "id": "dtd",
       "name": "DTD",
       "aliases": [
         "dtd"
@@ -3136,6 +3315,7 @@
       }
     },
     {
+      "id": "oxford-pets",
       "name": "Oxford Pets",
       "aliases": [
         "oxford pets",
@@ -3150,6 +3330,7 @@
       }
     },
     {
+      "id": "caltech-101",
       "name": "Caltech-101",
       "aliases": [
         "caltech-101",
@@ -3160,10 +3341,10 @@
       "ok": {}
     },
     {
+      "id": "sudoku",
       "name": "Sudoku",
       "aliases": [
-        "sudoku",
-        "sudoku-extreme"
+        "sudoku"
       ],
       "kind": "dataset",
       "hf": "sapientinc/sudoku-extreme",
@@ -3172,12 +3353,12 @@
       }
     },
     {
+      "id": "arc-agi",
       "name": "ARC-AGI",
       "aliases": [
         "arc-agi",
         "arc agi",
         "arc-agi-1",
-        "arc-agi-2",
         "abstraction and reasoning corpus"
       ],
       "kind": "benchmark",
@@ -3188,6 +3369,7 @@
       }
     },
     {
+      "id": "game-of-24",
       "name": "Game of 24",
       "aliases": [
         "game of 24",
@@ -3201,6 +3383,7 @@
       }
     },
     {
+      "id": "blimp",
       "name": "BLiMP",
       "aliases": [
         "blimp"
@@ -3212,6 +3395,7 @@
       }
     },
     {
+      "id": "lambada",
       "name": "LAMBADA",
       "aliases": [
         "lambada"
@@ -3223,6 +3407,7 @@
       }
     },
     {
+      "id": "xd-violence",
       "name": "XD-Violence",
       "aliases": [
         "xd-violence"
@@ -3232,6 +3417,7 @@
       "ok": {}
     },
     {
+      "id": "ucf-crime",
       "name": "UCF-Crime",
       "aliases": [
         "ucf-crime",
@@ -3242,6 +3428,7 @@
       "ok": {}
     },
     {
+      "id": "waterbirds",
       "name": "Waterbirds",
       "aliases": [
         "waterbirds"
@@ -3253,6 +3440,7 @@
       }
     },
     {
+      "id": "wilds",
       "name": "WILDS",
       "aliases": [
         "wilds"
@@ -3264,6 +3452,7 @@
       }
     },
     {
+      "id": "cifar-10-c",
       "name": "CIFAR-10-C",
       "aliases": [
         "cifar-10-c",
@@ -3277,6 +3466,7 @@
       }
     },
     {
+      "id": "cifar10-dvs",
       "name": "CIFAR10-DVS",
       "aliases": [
         "cifar10-dvs"
@@ -3286,6 +3476,7 @@
       "ok": {}
     },
     {
+      "id": "n-mnist",
       "name": "N-MNIST",
       "aliases": [
         "n-mnist"
@@ -3293,6 +3484,266 @@
       "kind": "dataset",
       "url": "https://www.garrickorchard.com/datasets/n-mnist",
       "ok": {}
+    },
+    {
+      "id": "pascal-voc-2012",
+      "name": "Pascal VOC 2012",
+      "aliases": [
+        "voc2012"
+      ],
+      "kind": "dataset"
+    },
+    {
+      "id": "refcoco-plus",
+      "name": "RefCOCO+",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "refcocog",
+      "name": "RefCOCOg",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "t2i-compbench-plus-plus",
+      "name": "T2I-CompBench++",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "objaverse-xl",
+      "name": "Objaverse-XL",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "numinamath-cot",
+      "name": "NuminaMath-CoT",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "gpqa-diamond",
+      "name": "GPQA Diamond",
+      "aliases": [
+        "gpqa-d"
+      ],
+      "kind": "benchmark"
+    },
+    {
+      "id": "arc-easy",
+      "name": "ARC-Easy",
+      "aliases": [
+        "arc-e"
+      ],
+      "kind": "benchmark"
+    },
+    {
+      "id": "nq-open",
+      "name": "NQ-Open",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "humaneval-plus",
+      "name": "HumanEval+",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "mbpp-plus",
+      "name": "MBPP+",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "alpacaeval-2-0",
+      "name": "AlpacaEval 2.0",
+      "aliases": [
+        "alpacaeval 2",
+        "alpacaeval2",
+        "alpacaeval-2"
+      ],
+      "kind": "benchmark"
+    },
+    {
+      "id": "ultrafeedback-binarized",
+      "name": "UltraFeedback Binarized",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "muse-news",
+      "name": "MUSE-News",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "muse-books",
+      "name": "MUSE-Books",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "tau2-bench",
+      "name": "τ²-bench",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "wikitext-2",
+      "name": "WikiText-2",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "wikitext-103",
+      "name": "WikiText-103",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "redpajama-v2",
+      "name": "RedPajama-V2",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "dclm-baseline",
+      "name": "DCLM-Baseline",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "atari-100k",
+      "name": "Atari 100k",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "openai-gym",
+      "name": "OpenAI Gym",
+      "aliases": [
+        "gym"
+      ],
+      "kind": "benchmark"
+    },
+    {
+      "id": "maniskill2",
+      "name": "ManiSkill2",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "maniskill3",
+      "name": "ManiSkill3",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "isaac-lab",
+      "name": "Isaac Lab",
+      "aliases": [],
+      "kind": "simulator"
+    },
+    {
+      "id": "rmd17",
+      "name": "rMD17",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "zinc250k",
+      "name": "ZINC250k",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "ogbn-arxiv",
+      "name": "ogbn-arxiv",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "ogbg-molhiv",
+      "name": "ogbg-molhiv",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "ogbn-products",
+      "name": "ogbn-products",
+      "aliases": [],
+      "kind": "benchmark"
+    },
+    {
+      "id": "mp-20",
+      "name": "MP-20",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "citeseer",
+      "name": "CiteSeer",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "pubmed",
+      "name": "PubMed",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "openml-cc18",
+      "name": "OpenML-CC18",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "etth1",
+      "name": "ETTh1",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "etth2",
+      "name": "ETTh2",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "ettm1",
+      "name": "ETTm1",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "ettm2",
+      "name": "ETTm2",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "uea-archive",
+      "name": "UEA archive",
+      "aliases": [
+        "uea"
+      ],
+      "kind": "dataset"
+    },
+    {
+      "id": "sudoku-extreme",
+      "name": "Sudoku-Extreme",
+      "aliases": [],
+      "kind": "dataset"
+    },
+    {
+      "id": "arc-agi-2",
+      "name": "ARC-AGI-2",
+      "aliases": [],
+      "kind": "benchmark"
     }
   ]
 }
