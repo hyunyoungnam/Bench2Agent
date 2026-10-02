@@ -1,7 +1,7 @@
 """Boundary cases for the rule that turns a text n-gram into a benchmark mention."""
 import unittest
 
-from icml.bench_mentions import Finder, caption_role, role_at, stated_roles
+from icml.bench_mentions import Finder, caption_role, role_at, stated_roles, unlisted_names
 from icml.taxonomy import dataset_key
 
 
@@ -58,7 +58,7 @@ G = finder({"cifar-10": ["CIFAR-10"], "c4": ["C4"], "gsm8k": ["GSM8K"], "imagene
 
 def roles(sentence: str) -> dict[str, str | None]:
     cues = stated_roles(sentence)
-    return {k: role_at(cues, t) for k, _, t in G.find(sentence)}
+    return {k: role_at(cues, t) for k, _, t, _ in G.find(sentence)}
 
 
 class StatedRoleTests(unittest.TestCase):
@@ -85,6 +85,32 @@ class StatedRoleTests(unittest.TestCase):
         self.assertIsNone(caption_role("Table 4: Comparison between our data and existing "
                                        "instruction tuning datasets."))
         self.assertEqual(caption_role("Table 3: Performance comparison on GSM8K."), "evaluates_on")
+
+
+
+def unlisted(sentence: str) -> list[tuple[str, str]]:
+    found = G.find(sentence)
+    covered = {i for _, _, t, n in found for i in range(t, t + n)}
+    return [(name, role) for _, name, role in unlisted_names(sentence, stated_roles(sentence),
+                                                            covered, G.fold_to)]
+
+
+class UnlistedNameTests(unittest.TestCase):
+    def test_names_after_the_cue_preposition(self):
+        self.assertEqual(
+            unlisted("We evaluate our method on three datasets: Stanford-ORB (Kuang et al., 2024), "
+                     "Objects-with-Lighting and GSM8K."),
+            [("Stanford-ORB", "evaluates_on"), ("Objects-with-Lighting", "evaluates_on")])
+
+    def test_multi_word_names_and_training(self):
+        self.assertEqual(unlisted("We fine-tune Llama on Open Assistant Conversations."),
+                         [("Open Assistant Conversations", "trains_on")])
+
+    def test_compared_method_is_not_a_dataset(self):
+        self.assertEqual(unlisted("We compare with FooNet and BarGAN."), [])
+
+    def test_no_cue_no_capture(self):
+        self.assertEqual(unlisted("Stanford-ORB contains 14 objects."), [])
 
 
 if __name__ == "__main__":

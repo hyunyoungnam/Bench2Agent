@@ -1,5 +1,5 @@
 {
-  "_note": "OUR mapping from benchmark names as papers write them to where the artifact lives. Authored, like DOMAIN_FAMILIES: the names are data-derived (the extracted `datasets` field), the locations are ours and are marked as such in the interface. Every hf/gh id is checked against the Hub / GitHub API by `python3 -m icml.resources --registry`; an id that fails the check carries ok:false and shows no link. Matching is by taxonomy.dataset_key over name + aliases. not_a_dataset lists model names the extractor files under datasets; they never become benchmark chips with links. `id` is the benchmark's stable key (owner, 2026-10-02): a slug of its published name, assigned once and never reused. A benchmark is its published product name: aliases are spelling variants or forms the benchmark itself publishes; a differently named product (a subset, a version, a year) is its own entry, and a bare name is left unmapped so it is counted as written. Entries split out on 2026-10-02 carry no location yet.",
+  "_note": "OUR mapping from benchmark names as papers write them to where the artifact lives. Authored, like DOMAIN_FAMILIES: the names are data-derived (the extracted `datasets` field), the locations are ours and are marked as such in the interface. Every hf/gh id is checked against the Hub / GitHub API by `python3 -m icml.resources --registry`; an id that fails the check carries ok:false and shows no link. Matching is by taxonomy.dataset_key over name + aliases. not_a_dataset lists model names the extractor files under datasets; they never become benchmark chips with links. `id` is the benchmark's stable key (owner, 2026-10-02): a slug of its published name, assigned once and never reused. A benchmark is its published product name: aliases are spelling variants or forms the benchmark itself publishes; a differently named product (a subset, a version, a year) is its own entry, and a bare name is left unmapped so it is counted as written. Entries split out on 2026-10-02 carry no location yet. `ambiguous: true` marks a name that is also an ordinary word, a method or an institution (CLEAR, FLAIR, BAIR): it counts only in its registered casing and only where the paper states a role for it.",
   "checked": "2026-09-17",
   "not_a_dataset": [
     "llama",
@@ -49,11 +49,10 @@
         "ilsvrc 2012",
         "imagenet 256x256",
         "imagenet-256",
-        "imagenet 64x64",
-        "imagenet-64",
         "imagenet 128x128",
         "imagenet-512",
-        "imagenet 512x512"
+        "imagenet 512x512",
+        "ilsvrc12"
       ],
       "kind": "dataset",
       "hf": "ILSVRC/imagenet-1k",
@@ -229,10 +228,7 @@
         "coco",
         "ms-coco",
         "mscoco",
-        "ms coco",
-        "coco 2017",
-        "coco2017",
-        "coco 2014"
+        "ms coco"
       ],
       "kind": "dataset",
       "hf": "detection-datasets/coco",
@@ -722,6 +718,9 @@
       "ok": {
         "hf": true,
         "gh": true
+      },
+      "alias_sources": {
+        "hendrycks math": "EleutherAI lm-evaluation-harness names the MATH task `hendrycks_math` and the Hub copy is EleutherAI/hendrycks_math; both cite Hendrycks et al. (2021). Not to be confused with `minerva_math` (a prompting protocol over MATH) or Minerva Math (separate OCW-course problems)."
       }
     },
     {
@@ -949,7 +948,8 @@
       "id": "mmlu",
       "name": "MMLU",
       "aliases": [
-        "mmlu"
+        "mmlu",
+        "massive multitask language understanding"
       ],
       "kind": "benchmark",
       "hf": "cais/mmlu",
@@ -1128,7 +1128,8 @@
       "id": "glue",
       "name": "GLUE",
       "aliases": [
-        "glue"
+        "glue",
+        "general language understanding evaluation"
       ],
       "kind": "benchmark",
       "hf": "nyu-mll/glue",
@@ -2597,7 +2598,8 @@
       "id": "c4",
       "name": "C4",
       "aliases": [
-        "c4"
+        "c4",
+        "colossal clean crawled corpus"
       ],
       "kind": "dataset",
       "hf": "allenai/c4",
@@ -3744,6 +3746,2452 @@
       "name": "ARC-AGI-2",
       "aliases": [],
       "kind": "benchmark"
+    },
+    {
+      "id": "coco-2014",
+      "name": "COCO 2014",
+      "aliases": [
+        "coco2014",
+        "mscoco 2014",
+        "ms-coco 2014"
+      ],
+      "kind": "dataset",
+      "url": "https://cocodataset.org",
+      "note": "Split out of COCO (owner, 2026-10-02): the 2014 and 2017 splits partition the same images differently, so results are not comparable across them."
+    },
+    {
+      "id": "coco-2017",
+      "name": "COCO 2017",
+      "aliases": [
+        "coco2017",
+        "mscoco 2017",
+        "ms-coco 2017",
+        "val2017",
+        "train2017"
+      ],
+      "kind": "dataset",
+      "url": "https://cocodataset.org",
+      "note": "Split out of COCO (owner, 2026-10-02); see COCO 2014.",
+      "alias_sources": {
+        "val2017": "COCO's own split file names",
+        "train2017": "COCO's own split file names"
+      }
+    },
+    {
+      "id": "imagenet-64x64",
+      "name": "ImageNet 64x64",
+      "aliases": [
+        "imagenet-64",
+        "imagenet64",
+        "imagenet 64",
+        "downsampled imagenet 64x64",
+        "imagenet64x64"
+      ],
+      "kind": "dataset",
+      "url": "https://www.image-net.org/download.php",
+      "note": "A downsampled release distinct from ImageNet-1k: introduced for density modelling by van den Oord et al. (2016) and released as Imagenet64x64 by Chrabaszcz, Loshchilov & Hutter (2017) — neither by the ImageNet authors."
+    },
+    {
+      "id": "tartanair",
+      "name": "TartanAir",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hpatches",
+      "name": "HPatches",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ho3d",
+      "name": "HO3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hopper",
+      "name": "Hopper",
+      "aliases": [],
+      "kind": "environment",
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "youtube-vis",
+      "name": "YouTube-VIS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "libero-90",
+      "name": "LIBERO-90",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vln-ce",
+      "name": "VLN-CE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mpii",
+      "name": "MPII",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ddad",
+      "name": "DDAD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "multiwoz",
+      "name": "MultiWOZ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "sceneflow",
+      "name": "SceneFlow",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "deepfashion",
+      "name": "DeepFashion",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ycb-video",
+      "name": "YCB-Video",
+      "aliases": [
+        "ycb-v"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "walker2d",
+      "name": "Walker2d",
+      "aliases": [],
+      "kind": "environment",
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vfhq",
+      "name": "VFHQ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mot20",
+      "name": "MOT20",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "avsbench",
+      "name": "AVSBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "faust",
+      "name": "FAUST",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "wmt",
+      "name": "WMT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "nc4k",
+      "name": "NC4K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mvsec",
+      "name": "MVSEC",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "camo",
+      "name": "CAMO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "waymo-open-motion-dataset",
+      "name": "Waymo Open Motion Dataset",
+      "aliases": [
+        "womd"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "real3d-ad",
+      "name": "Real3D-AD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ntu-120",
+      "name": "NTU-120",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hcp",
+      "name": "HCP",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "lol",
+      "name": "LOL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "msrs",
+      "name": "MSRS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lm-o",
+      "name": "LM-O",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "openlane-v2",
+      "name": "OpenLane-V2",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ref-youtube-vos",
+      "name": "Ref-YouTube-VOS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "babel",
+      "name": "BABEL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "rich",
+      "name": "RICH",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ov-coco",
+      "name": "OV-COCO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "linemod",
+      "name": "LINEMOD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "phoenix-2014t",
+      "name": "PHOENIX-2014T",
+      "aliases": [
+        "phoenix14t"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "shrec19",
+      "name": "SHREC’19",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "euroc",
+      "name": "EuRoC",
+      "aliases": [
+        "euroc mav"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hateful-memes",
+      "name": "Hateful Memes",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "libero-spatial",
+      "name": "LIBERO-Spatial",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "openood",
+      "name": "OpenOOD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "total-text",
+      "name": "Total-Text",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pascal-voc-2007",
+      "name": "Pascal VOC 2007",
+      "aliases": [
+        "voc2007",
+        "voc07"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kth",
+      "name": "KTH",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "mpdd",
+      "name": "MPDD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "btad",
+      "name": "BTAD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "anomaly-shapenet",
+      "name": "Anomaly-ShapeNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "visor",
+      "name": "VISOR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dreambench-plus-plus",
+      "name": "DreamBench++",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lra",
+      "name": "LRA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hoi4d",
+      "name": "HOI4D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "carpk",
+      "name": "CARPK",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "occ3d",
+      "name": "Occ3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "middlebury",
+      "name": "Middlebury",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "phototourism",
+      "name": "PhotoTourism",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "surreal",
+      "name": "SURREAL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "tudataset",
+      "name": "TUDataset",
+      "aliases": [
+        "tudatasets"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ref-davis17",
+      "name": "Ref-DAVIS17",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "air-bench",
+      "name": "AIR-Bench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "t-less",
+      "name": "T-LESS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kinetics-sounds",
+      "name": "Kinetics-Sounds",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "reds4",
+      "name": "REDS4",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "visda",
+      "name": "VisDA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "openlane",
+      "name": "OpenLane",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "diving48",
+      "name": "Diving48",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "circo",
+      "name": "CIRCO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pku-mmd",
+      "name": "PKU-MMD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "occ-scannet",
+      "name": "Occ-ScanNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "medmnist",
+      "name": "MedMNIST",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "funsd",
+      "name": "FUNSD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mpi-sintel",
+      "name": "MPI Sintel",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "3dssg",
+      "name": "3DSSG",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vod",
+      "name": "VoD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "shapenet-55",
+      "name": "ShapeNet-55",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "bair",
+      "name": "BAIR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "posetrack2017",
+      "name": "PoseTrack2017",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "places2",
+      "name": "Places2",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dna-rendering",
+      "name": "DNA-Rendering",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "howto100m",
+      "name": "HowTo100M",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "spin-nerf",
+      "name": "SPIn-NeRF",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "google-scanned-objects",
+      "name": "Google Scanned Objects",
+      "aliases": [
+        "google scanned object"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "webquestionssp",
+      "name": "WebQuestionsSP",
+      "aliases": [
+        "webquestionsp"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vbench-long",
+      "name": "VBench-Long",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "libero-10",
+      "name": "LIBERO-10",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mmlongbench-doc",
+      "name": "MMLongBench-Doc",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "multimodalqa",
+      "name": "MultimodalQA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "egobody",
+      "name": "EgoBody",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pix3d",
+      "name": "Pix3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "agora",
+      "name": "AGORA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "assembly101",
+      "name": "Assembly101",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "nymeria",
+      "name": "Nymeria",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "flyingchairs",
+      "name": "FlyingChairs",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "v2xset",
+      "name": "V2XSet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "one-billion-words",
+      "name": "One Billion Words",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "sbd",
+      "name": "SBD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ov-lvis",
+      "name": "OV-LVIS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "oakink",
+      "name": "OakInk",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scan2cad",
+      "name": "Scan2CAD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "rico",
+      "name": "Rico",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "eth-xgaze",
+      "name": "ETH-XGaze",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dynacap",
+      "name": "DynaCap",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "wildtrack",
+      "name": "Wildtrack",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "clevrer",
+      "name": "CLEVRER",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "core50",
+      "name": "CORe50",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "v2x-sim",
+      "name": "V2X-Sim",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "uvo",
+      "name": "UVO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "summe",
+      "name": "SumMe",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "k-radar",
+      "name": "K-Radar",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "gait3d",
+      "name": "Gait3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ccpg",
+      "name": "CCPG",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "human-art",
+      "name": "Human-Art",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "bigearthnet",
+      "name": "BigEarthNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cifar-fs",
+      "name": "CIFAR-FS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "d-faust",
+      "name": "D-FAUST",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "neuman",
+      "name": "NeuMan",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scape",
+      "name": "SCAPE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "action-genome",
+      "name": "Action Genome",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "fmb",
+      "name": "FMB",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "vocaset",
+      "name": "VOCASET",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "oven",
+      "name": "OVEN",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "urban1k",
+      "name": "Urban1K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mt10",
+      "name": "MT10",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cute",
+      "name": "CUTE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "rxr",
+      "name": "RxR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "beat2",
+      "name": "BEAT2",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "vl-rewardbench",
+      "name": "VL-RewardBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scifact",
+      "name": "SciFact",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "intercap",
+      "name": "InterCap",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "a2d-sentences",
+      "name": "A2D-Sentences",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dis5k",
+      "name": "DIS5K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "inter-x",
+      "name": "Inter-X",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "tcga-brca",
+      "name": "TCGA-BRCA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cvusa",
+      "name": "CVUSA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scannet1500",
+      "name": "ScanNet1500",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "synthetic-nerf",
+      "name": "Synthetic NeRF",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hi4d",
+      "name": "Hi4D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "voxceleb1",
+      "name": "VoxCeleb1",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "meta-dataset",
+      "name": "Meta-Dataset",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ava-256",
+      "name": "Ava-256",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "robotap",
+      "name": "RoboTAP",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pure",
+      "name": "PURE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ppi",
+      "name": "PPI",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "irstd-1k",
+      "name": "IRSTD-1k",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ucf-qnrf",
+      "name": "UCF-QNRF",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "publaynet",
+      "name": "PubLayNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lsvq",
+      "name": "LSVQ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "llcm",
+      "name": "LLCM",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vgg-ss",
+      "name": "VGG-SS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "spacenet",
+      "name": "SpaceNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "drugood",
+      "name": "DrugOOD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "stl10-lt",
+      "name": "STL10-LT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "raven",
+      "name": "RAVEN",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "posetrack2018",
+      "name": "PoseTrack2018",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "beat",
+      "name": "BEAT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "icdar2015",
+      "name": "ICDAR2015",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "grew",
+      "name": "GREW",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "visdrone",
+      "name": "VisDrone",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "flyingthings3d",
+      "name": "FlyingThings3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "wild6d",
+      "name": "Wild6D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "housecat6d",
+      "name": "HouseCat6D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "rain100h",
+      "name": "Rain100H",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "gsv-cities",
+      "name": "GSV-Cities",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "aro",
+      "name": "ARO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pb-t50-rs",
+      "name": "PB-T50-RS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "multi-mnist",
+      "name": "Multi-MNIST",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "tiny-imagenet-lt",
+      "name": "Tiny-ImageNet-LT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "motion-x",
+      "name": "Motion-X",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "clear",
+      "name": "CLEAR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "modelnet40-c",
+      "name": "ModelNet40-C",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mp-docvqa",
+      "name": "MP-DocVQA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "posetrack21",
+      "name": "PoseTrack21",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "activitynet-1-3",
+      "name": "ActivityNet-1.3",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "t3bench",
+      "name": "T3Bench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "xquad",
+      "name": "XQuAD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hc3",
+      "name": "HC3",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "longfact",
+      "name": "LongFact",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "commongen",
+      "name": "CommonGen",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "omnidocbench",
+      "name": "OmniDocBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "helpsteer3",
+      "name": "HelpSteer3",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "libero-object",
+      "name": "LIBERO-Object",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "drivingstereo",
+      "name": "DrivingStereo",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "inloc",
+      "name": "InLoc",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "sportsmot",
+      "name": "SportsMOT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "crowdpose",
+      "name": "CrowdPose",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "flir",
+      "name": "FLIR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dark-face",
+      "name": "DARK FACE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "jhmdb-sentences",
+      "name": "JHMDB-Sentences",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "iam",
+      "name": "IAM",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "vcr",
+      "name": "VCR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "tap-vid-kubric",
+      "name": "TAP-Vid-Kubric",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vid4",
+      "name": "Vid4",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "agd20k",
+      "name": "AGD20K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mixamo",
+      "name": "Mixamo",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "realblur",
+      "name": "RealBlur",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "real-forward-facing",
+      "name": "Real Forward-Facing",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "soon",
+      "name": "SOON",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "cvact",
+      "name": "CVACT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mvs-synth",
+      "name": "MVS-Synth",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kitti-2015",
+      "name": "KITTI-2015",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "camera25",
+      "name": "CAMERA25",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kodak24",
+      "name": "Kodak24",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "davis17",
+      "name": "DAVIS17",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "nvos",
+      "name": "NVOS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scannet20",
+      "name": "ScanNet20",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "fullbodymanipulation",
+      "name": "FullBodyManipulation",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "aachen-day-night",
+      "name": "Aachen Day-Night",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "coco-wholebody",
+      "name": "COCO-WholeBody",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "crello",
+      "name": "Crello",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "tud-l",
+      "name": "TUD-L",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "severe",
+      "name": "SEVERE",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "msr-action3d",
+      "name": "MSR-Action3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "vspw",
+      "name": "VSPW",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "msls",
+      "name": "MSLS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "3dlomatch",
+      "name": "3DLoMatch",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "wildrgbd",
+      "name": "WildRGBD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ovis",
+      "name": "OVIS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "upmc-food-101",
+      "name": "UPMC Food-101",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ixi",
+      "name": "IXI",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mpts-52",
+      "name": "MPTS-52",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "halfcheetah-v4",
+      "name": "HalfCheetah-v4",
+      "aliases": [],
+      "kind": "environment",
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ut-zappos",
+      "name": "UT-Zappos",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "gaze360",
+      "name": "Gaze360",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "fvqa",
+      "name": "FVQA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ijb-c",
+      "name": "IJB-C",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "eyediap",
+      "name": "EyeDiap",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hanco",
+      "name": "HanCo",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "living-17",
+      "name": "Living-17",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "m3ed",
+      "name": "M3ED",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "imagenet-30",
+      "name": "ImageNet-30",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "esconv",
+      "name": "ESConv",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "multi30k",
+      "name": "Multi30K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "redocred",
+      "name": "ReDocRED",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "road-anomaly",
+      "name": "Road Anomaly",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "weibo21",
+      "name": "Weibo21",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "tomato",
+      "name": "TOMATO",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "visdial",
+      "name": "VisDial",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "bdd-x",
+      "name": "BDD-X",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lv-vis",
+      "name": "LV-VIS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ppr10k",
+      "name": "PPR10K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kvasir-seg",
+      "name": "Kvasir-SEG",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "istd-plus",
+      "name": "ISTD+",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cd-fss",
+      "name": "CD-FSS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ucf101-24",
+      "name": "UCF101-24",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "synapse",
+      "name": "Synapse",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "obman",
+      "name": "ObMan",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dnd",
+      "name": "DND",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "vipseg",
+      "name": "VIPSeg",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "greatest-hits",
+      "name": "Greatest Hits",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cdfsl",
+      "name": "CDFSL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "breeds",
+      "name": "BREEDS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "safebench",
+      "name": "SafeBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "metaqa",
+      "name": "MetaQA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "qrecc",
+      "name": "QReCC",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "university-1652",
+      "name": "University-1652",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "camus",
+      "name": "CAMUS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "technicolor",
+      "name": "Technicolor",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "coco-stuff164k",
+      "name": "COCO-Stuff164k",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mpiifacegaze",
+      "name": "MPIIFaceGaze",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "v2x-seq",
+      "name": "V2X-Seq",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "levir-cd",
+      "name": "LEVIR-CD",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cmu-mocap",
+      "name": "CMU-Mocap",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "aitw",
+      "name": "AITW",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "visevent",
+      "name": "VisEvent",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dream-1k",
+      "name": "DREAM-1K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hrsc2016",
+      "name": "HRSC2016",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "taxibj",
+      "name": "TaxiBJ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "noveltybench",
+      "name": "NoveltyBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "entailmentbank",
+      "name": "EntailmentBank",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pdtb",
+      "name": "PDTB",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mllmu-bench",
+      "name": "MLLMU-Bench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "scenefun3d",
+      "name": "SceneFun3D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "humaneval-x",
+      "name": "HumanEval-X",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dailydialog",
+      "name": "DailyDialog",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ontonotes",
+      "name": "OntoNotes",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "xcopa",
+      "name": "XCOPA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "iwslt14",
+      "name": "IWSLT14",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "multipref",
+      "name": "MultiPref",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "fleurs",
+      "name": "FLEURS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kb-vqa",
+      "name": "KB-VQA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "oasis",
+      "name": "OASIS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "loong",
+      "name": "Loong",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ami",
+      "name": "AMI",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "dialogsum",
+      "name": "DialogSum",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "graspnet-1billion",
+      "name": "GraspNet-1Billion",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dexgraspnet",
+      "name": "DexGraspNet",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "bop",
+      "name": "BOP",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "deepfake-detection-challenge",
+      "name": "Deepfake Detection Challenge",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "omnilabel",
+      "name": "OmniLabel",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "shhq",
+      "name": "SHHQ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "renderpeople",
+      "name": "RenderPeople",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "egohumans",
+      "name": "EgoHumans",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "hqseg-44k",
+      "name": "HQSeg-44K",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ucsd-ped2",
+      "name": "UCSD Ped2",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "egtea",
+      "name": "EGTEA",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lsmdc",
+      "name": "LSMDC",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "pf-pascal",
+      "name": "PF-PASCAL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "webvid-2m",
+      "name": "WebVid-2M",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "2d-3d-s",
+      "name": "2D-3D-S",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "cbsd68",
+      "name": "CBSD68",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "physion",
+      "name": "Physion",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ehf",
+      "name": "EHF",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "finedance",
+      "name": "FineDance",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "deformingthings4d",
+      "name": "DeformingThings4D",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "jrdb",
+      "name": "JRDB",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "megadepth-1500",
+      "name": "MegaDepth-1500",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "office-caltech-10",
+      "name": "Office-Caltech-10",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "dior-r",
+      "name": "DIOR-R",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "motionfix",
+      "name": "MotionFix",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "ochuman",
+      "name": "OCHuman",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "gazefollow",
+      "name": "GazeFollow",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "videoattentiontarget",
+      "name": "VideoAttentionTarget",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "wosac",
+      "name": "WOSAC",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "robustbench",
+      "name": "RobustBench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "jhmdb",
+      "name": "JHMDB",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lerf-ovs",
+      "name": "LERF-OVS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "matrixcity",
+      "name": "MatrixCity",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "physics-iq",
+      "name": "Physics-IQ",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "kris-bench",
+      "name": "KRIS-Bench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mqar",
+      "name": "MQAR",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "bold5000",
+      "name": "BOLD5000",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "genvideo",
+      "name": "GenVideo",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "camelyon",
+      "name": "Camelyon",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "amos",
+      "name": "AMOS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "crowdhuman",
+      "name": "CrowdHuman",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "motsynth",
+      "name": "MOTSynth",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mmsi-bench",
+      "name": "MMSI-Bench",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "miracl",
+      "name": "MIRACL",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "egoclip",
+      "name": "EgoClip",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "jft",
+      "name": "JFT",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet.",
+      "ambiguous": true
+    },
+    {
+      "id": "ant-v4",
+      "name": "Ant-v4",
+      "aliases": [],
+      "kind": "environment",
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "mixeval",
+      "name": "MixEval",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "sarcos",
+      "name": "SARCOS",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "gsm8k-aug",
+      "name": "GSM8k-Aug",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "lj13",
+      "name": "LJ13",
+      "aliases": [],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "tanks-and-temples",
+      "name": "Tanks and Temples",
+      "aliases": [
+        "tanks & temples",
+        "tanks&temples"
+      ],
+      "kind": null,
+      "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
     }
   ]
 }
