@@ -31,3 +31,10 @@ report_roadmap.md
 
 # Internal working notes — not part of the published project.
 todo.md
+
+# Parsed arXiv HTML, one file per edition (icml.html_extract) — same reason as
+# fulltext*.jsonl above: large, and rebuildable from data/raw/html by --reparse.
+data/interim/html/
+# Rule-found benchmark mentions (icml.bench_mentions): 200 MB, rebuilt from
+# data/interim/html in ~45 min, no model involved.
+data/interim/mentions/
