@@ -21,6 +21,7 @@ import json
 import re
 from collections import defaultdict
 
+from .corpus import VENUES, Corpus
 from .common import PROCESSED, RAW, ensure_dirs, read_jsonl
 
 INDEX = RAW / "arxiv" / "oai_index.jsonl"
@@ -45,7 +46,7 @@ def main() -> int:
     ap.add_argument("--margin", type=float, default=0.05,
                     help="reject if the runner-up is within this of the best (ambiguous)")
     ap.add_argument("--report", action="store_true", help="show sample matches and rejects")
-    ap.add_argument("--venue", default="icml", choices=["icml", "neurips", "iclr"])
+    ap.add_argument("--venue", default="icml", choices=sorted(VENUES))
     ap.add_argument("--year", type=int, default=None)
     args = ap.parse_args()
 
@@ -53,10 +54,8 @@ def main() -> int:
     if not INDEX.exists():
         raise SystemExit("no oai_index.jsonl — run `python3 -m icml.arxiv_harvest` first")
 
-    from .corpus import Corpus
     from .common import FOCUS_YEAR
-    corpus = Corpus({"icml": "ICML", "neurips": "NeurIPS", "iclr": "ICLR"}[args.venue],
-                    args.year or FOCUS_YEAR)
+    corpus = Corpus(VENUES[args.venue], args.year or FOCUS_YEAR)
     out_path = OUT if corpus.is_focus else OUT.with_name(f"resolved_{corpus.key}.jsonl")
     papers = list(read_jsonl(corpus.papers))
 

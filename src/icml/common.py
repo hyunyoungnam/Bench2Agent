@@ -8,6 +8,7 @@ import gzip
 import json
 import os
 import random
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -41,6 +42,13 @@ UA = (
 )
 
 
+# Python 3.13+ sets VERIFY_X509_STRICT, which rejects several real certificate
+# chains (arXiv, PMLR, GitHub, the Hub) for a missing Authority Key Identifier
+# while curl accepts them. Clear only that flag; the chain is still verified.
+SSL_CTX = ssl.create_default_context()
+SSL_CTX.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+
+
 def ensure_dirs() -> None:
     for p in (RAW, RAW / "abstracts", INTERIM, PROCESSED, REPORTS):
         p.mkdir(parents=True, exist_ok=True)
@@ -59,7 +67,7 @@ def fetch(url: str, *, timeout: int = 60, retries: int = 4) -> bytes:
                     "Accept-Encoding": "gzip",
                 },
             )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as resp:
                 body = resp.read()
                 if resp.headers.get("Content-Encoding") == "gzip":
                     body = gzip.decompress(body)

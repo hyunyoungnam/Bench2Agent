@@ -28,8 +28,8 @@ from pathlib import Path
 
 try:
     import fitz  # PyMuPDF
-except ImportError:  # pragma: no cover
-    raise SystemExit("PyMuPDF missing — run: .venv/bin/pip install pymupdf")
+except ImportError:  # pragma: no cover — html_extract imports bucket_for only
+    fitz = None
 
 from .common import INTERIM, RAW
 
@@ -78,6 +78,8 @@ def extract(path: Path) -> dict:
     """PDF -> {sections: [...], kept_text, stats}. Never raises; reports errors."""
     row: dict = {"arxiv_base": path.stem}
     try:
+        if fitz is None:
+            raise SystemExit("PyMuPDF missing — run: .venv/bin/pip install pymupdf")
         doc = fitz.open(path)
     except Exception as exc:  # noqa: BLE001
         return row | {"ok": False, "error": f"open: {type(exc).__name__}"}

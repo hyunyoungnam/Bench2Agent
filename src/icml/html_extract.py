@@ -10,19 +10,25 @@ becomes primary (CLAUDE.md > Full text routes):
      pipeline's 60% filter dropped references entirely, which is why no
      citation data exists.
 
-HTML pages are an intermediate, never an archive: fetched, parsed in memory,
-and discarded — only the sectioned JSONL is kept (same schema as
-icml.pdf_extract plus `references` and an `appendix` bucket, where NeurIPS
-hides its limitations sections).
+Output is the sectioned JSONL (same schema as icml.pdf_extract plus
+`references`, an `appendix` bucket where NeurIPS hides its limitations
+sections, and `floats`: every captioned table and figure with its caption and,
+for tables, the cell text). With --archive the raw page is also kept gzipped
+(decided 2026-08-28), and --reparse rebuilds the JSONL from that archive
+without touching arXiv — how a parser change reaches every corpus.
 
     .venv/bin/python -m icml.html_extract --resolved data/raw/arxiv/resolved_neurips-2025.jsonl \\
         --out data/interim/fulltext_html_neurips_2025.jsonl --workers 4
+
+    .venv/bin/python -m icml.html_extract --resolved data/raw/arxiv/resolved_iclr-2025.jsonl \\
+        --out data/interim/fulltext_html_iclr_2025.jsonl --archive data/raw/html --reparse
 
 Resumable: rows already in --out are skipped.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 import threading
@@ -33,7 +39,7 @@ from pathlib import Path
 
 from lxml import html as lhtml
 
-from .common import RAW, read_jsonl
+from .common import RAW, SSL_CTX, read_jsonl
 from .pdf_extract import bucket_for
 
 RESOLVED = RAW / "arxiv" / "resolved.jsonl"
@@ -56,7 +62,7 @@ def fetch_html(base: str, timeout: int = 30) -> str | None:
     """The latest HTML rendering, or None when arXiv has none (~2%)."""
     req = urllib.request.Request(f"https://arxiv.org/html/{base}", headers=UA)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as fh:
+        with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as fh:
             return fh.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -74,10 +80,15 @@ def parse_html(text: str) -> dict:
     # source ("\\mathcal{O}(1)") — drop the annotation carrying the source.
     for ann in root.xpath(".//*[local-name()='annotation' or local-name()='annotation-xml']"):
         ann.getparent().remove(ann)
+    # Floats are kept OUT of the prose but not discarded: a benchmark is often
+    # named only in a table header or a caption ("Table 3: Results on GSM8K
+    # and MATH-500"), so they go to their own list before removal.
+    floats = _floats(root)
     # Floats and footnotes are layout, not prose.
     for el in root.xpath(".//figure | .//*[contains(@class,'ltx_table')]"
                          " | .//*[contains(@class,'ltx_note')]"):
-        el.getparent().remove(el)
+        if el.getparent() is not None:
+            el.getparent().remove(el)
 
     sections: list[dict] = []
     for ab in root.xpath(".//div[contains(@class,'ltx_abstract')]"):
@@ -151,7 +162,52 @@ def parse_html(text: str) -> dict:
         if len(t) > 20:
             refs.append(t[:600])
 
-    return {"sections": sections, "references": refs, "authors": authors}
+    return {"sections": sections, "references": refs, "authors": authors, "floats": floats}
+
+
+MAX_ROWS, MAX_COLS, MAX_CELL = 60, 24, 120
+
+
+def _floats(root) -> list[dict]:
+    """Every captioned figure and table, in document order:
+    {kind, id, section, caption, rows}. `rows` (tables only) is the cell text,
+    row by row — verbatim strings a benchmark name can be checked against, not
+    a reconstruction of the table. Panels of a figure (sub-captions "(a)") are
+    folded into their parent's caption list, not listed as floats of their own.
+    """
+    out = []
+    for fig in root.xpath(".//figure"):
+        cap = fig.xpath("./figcaption")
+        if not cap or fig.xpath("ancestor::figure"):
+            continue
+        cls = fig.get("class") or ""
+        kind = "table" if "ltx_table" in cls else "figure"
+        caption = _clean(cap[0].text_content())
+        subs = [_clean(c.text_content()) for c in fig.xpath(".//figure/figcaption")]
+        subs = [s for s in subs if len(s) > 4]
+        sec = fig.xpath("ancestor::section[contains(@class,'ltx_section')"
+                        " or contains(@class,'ltx_appendix')][last()]")
+        title = sec[0].xpath(".//*[contains(@class,'ltx_title')]") if sec else []
+        row = {"kind": kind, "id": fig.get("id"),
+               "section": _NUM.sub("", _clean(title[0].text_content())) if title else "",
+               "appendix": bool(sec) and "ltx_appendix" in (sec[0].get("class") or ""),
+               "caption": caption}
+        if subs:
+            row["subcaptions"] = subs
+        rows = []
+        # outer rows only: LaTeXML nests a tabular inside a header cell for
+        # line breaks, and its rows would repeat that cell's text as rows
+        for tr in fig.xpath(".//tr[not(ancestor::td) and not(ancestor::th)]"):
+            cells = [_clean(c.text_content())[:MAX_CELL] for c in tr.xpath("./td|./th")]
+            if any(cells):
+                rows.append(cells[:MAX_COLS])
+            if len(rows) >= MAX_ROWS:
+                break
+        if rows:
+            row["rows"] = rows
+        if caption or rows:
+            out.append(row)
+    return out
 
 
 def main() -> int:
@@ -166,6 +222,9 @@ def main() -> int:
     ap.add_argument("--archive", default=None,
                     help="directory for gzipped HTML — cheap insurance against "
                          "the NEXT field we discover we need (decided 2026-08-28)")
+    ap.add_argument("--reparse", action="store_true",
+                    help="read <archive>/<base>.html.gz when present instead of "
+                         "fetching; only papers missing from the archive hit arXiv")
     ap.add_argument("--authors-only", action="store_true",
                     help="harvest the author block only; sections/references "
                          "are not rewritten")
@@ -199,26 +258,31 @@ def main() -> int:
 
     def one(base: str) -> dict:
         row = {"arxiv_base": base}
+        cached = Path(args.archive) / f"{base}.html.gz" if args.archive else None
         try:
+            if args.reparse and cached and cached.exists():
+                return parsed_row(row, gzip.decompress(cached.read_bytes()).decode("utf-8", "replace"))
             text = fetch_html(base)
             if text is None:
                 return {**row, "ok": False, "error": "no-html"}
-            if args.archive:
-                import gzip
-                (Path(args.archive) / f"{base}.html.gz").write_bytes(
-                    gzip.compress(text.encode("utf-8"), 6))
-            parsed = parse_html(text)
-            if args.authors_only:
-                return {**row, "ok": True, "authors": parsed["authors"]}
-            kept = sum(len(s["text"]) for s in parsed["sections"])
-            if kept < 500:
-                return {**row, "ok": False, "error": f"thin ({kept} chars)"}
-            return {**row, "ok": True, **parsed, "chars": kept}
+            if cached:
+                cached.write_bytes(gzip.compress(text.encode("utf-8"), 6))
+            return parsed_row(row, text)
         except Exception as exc:  # noqa: BLE001
             return {**row, "ok": False, "error": f"{type(exc).__name__}: {exc}"[:200],
                     "transient": isinstance(exc, (urllib.error.URLError, TimeoutError, OSError))}
         finally:
-            time.sleep(args.delay)
+            if not (args.reparse and cached and cached.exists()):
+                time.sleep(args.delay)
+
+    def parsed_row(row: dict, text: str) -> dict:
+        parsed = parse_html(text)
+        if args.authors_only:
+            return {**row, "ok": True, "authors": parsed["authors"]}
+        kept = sum(len(s["text"]) for s in parsed["sections"])
+        if kept < 500:
+            return {**row, "ok": False, "error": f"thin ({kept} chars)"}
+        return {**row, "ok": True, **parsed, "chars": kept}
 
     import concurrent.futures as cf
     with out.open("a", encoding="utf-8") as fh, \

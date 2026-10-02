@@ -11,6 +11,11 @@ overwhelmingly 2024 onward; widen the window if match rate disappoints.
 
     python3 -m icml.arxiv_harvest                    # resume until complete
     python3 -m icml.arxiv_harvest --since 2023-01-01
+    python3 -m icml.arxiv_harvest --since 2022-06-01 --until 2023-12-31   # backfill
+
+A window with --until is tracked under its own state key, so a backfill never
+disturbs (or is skipped by) the completed open-ended harvest. Rows already in
+the index are not written again.
 
 Output: data/raw/arxiv/oai_index.jsonl  +  oai_state.json (resumption tokens)
 """
@@ -25,11 +30,13 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from .common import RAW, dump_json, ensure_dirs, load_json
+from .common import RAW, SSL_CTX, dump_json, ensure_dirs, load_json
 
 OUT = RAW / "arxiv" / "oai_index.jsonl"
 STATE = RAW / "arxiv" / "oai_state.json"
-BASE = "http://export.arxiv.org/oai2"
+# export.arxiv.org/oai2 now 301s here (seen 2026-10-02); a dated window can
+# take ~70 s per page, so the read timeout is generous.
+BASE = "https://oaipmh.arxiv.org/oai"
 
 OAI = "{http://www.openarchives.org/OAI/2.0/}"
 DC = "{http://purl.org/dc/elements/1.1/}"
@@ -37,13 +44,15 @@ DC = "{http://purl.org/dc/elements/1.1/}"
 UA = "icml-atlas/0.1 (academic research; building a conference research map)"
 
 
-def request(params: dict, timeout: int = 120) -> ET.Element:
+def request(params: dict, timeout: int = 400) -> ET.Element:
     """OAI request honouring 503 + Retry-After, which is arXiv's flow control."""
-    url = f"{BASE}?" + urllib.parse.urlencode(params)
+    # The resumption token arrives already percent-encoded (oaipmh.arxiv.org,
+    # 2026-10); encoding it again makes the server drop the connection.
+    url = f"{BASE}?" + urllib.parse.urlencode(params, safe="%")
     for attempt in range(8):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, context=SSL_CTX) as resp:
                 return ET.fromstring(resp.read())
         except urllib.error.HTTPError as exc:
             # 503 + Retry-After is the documented way OAI servers say "slow down".
@@ -81,12 +90,15 @@ def parse_records(root: ET.Element) -> tuple[list[dict], str | None]:
     return rows, (tok or None)
 
 
-def harvest_set(name: str, since: str, state: dict, delay: float) -> int:
-    token = state.get(name, {}).get("token")
-    done = state.get(name, {}).get("complete", False)
+def harvest_set(name: str, since: str, state: dict, delay: float,
+                until: str | None = None) -> int:
+    key = name if until is None else f"{name}@{since}..{until}"
+    token = state.get(key, {}).get("token")
+    done = state.get(key, {}).get("complete", False)
     if done:
-        print(f"[{name}] already complete")
+        print(f"[{key}] already complete")
         return 0
+    seen = {json.loads(l)["arxiv_base"] for l in OUT.open()} if OUT.exists() else set()
 
     n = 0
     start = time.time()
@@ -94,19 +106,22 @@ def harvest_set(name: str, since: str, state: dict, delay: float) -> int:
         while True:
             params = ({"verb": "ListRecords", "resumptionToken": token} if token
                       else {"verb": "ListRecords", "metadataPrefix": "oai_dc",
-                            "set": name, "from": since})
+                            "set": name, "from": since,
+                            **({"until": until} if until else {})})
             root = request(params)
             rows, token = parse_records(root)
+            rows = [r for r in rows if r["arxiv_base"] not in seen]
             for r in rows:
+                seen.add(r["arxiv_base"])
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
             fh.flush()
             n += len(rows)
 
-            state[name] = {"token": token, "complete": token is None}
+            state[key] = {"token": token, "complete": token is None}
             dump_json(STATE, state)
 
             rate = n / max(time.time() - start, 1e-6)
-            print(f"[{name}] +{len(rows):4d}  total={n:6d}  {rate:.0f} rec/s"
+            print(f"[{key}] +{len(rows):4d}  total={n:6d}  {rate:.0f} rec/s"
                   f"{'' if token else '  COMPLETE'}", flush=True)
             if not token:
                 break
@@ -117,6 +132,8 @@ def harvest_set(name: str, since: str, state: dict, delay: float) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Harvest arXiv metadata via OAI-PMH.")
     ap.add_argument("--since", default="2024-01-01", help="harvest records from this date")
+    ap.add_argument("--until", default=None,
+                    help="end of a backfill window (YYYY-MM-DD); omit for open-ended")
     ap.add_argument("--sets", nargs="+", default=["cs", "stat"])
     ap.add_argument("--delay", type=float, default=3.0)
     args = ap.parse_args()
@@ -127,7 +144,7 @@ def main() -> int:
 
     total = 0
     for s in args.sets:
-        total += harvest_set(s, args.since, state, args.delay)
+        total += harvest_set(s, args.since, state, args.delay, args.until)
 
     have = sum(1 for _ in OUT.open()) if OUT.exists() else 0
     print(f"\nharvested +{total} records this run; index now {have:,} rows")

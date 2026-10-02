@@ -30,6 +30,32 @@ ACTIVE = (
 )
 ACTIVE_YEARS = tuple(sorted({y for _, y in ACTIVE}))
 
+# Every venue the pipeline knows, keyed by the lowercase CLI/file name. The
+# display name is the venue's own spelling.
+VENUES = {
+    "icml": "ICML", "iclr": "ICLR", "neurips": "NeurIPS",
+    "cvpr": "CVPR", "iccv": "ICCV", "eccv": "ECCV",
+    "aaai": "AAAI", "acl": "ACL", "emnlp": "EMNLP", "corl": "CoRL",
+}
+
+# The collection scope for benchmark usage (owner, 2026-10-02): the three most
+# recent editions of each venue, two for ICCV and ECCV, which alternate years.
+# This is what icml.sources collects. It is NOT the ACTIVE list above: a corpus
+# joins ACTIVE only once it is extracted and embedded, and adding one there
+# re-keys gid (union.json sorts by corpus key), so that is a desktop step.
+EDITIONS = (
+    ("ICML", 2024), ("ICML", 2025), ("ICML", 2026),
+    ("ICLR", 2024), ("ICLR", 2025), ("ICLR", 2026),
+    ("NeurIPS", 2023), ("NeurIPS", 2024), ("NeurIPS", 2025),
+    ("CVPR", 2024), ("CVPR", 2025), ("CVPR", 2026),
+    ("ICCV", 2023), ("ICCV", 2025),
+    ("ECCV", 2024), ("ECCV", 2026),
+    ("AAAI", 2024), ("AAAI", 2025), ("AAAI", 2026),
+    ("ACL", 2024), ("ACL", 2025), ("ACL", 2026),
+    ("EMNLP", 2023), ("EMNLP", 2024), ("EMNLP", 2025),
+    ("CoRL", 2023), ("CoRL", 2024), ("CoRL", 2025),
+)
+
 
 @dataclass(frozen=True)
 class Corpus:

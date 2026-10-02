@@ -10,23 +10,25 @@ from __future__ import annotations
 import argparse
 import re
 
-from .collect import latest_snapshot
 from .common import (
     FOCUS_YEAR, PROCESSED, RAW, ROOT, dump_json, ensure_dirs, load_json, read_jsonl, write_jsonl,
 )
-from .corpus import Corpus
+from .corpus import VENUES, Corpus
+from .sources import latest_snapshot
 
 ABSTRACTS = RAW / "abstracts" / "abstracts.jsonl"
 OUT = PROCESSED / "papers.jsonl"
-# The virtual sites run the same infrastructure, so one normaliser covers all
-# three venues; only the feed name and the link domain differ.
+# The virtual sites run the same infrastructure, so one normaliser covers every
+# venue; icml.sources writes the other venues' lists in the same feed shape.
 VENUE_DOMAIN = {"ICML": "https://icml.cc", "NeurIPS": "https://neurips.cc",
-                "ICLR": "https://iclr.cc"}
-VENUE_ARG = {"icml": "ICML", "neurips": "NeurIPS", "iclr": "ICLR"}
+                "ICLR": "https://iclr.cc", "CVPR": "https://cvpr.thecvf.com",
+                "ICCV": "https://iccv.thecvf.com", "ECCV": "https://eccv.ecva.net"}
+VENUE_ARG = VENUES
 
 # Track identification, derived from the feed's sourceurl field.
 TRACK_PATTERNS = [
     (re.compile(r"/\d{4}/Conference", re.I), "main"),
+    (re.compile(r"thecvf\.com/(CVPR|ICCV|ECCV)|^ECCV\d{4}$|^(cvf|aaai|anthology|pmlr):", re.I), "main"),
     (re.compile(r"Position_Paper_Track", re.I), "position"),
     (re.compile(r"^TMLR", re.I), "tmlr-journal"),
     (re.compile(r"JmlrOrg", re.I), "jmlr-journal"),
@@ -153,18 +155,14 @@ def main() -> int:
     out = corpus.papers
 
     ensure_dirs()
-    if venue == "ICML":
-        snap = latest_snapshot(args.year)
-    else:
-        snaps = sorted(RAW.glob(f"virtual_feed_{args.venue}_{args.year}_*.json"))
-        snap = snaps[-1] if snaps else None
+    snap = latest_snapshot(args.venue, args.year)
     if snap is None:
-        raise SystemExit("no feed snapshot — run `python3 -m icml.collect` first")
+        raise SystemExit("no feed snapshot — run `python3 -m icml.sources collect` first")
 
     # Abstracts, best source first: the feed itself carries them for past
     # editions (NeurIPS 2025, ICLR 2025 — 100%); a current edition needs the
     # scraped file (abstracts.jsonl for ICML, abstracts_<venue>_<year>.jsonl
-    # otherwise, from scripts/scrape_abstracts_generic.py).
+    # otherwise, from `icml.sources abstracts`).
     if venue == "ICML":
         abs_path = ABSTRACTS
     else:
@@ -217,7 +215,7 @@ def main() -> int:
             "openreview_id": openreview_id(rec.get("paper_url")),
             "paper_url": rec.get("paper_url"),
             "virtual_url": (VENUE_DOMAIN[venue] + rec["virtualsite_url"])
-                           if rec.get("virtualsite_url") else None,
+                           if rec.get("virtualsite_url") and venue in VENUE_DOMAIN else None,
         })
 
     # Collapse the oral/poster double-listing before anything is counted.
