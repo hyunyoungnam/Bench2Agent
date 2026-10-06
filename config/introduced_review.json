@@ -1,0 +1,894 @@
+{
+  "claims": {
+    "2507.12591#ctscangaze": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.19852#convcodeworld": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.12963#longformrewardbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2407.12593#evsign": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2506.02548#cybergym": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2509.17325#codegym": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2508.06757#voccl3d": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2312.11523#tovilag": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.19765#freak": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2508.09641#visfineval": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2310.05174#gslb": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2604.12221#barbiegait": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2505.23922#scalelong": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2511.01625#unidatabench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2606.31219#cooperscene": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2605.17187#plurule": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2506.00064#misprompt": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2410.19488#mmwlauslan": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2310.17316#defectspectrum": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.01811#autoadvexbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2510.11985#cgbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2301.03213#egotracks": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2606.04184#grouptombench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2305.14938#socket": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.19684#grace": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.14739#supergpqa": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2306.02069#multilegalpile": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2504.13955#thousandvoices": {
+      "label": "X",
+      "status": "excluded",
+      "note": "real name Thousand Voices of Trauma",
+      "reviewed": "2026-10-06"
+    },
+    "2409.13592#yesbut": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2509.09680#prismbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2501.13773#geometricrelationshipidentification": {
+      "label": "X",
+      "status": "excluded",
+      "note": "real name GeomRel",
+      "reviewed": "2026-10-06"
+    },
+    "2403.20266#eusproficiency": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.13547#numcolordata": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.16094#leakpii": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.29036#egocrowds": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2510.25694#configurationdiagnosis": {
+      "label": "X",
+      "status": "excluded",
+      "note": "real name EnConda-Bench",
+      "reviewed": "2026-10-06"
+    },
+    "2502.11684#numinamathfim": {
+      "label": "?",
+      "status": "undetermined",
+      "reviewed": "2026-10-06"
+    },
+    "2312.08366#fprefcoco": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.07003#wdct": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2407.05311#mma52": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2510.15513#temprecon": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2310.17722#languagerearrangement": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2506.13130#visionhall": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2508.08328#dqbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2505.11032#dexgarmentlabenvironment": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2411.07232#additingaffordance": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.17716#ac1m": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2405.19782#pypi": {
+      "label": "X",
+      "status": "excluded",
+      "note": "real name ReccEval",
+      "reviewed": "2026-10-06"
+    },
+    "2602.22583#hmreasoningbench": {
+      "label": "?",
+      "status": "undetermined",
+      "reviewed": "2026-10-06"
+    },
+    "2602.07143#mseb": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2304.14399#ambient": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2602.16313#bundledwebshopping": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2507.04451#3dscenebench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2409.19680#ieb": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.14378#ipvtxt": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2510.09259#rlmia": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2401.03043#flytracing": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2506.09814#3dmeshpref": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2408.10123#aed": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2506.02689#boostqa": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2410.04660#ddx": {
+      "label": "X",
+      "status": "excluded",
+      "note": "real name MedDDx",
+      "reviewed": "2026-10-06"
+    },
+    "2410.05235#iaa": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2409.08202#vab": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2402.15052#tmbench": {
+      "label": "X",
+      "status": "excluded",
+      "note": "title says ToMBench; the text writes TMBench",
+      "reviewed": "2026-10-06"
+    },
+    "2603.07659#drbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2607.14927#gso": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2406.11035#fol": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2406.10638#mmvu": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2308.03977#pug": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2604.16593#lms": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2412.13102#airbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2410.06526#korbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2507.02833#ifbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2505.14148#mmbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2603.05912#ats": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2311.01410#dragbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.17350#mtbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2401.10226#rovi": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2410.07095#mlebench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2407.12435#hoi": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2410.12332#mcbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2306.10012#magicbrush": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.06994#syncbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2406.07436#mceval": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2410.16451#mcq": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2506.23263#drivegaze": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2605.01638#omnifake": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.00595#unicbench": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2603.26362#mcq": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2601.07553#framework": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2402.05787#dshuffle": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2602.03183#privasis": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2403.09093#webdesign": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2302.02257#dgen": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2601.08040#rescind": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2312.09542#marathon": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2602.14872#fourierbased": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2306.05144#mesogeos": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2409.05806#chinese": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2505.13938#clever": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.09447#based": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2403.16513#multistep": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2502.05790#raffel": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2401.07663#selene": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2605.16449#meter": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2404.16019#prism": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2411.07763#spider20lite": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.06434#compression": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2401.12585#slang": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2502.06857#gemstones": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2510.13796#das": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2410.02603#tell": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2412.09283#inseval": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2503.23508#licenses": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2412.05203#archaeoscape": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2605.05777#zeng": {
+      "label": "N",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2505.23387#venus": {
+      "label": "E",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2601.04745#tier1": {
+      "label": "X",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2510.09096#brockman": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2406.06040#vript": {
+      "label": "T",
+      "status": "confirmed",
+      "reviewed": "2026-10-06"
+    },
+    "2605.02572#sudoku": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2306.08386#cifar10": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2306.06070#mind2web": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2406.06565#mixeval": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2406.15877#bigcodebench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2308.12952#bridgedatav2": {
+      "label": "T",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2412.12839#muse": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2311.14897#anomalyshapenet": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2403.20330#mmstar": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2406.04770#wildbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2403.14624#mathverse": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2212.03741#finedance": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2508.04946#fleurs": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2308.03688#agentbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2406.11794#dclm": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2304.01715#lvvis": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2511.18903#mmlu": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2412.07626#omnidocbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2402.14804#mathvision": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2511.01589#bird": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2406.11939#arenahardauto": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2402.07729#airbench": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2402.04902#commonsenseqa": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2406.19320#crafter": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2406.15513#pkusaferlhf": {
+      "label": "T",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2511.07317#sudoku": {
+      "label": "T",
+      "status": "confirmed",
+      "note": "homonym",
+      "reviewed": "2026-10-06"
+    },
+    "2407.06172#alpacaeval": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2401.12592#wildrgbd": {
+      "label": "E",
+      "status": "confirmed",
+      "note": "same",
+      "reviewed": "2026-10-06"
+    },
+    "2510.09719#humaneval": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    },
+    "2404.04612#cora": {
+      "label": "U",
+      "status": "excluded",
+      "reviewed": "2026-10-06"
+    }
+  },
+  "ids": {
+    "bridgedatav2|reg@2308.12952": "bridgedata-v2",
+    "ambient@2304.14399": "ambient",
+    "tovilag@2312.11523": "tovilag",
+    "socket@2305.14938": "socket",
+    "lvvis|reg@2304.01715": "lv-vis",
+    "finedance|reg@2212.03741": "finedance",
+    "gslb@2310.05174": "gslb",
+    "mind2web|reg@2306.06070": "mind2web",
+    "magicbrush@2306.10012": "magicbrush",
+    "pug@2308.03977": "pug",
+    "egotracks@2301.03213": "egotracks",
+    "mesogeos@2306.05144": "mesogeos",
+    "flytracing@2401.03043": "flytracing",
+    "selene@2401.07663": "selene",
+    "airbench|reg@2402.07729": "air-bench",
+    "marathon@2312.09542": "marathon",
+    "eusproficiency@2403.20266": "eusproficiency",
+    "multilegalpile@2306.02069": "multilegalpile",
+    "wildrgbd|reg@2401.12592": "wildrgbd",
+    "rovi@2401.10226": "rovi",
+    "anomalyshapenet|reg@2311.14897": "anomaly-shapenet",
+    "webdesign@2403.09093": "web-design",
+    "fprefcoco@2312.08366": "fp-refcoco",
+    "defectspectrum@2310.17316": "defect-spectrum",
+    "evsign@2407.12593": "evsign",
+    "mathverse|reg@2403.14624": "mathverse",
+    "slang@2401.12585": "slang",
+    "yesbut@2409.13592": "yesbut",
+    "agentbench|reg@2308.03688": "agentbench",
+    "languagerearrangement@2310.17722": "language-rearrangement",
+    "dragbench@2311.01410": "dragbench",
+    "mmstar|reg@2403.20330": "mmstar",
+    "mixeval|reg@2406.06565": "mixeval",
+    "mmwlauslan@2410.19488": "mm-wlauslan",
+    "archaeoscape@2412.05203": "archaeoscape",
+    "mathvision|reg@2402.14804": "mathvision",
+    "dclm|reg@2406.11794": "dclm",
+    "ieb@2409.19680": "ieb",
+    "vript@2406.06040": "vript",
+    "prism@2404.16019": "prism",
+    "ac1m@2503.17716": "ac-1m",
+    "misprompt@2506.00064": "mis-prompt",
+    "grace@2502.19684": "grace",
+    "airbench@2412.13102": "air-bench-2",
+    "pkusaferlhf|reg@2406.15513": "pku-saferlhf",
+    "mmvu@2406.10638": "mmvu",
+    "omnidocbench|reg@2412.07626": "omnidocbench",
+    "inseval@2412.09283": "inseval",
+    "leakpii@2502.16094": "leakpii",
+    "temprecon@2510.15513": "temp-recon",
+    "bird@2511.01589": "bird-2",
+    "visfineval@2508.09641": "visfineval",
+    "mma52@2407.05311": "mma-52",
+    "ctscangaze@2507.12591": "ct-scangaze",
+    "aed@2408.10123": "aed",
+    "mcbench@2410.12332": "mc-bench",
+    "drivegaze@2506.23263": "drive-gaze",
+    "voccl3d@2508.06757": "voccl3d",
+    "mtbench@2503.17350": "mtbench",
+    "convcodeworld@2502.19852": "convcodeworld",
+    "additingaffordance@2411.07232": "additing-affordance",
+    "mceval@2406.07436": "mceval",
+    "korbench@2410.06526": "kor-bench",
+    "wdct@2503.07003": "wdct",
+    "muse@2412.12839": "muse-2",
+    "wildbench|reg@2406.04770": "wildbench",
+    "vab@2409.08202": "vab",
+    "bigcodebench|reg@2406.15877": "bigcodebench",
+    "spider20lite@2411.07763": "spider-2-0-lite",
+    "mlebench@2410.07095": "mle-bench",
+    "ipvtxt@2503.14378": "ipv-txt",
+    "arenahardauto|reg@2406.11939": "arena-hard",
+    "syncbench@2502.06994": "syncbench",
+    "autoadvexbench@2503.01811": "autoadvexbench",
+    "mmbench@2505.14148": "mm-bench",
+    "venus@2505.23387": "venus",
+    "3dscenebench@2507.04451": "3dscenebench",
+    "boostqa@2506.02689": "boost-qa",
+    "ifbench@2507.02833": "ifbench",
+    "mseb@2602.07143": "mseb",
+    "cgbench@2510.11985": "cgbench",
+    "clever@2505.13938": "clever",
+    "supergpqa@2502.14739": "supergpqa",
+    "dqbench@2508.08328": "dq-bench",
+    "longformrewardbench@2603.12963": "long-form-rewardbench",
+    "rescind@2601.08040": "rescind",
+    "unidatabench@2511.01625": "unidatabench",
+    "plurule@2605.17187": "plurule",
+    "grouptombench@2606.04184": "grouptom-bench",
+    "visionhall@2506.13130": "visionhall",
+    "barbiegait@2604.12221": "barbiegait",
+    "omnifake@2605.01638": "omni-fake",
+    "unicbench@2603.00595": "unicbench",
+    "egocrowds@2603.29036": "egocrowds",
+    "drbench@2603.07659": "drbench",
+    "numcolordata@2603.13547": "numcolor-data",
+    "cooperscene@2606.31219": "cooperscene",
+    "prismbench@2509.09680": "prism-bench",
+    "freak@2603.19765": "freak",
+    "codegym@2509.17325": "codegym",
+    "3dmeshpref@2506.09814": "3d-meshpref",
+    "rlmia@2510.09259": "rl-mia",
+    "scalelong@2505.23922": "scalelong",
+    "cybergym@2506.02548": "cybergym",
+    "privasis@2602.03183": "privasis",
+    "bundledwebshopping@2602.16313": "bundled-web-shopping",
+    "sudoku@2511.07317": "sudoku-2",
+    "meter@2605.16449": "meter"
+  }
+}

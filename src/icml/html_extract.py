@@ -84,6 +84,15 @@ def parse_html(text: str) -> dict:
     # named only in a table header or a caption ("Table 3: Results on GSM8K
     # and MATH-500"), so they go to their own list before removal.
     floats = _floats(root)
+    # in-text citations: visible text -> bibliography ids ("Rombach et al.,
+    # 2022a" -> bib.bib45; numeric styles give "12"). A sentence's citations
+    # can then be tied to the works it cites, which plain reference text cannot.
+    cites: dict[str, list[str]] = {}
+    for a in root.xpath(".//cite//a[starts-with(@href,'#bib')]"):
+        surf = _clean(a.text_content())
+        bid = (a.get("href") or "")[1:]
+        if surf and bid and bid not in cites.setdefault(surf, []):
+            cites[surf].append(bid)
     # Floats and footnotes are layout, not prose.
     for el in root.xpath(".//figure | .//*[contains(@class,'ltx_table')]"
                          " | .//*[contains(@class,'ltx_note')]"):
@@ -156,13 +165,15 @@ def parse_html(text: str) -> dict:
                         and authors[cur][1] is None:
                     authors[cur][1] = em
 
-    refs = []
+    refs, ref_ids = [], []
     for li in root.xpath(".//li[contains(@class,'ltx_bibitem')]"):
         t = _clean(li.text_content())
         if len(t) > 20:
             refs.append(t[:600])
+            ref_ids.append(li.get("id") or "")
 
-    return {"sections": sections, "references": refs, "authors": authors, "floats": floats}
+    return {"sections": sections, "references": refs, "ref_ids": ref_ids, "cites": cites,
+            "authors": authors, "floats": floats}
 
 
 MAX_ROWS, MAX_COLS, MAX_CELL = 60, 24, 120

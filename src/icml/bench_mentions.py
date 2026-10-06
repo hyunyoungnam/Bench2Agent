@@ -98,15 +98,18 @@ def vocabulary(min_papers: int = MIN_PAPERS) -> tuple[dict[str, str], dict[str, 
                 fold_to.setdefault(k, e["id"])
 
     # benchmarks a paper in the corpus says it built (icml.bench_mentions --introduced)
+    # only claims Claude Code's review confirmed; same-named products share one
+    # key here and are told apart later by what the role sentence cites
     if INTRODUCED.exists():
         for e in load_json(INTRODUCED)["benchmarks"]:
-            if e["fold"] in fold_to or not e.get("verified"):
-                continue        # body-only claims stay candidates until reviewed
-            fold_to[e["fold"]] = e["id"]
-            casings[e["id"]].add(e["name"])
-            label[e["id"]] = e["name"]
+            if e.get("registered") or e["fold"] in fold_to:
+                continue
+            key = e["id"] if not e.get("homonym_of") else "hom:" + e["fold"]
+            fold_to[e["fold"]] = key
+            casings[key].add(e["name"])
+            label[key] = e["name"]
             if _plain_word(e["name"]):
-                AMBIGUOUS.add(e["id"])     # "Waterbirds": a capitalized word is also prose
+                AMBIGUOUS.add(key)         # "Waterbirds": a capitalized word is also prose
 
     papers: collections.Counter = collections.Counter()
     seen: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
@@ -372,6 +375,7 @@ _INTRO_SUBJ = rf"(?:\bwe\s+(?:have\s+|had\s+)?{_FILL}{_INTRO_VERB}|\bthis\s+(?:p
               rf"(?P<coord>\b(?:and|then)\s+(?:also\s+)?{_INTRO_VERB}))"
 _INTRO_NOUN = r"(?:benchmark|dataset|data\s?set|suite|test-?bed|corpus|corpora|evaluation\s+(?:suite|set)|" \
               r"environment|challenge)s?"
+_NUMERAL = r"(?:two|three|four|five|six|seven|eight|nine|ten|\d+)"
 _INTRO_NAME = r"(?P<name>[^\s,:;()]+(?:\s+[A-Z0-9][^\s,:;()]*){0,4})"
 _INTRO_ACRO = r"(?:\s*\((?P<acro>[^()\s,;]{2,24})\))?"
 _INTRO_MID = r"(?P<mid>(?:[\w-]+,?\s+){0,7}?)"
@@ -380,23 +384,56 @@ _INTRO = [
                rf"(?:a|an|the|our)?\s*{_INTRO_MID}(?P<noun>{_INTRO_NOUN})\b", re.I),
     # "we have developed the MR-GSM8K benchmark", "the Multimodal Multi-image
     # Understanding (MMIU) benchmark"
+    # "we build a new benchmark based on existing datasets, called MixBench"
+    re.compile(rf"{_INTRO_SUBJ}\s+(?:a|an|the|our)\s+{_INTRO_MID}(?P<noun>{_INTRO_NOUN})\b[^.;:()]{{1,70}}?"
+               rf"\b(?:called|named|dubbed|termed|coined)\s+{_INTRO_NAME}{_INTRO_ACRO}", re.I),
     # (gathering verbs excluded here: "we collect the Cora dataset" downloads it)
     re.compile(rf"{_INTRO_SUBJ.replace(_INTRO_VERB, _BUILD_VERB)}\s+(?:the|a|an|our)\s+(?:new\s+|novel\s+)?"
                rf"{_INTRO_NAME}{_INTRO_ACRO}\s+(?P<mid>)(?P<noun>{_INTRO_NOUN})\b", re.I),
-    re.compile(rf"{_INTRO_SUBJ}\s+(?:a|an|the|our)\s+{_INTRO_MID}(?P<noun>{_INTRO_NOUN})\s*"
+    re.compile(rf"{_INTRO_SUBJ}\s+(?:a|an|the|our|{_NUMERAL})\s+{_INTRO_MID}(?P<noun>{_INTRO_NOUN})\s*"
                rf"(?:,\s*|\(\s*|:\s*|\s+(?:called|named|dubbed|termed|coined|namely)\s+|\s+)"
                rf"{_INTRO_NAME}{_INTRO_ACRO}", re.I),
 ]
-# the head of the phrase must be the data noun: a preposition or another head
-# noun in between means the name labels something else
-_INTRO_MID_BAD = re.compile(r"\b(?:for|to|of|on|in|with|that|which|and|framework|method|model|approach|"
+# the data noun must head the verb's object. A preposition in the phrase before
+# it ("we construct the attack input FROM three jailbreak benchmarks (HarmBench,
+# ...)") puts the noun inside what was used, not what was built; another head
+# noun ("a framework for benchmark ...") means the name labels something else.
+# Words like "existing" or "three" are not grounds: "three new benchmarks" and
+# "a new benchmark based on existing data" are claims.
+_INTRO_MID_BAD = re.compile(r"\b(?:for|to|of|on|in|with|from|by|via|at|into|over|across|through|"
+                            r"that|which|framework|method|model|approach|"
                             r"algorithm|system|pipeline|architecture|technique|agent|tool|toolkit|library|"
                             r"metric|protocol|loss|strategy|module|network|paradigm)\b", re.I)
 
 
+def _acronym_of(acro: str, phrase: str) -> bool:
+    """Do the acronym's capitals follow the initials of the phrase's words, in
+    order? "RL-ViGen" ~ "Reinforcement Learning benchmark for Visual
+    Generalization"; "SRB" ~ "Speech Robust Bench"."""
+    caps = [c for c in acro if c.isupper()]
+    if len(caps) < 2:
+        return False
+    initials = [w[0].upper() for w in re.findall(r"[A-Za-z][\w']*", phrase)]
+    i = 0
+    for ch in caps:
+        while i < len(initials) and initials[i] != ch:
+            i += 1
+        if i == len(initials):
+            return False
+        i += 1
+    return True
+
+
+class _Unique(list):
+    """A list that ignores a name it already holds (two claim shapes can match one claim)."""
+    def append(self, item):
+        if dataset_key(item[0]) not in {dataset_key(x[0]) for x in self}:
+            super().append(item)
+
+
 def introduced_names(sentence: str) -> list[tuple[str, str]]:
     """-> [(name as written, data noun)] the sentence says the paper built."""
-    out = []
+    out = _Unique()
     for rx in _INTRO:
         for m in rx.finditer(sentence):
             if _INTRO_MID_BAD.search(m.group("mid") or ""):
@@ -404,7 +441,16 @@ def introduced_names(sentence: str) -> list[tuple[str, str]]:
             if m.group("coord") and not _FIRST_PERSON.search(sentence[:m.start()]):
                 continue            # "... and construct X" needs a "we" before it
             acro = (m.groupdict().get("acro") or "").strip()
-            if acro and _name_like(acro):
+            if not acro:
+                # "a novel Reinforcement Learning benchmark for Visual Generalization
+                # (RL-ViGen)": an acronym later in the same clause names the phrase
+                later = re.match(r"[^.;()]{0,90}?\((?P<a>[^()\s,;]{2,24})\)", sentence[m.end():])
+                if later and _acronym_of(later.group("a"),
+                                         sentence[m.start("name"):m.end() + later.start("a")]):
+                    acro = later.group("a")
+            if acro and _name_like(acro) and _acronym_of(acro, m.group("name") + " " +
+                                                         sentence[m.end("name"):m.end()] + " " +
+                                                         sentence[m.end():m.end() + 90]):
                 name, run = acro, [acro]     # "Speech Robust Bench (SRB)" -> SRB
             else:
                 words = [_EDGE.sub("", w) for w in m.group("name").split()]
@@ -423,7 +469,16 @@ def introduced_names(sentence: str) -> list[tuple[str, str]]:
                     or re.match(rf"\s*(?:\[\d|et\s+al)", sentence[m.end("name"):m.end("name") + 8])
                     or _SIZE.match(name) or fold in _HOSTS or name.lower() in _INTRO_GENERIC):
                 continue
-            out.append((name, re.sub(r"\s+", " ", m.group("noun").lower())))
+            noun = re.sub(r"\s+", " ", m.group("noun").lower())
+            out.append((name, noun))
+            if noun.endswith("s"):
+                # "three new benchmarks, CodeA, CodeB and CodeC": the rest of the list
+                tail = re.match(r"((?:\s*(?:,|and|,\s*and)\s*[A-Za-z0-9][^\s,;:()]*(?:\s*\([^()]*\))?)+)",
+                                sentence[m.end("name"):m.end("name") + 200])
+                for nxt in re.findall(r"(?:,|\band\b)\s*([A-Za-z0-9][^\s,;:()]*)", tail.group(1) if tail else ""):
+                    nxt = _EDGE.sub("", nxt)
+                    if _name_like(nxt) and _strong_name(nxt) and dataset_key(nxt) not in _INTRO_NOT_NAME:
+                        out.append((nxt, noun))
     return out
 
 
@@ -485,6 +540,30 @@ def data_linked(sentence: str, tok: int, n: int, covered: set[int]) -> bool:
     return False
 
 
+def citation_resolver(row: dict):
+    """sentence -> the reference texts it cites, from the parser's `cites` map.
+    Numeric citations ("12") count only inside brackets, so a bare number in
+    prose is not a citation."""
+    refs = dict(zip(row.get("ref_ids") or [], row.get("references") or []))
+    surfaces = [(s_, ids) for s_, ids in (row.get("cites") or {}).items() if s_]
+    numeric = [(s_, ids) for s_, ids in surfaces if s_.isdigit()]
+    named = [(s_, ids) for s_, ids in surfaces if not s_.isdigit()]
+
+    def cited(sentence: str) -> set[str]:
+        out = set()
+        for s_, ids in named:
+            if s_ in sentence:
+                out.update(refs.get(i, "")[:200] for i in ids)
+        if numeric and "[" in sentence:
+            groups = " ".join(re.findall(r"\[([^\]]{1,60})\]", sentence))
+            for s_, ids in numeric:
+                if re.search(rf"\b{s_}\b", groups):
+                    out.update(refs.get(i, "")[:200] for i in ids)
+        out.discard("")
+        return out
+    return cited
+
+
 def mentions_of(row: dict, finder: Finder) -> dict:
     count: collections.Counter = collections.Counter()
     where: dict[str, set[str]] = collections.defaultdict(set)
@@ -493,6 +572,9 @@ def mentions_of(row: dict, finder: Finder) -> dict:
     roles: dict[str, dict[str, list[dict]]] = collections.defaultdict(lambda: collections.defaultdict(list))
     unlisted: dict[str, dict] = {}
     introduces: dict[str, dict] = {}
+
+    cited = citation_resolver(row)
+    role_refs: dict[str, set[str]] = collections.defaultdict(set)
 
     def note(key, surf, place, text, role=None, linked=None):
         if key in AMBIGUOUS and (role is None or not (
@@ -507,6 +589,9 @@ def mentions_of(row: dict, finder: Finder) -> dict:
             ev[key].append({"where": place, "text": text[:500]})
         if role and len(roles[key][role]) < MAX_ROLE_EVIDENCE:
             roles[key][role].append({"where": place, "text": text[:500]})
+        if role and ":" not in place:
+            # what the role sentence cites: which of two same-named products it means
+            role_refs[key].update(cited(text))
 
     for sec in row.get("sections") or []:
         if "checklist" in (sec.get("title") or "").lower():
@@ -554,7 +639,8 @@ def mentions_of(row: dict, finder: Finder) -> dict:
                              "as_written": surface[k].most_common(1)[0][0],
                              # every spelling kept: "val2017" says which COCO 2017 split
                              "surfaces": dict(surface[k].most_common(6)), "evidence": ev[k],
-                             **({"roles": {r: v for r, v in roles[k].items()}} if roles.get(k) else {})}
+                             **({"roles": {r: v for r, v in roles[k].items()}} if roles.get(k) else {}),
+                             **({"role_cites": sorted(role_refs[k])[:12]} if role_refs.get(k) else {})}
                          for k in count},
             **({"unlisted": unlisted} if unlisted else {}),
             **({"introduces": introduces} if introduces else {})}
@@ -639,10 +725,9 @@ def _strong_name(name: str) -> bool:
 
 def _title_names(name: str, title: str) -> bool:
     """Does the paper's title name it as its subject? Either the title leads
-    with it ("MMMU: A Massive ...", "LIBERO: Benchmarking ...") or it is a
-    product-shaped name of 5+ characters anywhere in the title ("Judging
-    LLM-as-a-Judge with MT-Bench ..."). A plain word or a short acronym that a
-    title merely contains — "Chinese", "PDE", "SLAM" — does not count."""
+    with it ("MMMU: A Massive ...") or it is a product-shaped name of 5+
+    characters anywhere in the title ("Judging LLM-as-a-Judge with MT-Bench").
+    Used to ORDER the review, never to decide it (Codex review, 2026-10-06)."""
     if not re.search(rf"(?<![A-Za-z0-9]){re.escape(name)}(?![A-Za-z0-9])", title, re.I):
         return False
     if re.match(rf"\s*{re.escape(name)}\s*(?::|—|–|-\s|\band\b)", title, re.I):
@@ -650,74 +735,114 @@ def _title_names(name: str, title: str) -> bool:
     return _strong_name(name) and len(dataset_key(name)) >= 5
 
 
-def introduced() -> Path:
-    """Paper-claimed new benchmarks -> config/benchmarks_introduced.json.
+# ---------------------------------------------------------------- claims
+# The unit of review is one claim: one paper saying it built one name. The
+# decision lives in config/introduced_review.json (written by Claude Code's
+# review, never by a rule), so regenerating the claims never loses it.
+REVIEW = ROOT / "config" / "introduced_review.json"
+LABELS = {
+    "E": ("confirmed", "introduces a benchmark it evaluates on"),
+    "T": ("confirmed", "introduces a dataset or resource for training or other use"),
+    "U": ("excluded", "uses or rebuilds existing data; introduces nothing"),
+    "X": ("excluded", "extraction error: a real claim, but the name is wrong"),
+    "N": ("excluded", "not data: a method, model, metric or task"),
+    "?": ("undetermined", "the sentence and its context do not settle it"),
+}
 
-    Append-only, like the registry: an id, once given, is never reused or
-    removed; a claim no longer found keeps its entry with `found_in_last_run`
-    false. A name that is already in the registry gets no entry here — its
-    claim is recorded under `claims_on_registered` instead."""
-    reg_ids = {e["id"] for e in load_json(REGISTRY)["benchmarks"]}
-    reg_fold = {}
-    for e in load_json(REGISTRY)["benchmarks"]:
-        for s_ in [e["name"], *e.get("aliases", [])]:
-            reg_fold.setdefault(dataset_key(s_), e["id"])
-    old = load_json(INTRODUCED) if INTRODUCED.exists() else {"benchmarks": [], "claims_on_registered": {}}
-    by_fold = {e["fold"]: e for e in old["benchmarks"]}
-    used_ids = reg_ids | {e["id"] for e in old["benchmarks"]}
-    for e in old["benchmarks"]:
-        e["claims"], e["found_in_last_run"] = [], False
-    on_reg: dict[str, list] = collections.defaultdict(list)
+
+def _load_review() -> dict:
+    return load_json(REVIEW) if REVIEW.exists() else {"claims": {}, "ids": {}}
+
+
+def all_claims() -> list[dict]:
+    """Every introduction claim in the mention outputs, one row per (paper, name)."""
     idx = paper_index()
+    reg = load_json(REGISTRY)["benchmarks"]
+    reg_fold = {dataset_key(s_): e["id"] for e in reg for s_ in [e["name"], *e.get("aliases", [])]}
+    out = []
     for f in sorted(OUT_DIR.glob("mentions_*.jsonl")):
         ed = f.stem.removeprefix("mentions_")
         for r in read_jsonl(f):
-            for key, it in (r.get("introduces") or {}).items():
+            for it in (r.get("introduces") or {}).values():
                 fold = dataset_key(it["name"])
                 if fold in _INTRO_NOT_NAME or _INTRO_REF.match(it["name"]):
                     continue
-                title = idx.get(r["arxiv_base"], {}).get("title") or ""
-                claim = {"edition": ed, "arxiv_base": r["arxiv_base"], "title": title,
-                         "noun": it["noun"], "evidence": it["evidence"][0]["text"],
-                         # the name in the paper's own title: a benchmark paper names
-                         # its benchmark there; a passing "we also build X" does not
-                         "in_title": _title_names(it["name"], title)}
-                if fold in reg_fold:
-                    on_reg[reg_fold[fold]].append(claim)
-                    continue
-                e = by_fold.get(fold)
-                if e is None:
-                    i = _slug(it["name"])
-                    if i in used_ids:
-                        i = f"{i}-{ed}"
-                    e = {"id": i, "name": it["name"], "fold": fold, "claims": [],
-                         "added": dt.date.today().isoformat()}
-                    by_fold[fold] = e
-                    old["benchmarks"].append(e)
-                    used_ids.add(i)
-                e["claims"].append(claim)
-                e["found_in_last_run"] = True
-    for e in old["benchmarks"]:
-        e["claims"].sort(key=lambda c: (idx.get(c["arxiv_base"], {}).get("year", 0), c["edition"]))
-        if e["claims"]:
-            e["first_claim"] = e["claims"][0]["edition"]
-        e["verified"] = any(c["in_title"] for c in e["claims"])
-    # an established benchmark "re-introduced" in a body sentence is noise; one
-    # whose own paper is in the corpus (MMMU at CVPR 2024) has it in the title
-    old["claims_on_registered"] = {k: v for k, v in sorted(on_reg.items()) if any(c["in_title"] for c in v)}
-    old["_note"] = ("Benchmarks and datasets a paper in the corpus says it built ('we introduce X, a new "
-                    "benchmark'), found by icml.bench_mentions --introduced and listed whatever their "
-                    "frequency (owner, 2026-10-06). `verified`: the name is in a claiming paper's own title; "
-                    "only verified names are counted in other papers, the rest are candidates for review. "
-                    "A claim is the paper's own words, not proof that the name is new to the world: the "
-                    "corpus starts in 2023, and `first_claim` is the first edition HERE that claims it. "
-                    "Ids are append-only.")
-    dump_json(INTRODUCED, old)
-    live = [e for e in old["benchmarks"] if e["found_in_last_run"]]
-    print(f"introduced: {len(live)} names claimed as new (of {len(old['benchmarks'])} ever listed), "
-          f"{sum(e['verified'] for e in live)} verified by the claiming paper's title; "
-          f"{len(old['claims_on_registered'])} registered names introduced by a paper in the corpus -> {INTRODUCED.name}")
-    return INTRODUCED
+                p = idx.get(r["arxiv_base"], {})
+                out.append({"claim_id": f"{r['arxiv_base']}#{fold}", "name": it["name"], "fold": fold,
+                            "noun": it["noun"], "edition": ed, "year": p.get("year"),
+                            "arxiv_base": r["arxiv_base"], "title": p.get("title") or "",
+                            "authors": p.get("authors") or [], "registered": reg_fold.get(fold),
+                            "in_title": _title_names(it["name"], p.get("title") or ""),
+                            "evidence": it["evidence"][0]["text"]})
+    return out
+
+
+def _context(claims: list[dict]) -> dict[str, str]:
+    """claim_id -> the claim sentence with the sentences around it, from the parsed text."""
+    want: dict[str, list[dict]] = collections.defaultdict(list)
+    for c in claims:
+        want[c["arxiv_base"]].append(c)
+    out = {}
+    for f in sorted(HTML_DIR.glob("fulltext_*.jsonl")):
+        for row in read_jsonl(f):
+            for c in want.get(row.get("arxiv_base"), []):
+                for sec in row.get("sections") or []:
+                    sents = _SENT.split(sec["text"])
+                    hit = next((i for i, s_ in enumerate(sents) if c["evidence"][:120] in s_), None)
+                    if hit is not None:
+                        out[c["claim_id"]] = " ".join(sents[max(hit - 1, 0): hit + 2])[:900]
+                        break
+    return out
+
+
+def review_export(path: str, sample: int = 0, seed: int = 0) -> None:
+    """Unreviewed claims as a TSV to read: n, claim_id, name, noun, edition,
+    in_title, registered, title, context. `sample` draws a stratified sample
+    (in-title, body-only, homonym, plain-word, registered) instead of all."""
+    import random
+    done = _load_review()["claims"]
+    claims = [c for c in all_claims() if c["claim_id"] not in done]
+    if sample:
+        by_fold = collections.Counter(c["fold"] for c in claims)
+        strata = {"in_title": [c for c in claims if c["in_title"] and not c["registered"]],
+                  "body_only": [c for c in claims if not c["in_title"] and not c["registered"]],
+                  "homonym": [c for c in claims if by_fold[c["fold"]] > 1],
+                  "plain_word": [c for c in claims if _plain_word(c["name"]) or
+                                 (" " in c["name"] and not _strong_name(c["name"]))],
+                  "registered": [c for c in claims if c["registered"]]}
+        rnd, picked, seen = random.Random(seed), [], set()
+        for name, pool in strata.items():
+            for c in rnd.sample(pool, min(len(pool), sample // len(strata))):
+                if c["claim_id"] not in seen:
+                    seen.add(c["claim_id"])
+                    picked.append({**c, "stratum": name})
+        claims = picked
+    else:
+        claims.sort(key=lambda c: (not c["in_title"], c["fold"], c["year"] or 0))
+    ctx = _context(claims)
+    with open(path, "w", encoding="utf-8") as fh:
+        for n, c in enumerate(claims):
+            text = re.sub(r"\s+", " ", ctx.get(c["claim_id"], c["evidence"]))
+            fh.write("\t".join([str(n), c["claim_id"], c["name"], c["noun"], c["edition"],
+                                "T" if c["in_title"] else "-", c["registered"] or "-",
+                                c.get("stratum", ""), c["title"][:160], text]) + "\n")
+    print(f"review: {len(claims)} claims -> {path}")
+
+
+def review_import(path: str) -> None:
+    """Lines 'claim_id<TAB>label[<TAB>note]' -> config/introduced_review.json."""
+    rev = _load_review()
+    n = 0
+    for line in open(path, encoding="utf-8"):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 2 or parts[1] not in LABELS:
+            continue
+        rev["claims"][parts[0]] = {"label": parts[1], "status": LABELS[parts[1]][0],
+                                   **({"note": parts[2]} if len(parts) > 2 and parts[2] else {}),
+                                   "reviewed": dt.date.today().isoformat()}
+        n += 1
+    dump_json(REVIEW, rev)
+    print(f"review: {n} decisions recorded, {len(rev['claims'])} in total -> {REVIEW.name}")
 
 
 def _person(n: str) -> str:
@@ -726,54 +851,156 @@ def _person(n: str) -> str:
     return re.sub(r"[^a-z ]", "", n).strip()
 
 
-def adoption() -> Path:
-    """For every introduced name: who else states a role for it, and when.
+def introduced() -> Path:
+    """Reviewed claims -> benchmark identities in config/benchmarks_introduced.json.
 
-    'self' = a using paper that shares an author with a claiming paper (by
-    normalized full name — two different people with one name count as self,
-    the conservative side). A use in an edition earlier than the first claim is
-    listed under `before_claim`: the name existed before the claim here."""
-    intro = load_json(INTRODUCED)
-    reg_claims = intro.get("claims_on_registered", {})
-    targets = {e["id"]: e["claims"] for e in intro["benchmarks"] if e.get("claims") and e.get("verified")}
-    targets.update(reg_claims)
+    A benchmark's id belongs to the benchmark, not to a paper: confirmed claims
+    on one name whose papers share an author (arXiv and conference versions, a
+    follow-up) are one benchmark; claims with no author in common are different
+    products under one name and get separate ids, marked as homonyms. A name
+    already in the registry keeps its registry id; its confirmed in-corpus
+    claims are recorded against it. Ids persist in introduced_review.json."""
+    rev = _load_review()
+    ids = rev.setdefault("ids", {})
+    reg_ids = {e["id"] for e in load_json(REGISTRY)["benchmarks"]}
+    claims = all_claims()
+    for c in claims:
+        c["review"] = rev["claims"].get(c["claim_id"])
+    confirmed = [c for c in claims if c["review"] and c["review"]["status"] == "confirmed"]
+    confirmed.sort(key=lambda c: (c["year"] or 9999, c["edition"]))
+    groups: dict[str, list[list[dict]]] = collections.defaultdict(list)
+    for c in confirmed:
+        # a claim on a registered name is that benchmark unless the review says
+        # it is another product with the same name ("MTBench" for motion
+        # transfer is not MT-Bench)
+        hom = bool(c["registered"]) and (c["review"].get("note") or "").startswith("homonym")
+        c["homonym_of_registered"] = c["registered"] if hom else None
+        if c["registered"] and not hom:
+            groups[c["fold"] + "|reg"] = groups.get(c["fold"] + "|reg") or [[]]
+            groups[c["fold"] + "|reg"][0].append(c)
+            continue
+        people = {_person(a) for a in c["authors"]}
+        for g in groups[c["fold"]]:
+            if people & {_person(a) for x in g for a in x["authors"]}:
+                g.append(c)
+                break
+        else:
+            groups[c["fold"]].append([c])
+    entities = []
+    for gkey, gs in groups.items():
+        fold = gkey.split("|")[0]
+        for g in gs:
+            key = f"{gkey}@{g[0]['arxiv_base']}"
+            if gkey.endswith("|reg"):
+                ids[key] = g[0]["registered"]          # the registered benchmark's own paper
+            elif key not in ids:
+                base, k = _slug(g[0]["name"]), 2
+                i, taken = base, set(ids.values()) | reg_ids
+                while i in taken:
+                    i, k = f"{base}-{k}", k + 1
+                ids[key] = i
+            labels = {c["review"]["label"] for c in g}
+            entities.append({
+                "id": ids[key], "name": g[0]["name"], "fold": fold,
+                "registered": g[0]["registered"] if gkey.endswith("|reg") else None,
+                "homonym_of_registered": g[0].get("homonym_of_registered"),
+                "kind": "benchmark" if "E" in labels else "dataset",
+                "homonym_of": None,                         # filled below
+                "first_claim": g[0]["edition"],
+                "claims": [{k_: c[k_] for k_ in ("claim_id", "edition", "arxiv_base", "title", "noun",
+                                                 "evidence")} | {"label": c["review"]["label"]} for c in g],
+                "developers": sorted({a for c in g for a in c["authors"]})})
+    # homonym ids exist only after every group got one; fill the cross-links
+    by_fold = collections.defaultdict(list)
+    for e in entities:
+        by_fold[e["fold"]].append(e["id"])
+    for e in entities:
+        e["homonym_of"] = sorted(i for i in by_fold[e["fold"]] if i != e["id"]) or None
+        if e["homonym_of_registered"] and e["homonym_of_registered"] not in (e["homonym_of"] or []):
+            e["homonym_of"] = sorted((e["homonym_of"] or []) + [e["homonym_of_registered"]])
+    status = collections.Counter((c["review"] or {}).get("status", "candidate") for c in claims)
+    dump_json(REVIEW, rev)
+    dump_json(INTRODUCED, {
+        "_note": ("Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark "
+                  "(owner, 2026-10-06; rebuilt after the Codex review). Only claims Claude Code's review "
+                  "confirmed are here; candidates, exclusions and undetermined claims are counted in "
+                  "`claims` and listed in introduced_review.json. kind 'benchmark' = some claim says it is "
+                  "evaluated on; 'dataset' = training data or a resource. `first_claim` is the first edition "
+                  "HERE that claims it, never 'first developed': the corpus starts in 2023. Same name, no "
+                  "shared author = a different product (`homonym_of`)."),
+        "claims": dict(status), "benchmarks": sorted(entities, key=lambda e: e["id"])})
+    print(f"introduced: {len(claims)} claims — {dict(status)}; {len(entities)} benchmarks "
+          f"({sum(1 for e in entities if e['homonym_of'])} under a shared name) -> {INTRODUCED.name}")
+    return INTRODUCED
+
+
+def _cites_paper(ref_texts: list[str], title: str) -> bool:
+    t = dataset_key(title)[:40]
+    return len(t) >= 12 and any(t in dataset_key(r) for r in ref_texts)
+
+
+def adoption() -> Path:
+    """For every confirmed benchmark: stated uses in other papers, by role.
+
+    A use is a stated role (evaluates_on / trains_on) — the same evidence every
+    count needs. Homonyms add one condition: the role sentences must cite that
+    product's introducing paper, or the use stays `unattributed`. Authors:
+    'self' = shares an author with a confirmed introducing paper; 'undetermined'
+    when either side has no author list; 'others' otherwise. A use in an
+    edition earlier than the first claim goes to `before_claim`."""
+    intro = load_json(INTRODUCED)["benchmarks"]
     idx = paper_index()
-    uses: dict[str, list] = collections.defaultdict(list)
+    by_key: dict[str, list[dict]] = collections.defaultdict(list)
+    for e in intro:
+        key = e["registered"] or e.get("homonym_of_registered") or \
+            (("hom:" + e["fold"]) if e["homonym_of"] else e["id"])
+        by_key[key].append(e)
+    rows = {e["id"]: {"id": e["id"], "name": e["name"], "kind": e["kind"], "first_claim": e["first_claim"],
+                      "homonym_of": e["homonym_of"], "before_claim": [], "unattributed": 0,
+                      **{r: {"others": 0, "self": 0, "undetermined": 0} for r in ("evaluates_on", "trains_on")}}
+            for e in intro}
     for f in sorted(OUT_DIR.glob("mentions_*.jsonl")):
         ed = f.stem.removeprefix("mentions_")
         for r in read_jsonl(f):
+            p = idx.get(r["arxiv_base"], {})
             for k, m in r["mentions"].items():
-                if k in targets and m.get("roles"):
-                    uses[k].append((ed, r["arxiv_base"], sorted(m["roles"])))
-    rows = []
-    for k, claims in targets.items():
-        claimers = {c["arxiv_base"] for c in claims}
-        authors = {_person(a) for c in claims for a in idx.get(c["arxiv_base"], {}).get("authors", [])}
-        first_year = min(idx.get(c["arxiv_base"], {}).get("year", 9999) for c in claims)
-        row = {"id": k, "first_claim": claims[0]["edition"], "claims": len(claimers),
-               "self": 0, "others": 0, "before_claim": [], "others_by_edition": collections.Counter(),
-               "others_roles": collections.Counter()}
-        for ed, base, roles in uses.get(k, []):
-            if base in claimers:
-                continue
-            p = idx.get(base, {})
-            if p.get("year", 9999) < first_year:
-                row["before_claim"].append(ed)
-                continue
-            if authors & {_person(a) for a in p.get("authors", [])}:
-                row["self"] += 1
-            else:
-                row["others"] += 1
-                row["others_by_edition"][ed] += 1
-                row["others_roles"].update(roles)
-        row["others_by_edition"] = dict(row["others_by_edition"])
-        row["others_roles"] = dict(row["others_roles"])
-        rows.append(row)
-    rows.sort(key=lambda r: (-r["others"], r["id"]))
+                es = by_key.get(k)
+                if not es or not m.get("roles"):
+                    continue
+                if len(es) > 1 or es[0].get("homonym_of_registered"):
+                    # same name, several products: the role sentence's citation
+                    # decides; with none, a registered name keeps its own
+                    # benchmark, and two new products stay unattributed
+                    cited = [e for e in es if any(_cites_paper(m.get("role_cites", []), c["title"])
+                                                  for c in e["claims"])]
+                    own = [e for e in es if e.get("registered")]
+                    if len(cited) == 1:
+                        es = cited
+                    elif not cited and own:
+                        es = own
+                    elif not cited and all(e.get("homonym_of_registered") for e in es):
+                        continue                       # the registered one, not in this table
+                    else:
+                        for e in by_key[k]:
+                            rows[e["id"]]["unattributed"] += 1
+                        continue
+                e = es[0]
+                if r["arxiv_base"] in {c["arxiv_base"] for c in e["claims"]}:
+                    continue                                   # its own introducing paper
+                first_year = idx.get(e["claims"][0]["arxiv_base"], {}).get("year", 0)
+                if p.get("year", 9999) < first_year:
+                    rows[e["id"]]["before_claim"].append(ed)
+                    continue
+                devs = {_person(a) for a in e["developers"]}
+                users = {_person(a) for a in p.get("authors", [])}
+                who = "undetermined" if not devs or not users else ("self" if devs & users else "others")
+                for role in m["roles"]:
+                    rows[e["id"]][role][who] += 1
+    out_rows = sorted(rows.values(), key=lambda r: (-r["evaluates_on"]["others"], r["id"]))
     out = OUT_DIR / "introduced_adoption.json"
-    out.write_text(json.dumps({"rows": rows}, ensure_ascii=False, indent=1), encoding="utf-8")
-    adopted = sum(1 for r in rows if r["others"])
-    print(f"adoption: {len(rows)} introduced names; {adopted} with a stated use by other authors -> {out.name}")
+    out.write_text(json.dumps({"rows": out_rows}, ensure_ascii=False, indent=1), encoding="utf-8")
+    adopted = sum(1 for r in out_rows if r["evaluates_on"]["others"])
+    print(f"adoption: {len(out_rows)} confirmed benchmarks; {adopted} evaluated on by other authors -> {out.name}")
     return out
 
 
@@ -782,10 +1009,7 @@ def summary() -> None:
     evaluation benchmark, a training dataset, or a benchmark of their own."""
     from .corpus import EDITIONS, Corpus
     intro = load_json(INTRODUCED)["benchmarks"] if INTRODUCED.exists() else []
-    verified_by_ed: collections.Counter = collections.Counter()
-    for e in intro:
-        if e.get("verified"):
-            verified_by_ed[e["first_claim"]] += 1
+    new_by_ed = collections.Counter(e["first_claim"] for e in intro if not e.get("registered"))
     print(f"{'edition':13s} {'papers':>6s} {'arXiv':>6s} {'parsed':>6s} {'eval':>6s} {'train':>6s} "
           f"{'intro':>6s} {'new':>5s}")
     for disp, year in EDITIONS:
@@ -797,9 +1021,10 @@ def summary() -> None:
         has = lambda role: sum(1 for r in ms if any(role in m.get("roles", {}) for m in r["mentions"].values()))
         intro_papers = sum(1 for r in ms if r.get("introduces"))
         print(f"{disp + ' ' + str(year):13s} {papers:6d} {matched:6d} {len(ms):6d} {has('evaluates_on'):6d} "
-              f"{has('trains_on'):6d} {intro_papers:6d} {verified_by_ed[c.key]:5d}")
+              f"{has('trains_on'):6d} {intro_papers:6d} {new_by_ed[c.key]:5d}")
     print("parsed = the denominator (every parsed paper went through the rules); intro = papers claiming a "
-          "benchmark or dataset of their own; new = verified introduced names whose first claim is here")
+          "benchmark or dataset of their own (any claim, reviewed or not); new = confirmed new benchmarks and "
+          "datasets whose first claim in this corpus is here")
 
 
 def main() -> int:
@@ -811,6 +1036,9 @@ def main() -> int:
     ap.add_argument("--introduced", action="store_true",
                     help="update config/benchmarks_introduced.json from existing outputs")
     ap.add_argument("--summary", action="store_true", help="per-edition funnel and stated-role counts")
+    ap.add_argument("--review-export", metavar="TSV", help="write unreviewed introduction claims to read")
+    ap.add_argument("--sample", type=int, default=0, help="with --review-export: a stratified sample of N")
+    ap.add_argument("--review-import", metavar="TSV", help="record 'claim_id<TAB>label[<TAB>note]' decisions")
     ap.add_argument("--adoption", action="store_true",
                     help="count stated uses of introduced names, self vs other authors")
     args = ap.parse_args()
@@ -825,6 +1053,12 @@ def main() -> int:
         return 0
     if args.summary:
         summary()
+        return 0
+    if args.review_export:
+        review_export(args.review_export, args.sample)
+        return 0
+    if args.review_import:
+        review_import(args.review_import)
         return 0
     fold_to, casings, label = vocabulary()
     print(f"vocabulary: {len(set(fold_to.values()))} benchmarks, {len(fold_to)} folded surfaces")
