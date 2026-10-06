@@ -18,12 +18,20 @@ authors made, not how the name looks.
 | `E` | The paper introduces this benchmark and it is meant for evaluation: called a benchmark, test set, evaluation suite or testbed, or methods/models are evaluated on it in the paper. | yes, as a benchmark |
 | `T` | The paper introduces this dataset or resource, built for training, fine-tuning, pre-training, or as a general resource, with no evaluation framing. | yes, as a dataset |
 | `U` | The paper uses, downloads, subsets or re-processes data that already exists under that name. "We construct the FLEURS dataset for en→de" builds a FLEURS subset; "we collected the AlpacaEval dataset" downloads it. | no |
-| `X` | The paper does introduce something, but the extracted name is not its name: a descriptor ("MCQ", "HOI", "Reinforcement Learning"), a truncation ("Thousand Voices" for *Thousand Voices of Trauma*), or a neighbouring word ("PyPI" for *ReccEval*). Put the real name in the note. | no |
+| `X` | The paper does introduce something, but the extracted name is not its name: a descriptor ("MCQ", "HOI", "Reinforcement Learning"), a truncation ("Thousand Voices" for *Thousand Voices of Trauma*), or a neighbouring word ("PyPI" for *ReccEval*). Note `real name <name>; E` or `real name <name>; T` (or just `real name unknown` when the paper gives no name). | yes, under the real name, when one is given |
 | `N` | Not a data artifact: a method, model, model suite, metric, notation (`Dgen`, `Dshuffle`), a citation surname ("Raffel", "Das"), a section word ("Licenses", "Tier 1"). | no |
 | `?` | The sentence and its context do not settle it. | no, until re-read |
 
-`E` vs `T` when both apply: if the paper evaluates anything on it, or the title
-calls it a benchmark, it is `E`. A dataset "for training and evaluating" is `E`.
+`E` vs `T`: `E` needs evaluation evidence in the title or the context — it is
+called a benchmark, test set, evaluation suite or testbed, or the context says
+methods are evaluated or compared on it. A dataset whose context states no
+purpose, or states training, is `T`. (A `T` dataset becomes a benchmark in the
+counts when other papers state they evaluate on it; the label is about what its
+own paper says.) A dataset "for training and evaluating" is `E`.
+
+A long form of the published short name ("BEfore-AFter" for *BEAF*, "Comprehensive
+RAG" for *CRAG*): label it as the claim deserves (`E`/`T`) and note
+`name <short name>` — the short name is what other papers write.
 
 ## Notes
 
