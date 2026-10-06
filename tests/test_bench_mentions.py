@@ -1,7 +1,8 @@
 """Boundary cases for the rule that turns a text n-gram into a benchmark mention."""
 import unittest
 
-from icml.bench_mentions import Finder, caption_role, role_at, stated_roles, unlisted_names
+from icml.bench_mentions import (Finder, _title_names, caption_role, data_linked, introduced_names, role_at,
+                                  stated_roles, unlisted_names)
 from icml.taxonomy import dataset_key
 
 
@@ -111,6 +112,54 @@ class UnlistedNameTests(unittest.TestCase):
 
     def test_no_cue_no_capture(self):
         self.assertEqual(unlisted("Stanford-ORB contains 14 objects."), [])
+
+
+
+def linked(sentence: str, name: str) -> bool:
+    toks = sentence.split()
+    i = next(k for k, x in enumerate(toks) if x.strip(",.[]").startswith(name))
+    return data_linked(sentence, i, 1, set())
+
+
+class AmbiguousNameTests(unittest.TestCase):
+    def test_a_data_word_elsewhere_in_the_sentence_is_not_enough(self):
+        self.assertFalse(linked("We compare CLEAR with other methods on the CIFAR-10 dataset.", "CLEAR"))
+        self.assertFalse(linked("We compare against FLAIR [3] and BiteNet on food data.", "FLAIR"))
+
+    def test_attached_data_words(self):
+        self.assertTrue(linked("Results on the CLEAR dataset improve.", "CLEAR"))
+        self.assertTrue(linked("We evaluate on FLAIR, a land-cover dataset.", "FLAIR"))
+        self.assertTrue(linked("for Synapse and ACDC datasets, respectively", "Synapse"))
+        self.assertTrue(linked("on four publicly available datasets, including PANORAMA [2], AMOS [23], FeTA",
+                               "AMOS"))
+
+
+class IntroducedTests(unittest.TestCase):
+    def test_paper_built_benchmarks(self):
+        self.assertEqual(introduced_names("We introduce SPORTU, a benchmark for sports reasoning."),
+                         [("SPORTU", "benchmark")])
+        self.assertEqual(introduced_names("we present a new large-scale benchmark, MMSI-Bench, covering"),
+                         [("MMSI-Bench", "benchmark")])
+        self.assertEqual(introduced_names("In this paper, we curate a dataset called AfriMed-QA of 15k items."),
+                         [("AfriMed-QA", "dataset")])
+        self.assertEqual(
+            introduced_names("We introduce OmniRewardBench, a benchmark for evaluation, and construct "
+                             "OmniRewardData, a training dataset."),
+            [("OmniRewardBench", "benchmark"), ("OmniRewardData", "dataset")])
+
+    def test_methods_and_unnamed_data_are_not_introductions(self):
+        self.assertEqual(introduced_names("We propose ModelX, a framework for benchmark construction."), [])
+        self.assertEqual(introduced_names("We propose ModelX and evaluate it on the ImageNet benchmark."), [])
+        self.assertEqual(introduced_names("We build a new dataset for robotic grasping."), [])
+        self.assertEqual(introduced_names("Prior work built and released DataX, a dataset of images."), [])
+
+
+    def test_title_verifies_the_benchmark_paper(self):
+        self.assertTrue(_title_names("MMMU", "MMMU: A Massive Multi-discipline Multimodal Understanding Benchmark"))
+        self.assertTrue(_title_names("MT-Bench", "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena"))
+        self.assertFalse(_title_names("PDE", "Learning PDE solvers with neural operators"))
+        self.assertFalse(_title_names("Chinese", "Chinese SimpleQA: a factuality benchmark"))
+        self.assertFalse(_title_names("Mixup", "Graph Invariant Learning with Subgraph Co-mixup"))
 
 
 if __name__ == "__main__":

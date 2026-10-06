@@ -47,11 +47,6 @@
         "imagenet1k",
         "ilsvrc-2012",
         "ilsvrc 2012",
-        "imagenet 256x256",
-        "imagenet-256",
-        "imagenet 128x128",
-        "imagenet-512",
-        "imagenet 512x512",
         "ilsvrc12"
       ],
       "kind": "dataset",
@@ -790,11 +785,9 @@
       "aliases": [
         "minerva math"
       ],
-      "kind": "benchmark",
-      "hf": "math-ai/minervamath",
-      "ok": {
-        "hf": true
-      }
+      "kind": null,
+      "unresolved": true,
+      "note": "Ambiguous name, kept as written and never linked by name alone: in papers it denotes either OCWCourses (272 university STEM problems from the Minerva paper, Lewkowycz et al. 2022) or lm-evaluation-harness `minerva_math` (MATH under Minerva's prompting and answer checking). Which one needs the cited paper, the problem count or the run settings."
     },
     {
       "id": "olympiadbench",
@@ -3789,7 +3782,8 @@
       ],
       "kind": "dataset",
       "url": "https://www.image-net.org/download.php",
-      "note": "A downsampled release distinct from ImageNet-1k: introduced for density modelling by van den Oord et al. (2016) and released as Imagenet64x64 by Chrabaszcz, Loshchilov & Hutter (2017) — neither by the ImageNet authors."
+      "note": "A downsampled release distinct from ImageNet-1k: introduced for density modelling by van den Oord et al. (2016) and released as Imagenet64x64 by Chrabaszcz, Loshchilov & Hutter (2017) — neither by the ImageNet authors.",
+      "derived_from": "imagenet-1k"
     },
     {
       "id": "tartanair",
@@ -6192,6 +6186,73 @@
       ],
       "kind": null,
       "note": "Registered from the unlisted-name review, 2026-10-02 (>= 5 papers state a role for it). No location yet."
+    },
+    {
+      "id": "imagenet-128x128",
+      "name": "ImageNet 128x128",
+      "aliases": [
+        "imagenet-128",
+        "imagenet128"
+      ],
+      "kind": "benchmark",
+      "derived_from": "imagenet-1k",
+      "setting": {
+        "resolution": "128x128",
+        "preprocessing": "center crop and resize of ImageNet-1k images; the exact protocol is the paper's (e.g. ADM / guided-diffusion)"
+      },
+      "note": "Separate from ImageNet-1k (owner, 2026-10-06): image-generation papers compare results only within one resolution, and the reference code ships per-resolution evaluation batches (guided-diffusion evaluations/README.md; DiT calls ImageNet 256x256 and 512x512 benchmarks). Same images as ImageNet-1k — the relation is recorded, never a merged count."
+    },
+    {
+      "id": "imagenet-256x256",
+      "name": "ImageNet 256x256",
+      "aliases": [
+        "imagenet-256",
+        "imagenet256"
+      ],
+      "kind": "benchmark",
+      "derived_from": "imagenet-1k",
+      "setting": {
+        "resolution": "256x256",
+        "preprocessing": "center crop and resize of ImageNet-1k images; the exact protocol is the paper's (e.g. ADM / guided-diffusion)"
+      },
+      "note": "Separate from ImageNet-1k (owner, 2026-10-06): image-generation papers compare results only within one resolution, and the reference code ships per-resolution evaluation batches (guided-diffusion evaluations/README.md; DiT calls ImageNet 256x256 and 512x512 benchmarks). Same images as ImageNet-1k — the relation is recorded, never a merged count."
+    },
+    {
+      "id": "imagenet-512x512",
+      "name": "ImageNet 512x512",
+      "aliases": [
+        "imagenet-512",
+        "imagenet512"
+      ],
+      "kind": "benchmark",
+      "derived_from": "imagenet-1k",
+      "setting": {
+        "resolution": "512x512",
+        "preprocessing": "center crop and resize of ImageNet-1k images; the exact protocol is the paper's (e.g. ADM / guided-diffusion)"
+      },
+      "note": "Separate from ImageNet-1k (owner, 2026-10-06): image-generation papers compare results only within one resolution, and the reference code ships per-resolution evaluation batches (guided-diffusion evaluations/README.md; DiT calls ImageNet 256x256 and 512x512 benchmarks). Same images as ImageNet-1k — the relation is recorded, never a merged count."
+    },
+    {
+      "id": "ocwcourses",
+      "name": "OCWCourses",
+      "aliases": [
+        "ocw courses",
+        "ocw-courses"
+      ],
+      "kind": "benchmark",
+      "hf": "math-ai/minervamath",
+      "ok": {
+        "hf": true
+      },
+      "note": "The 272-problem set the Minerva paper (Lewkowycz et al., 2022) names OCWCourses; the Hub copy is math-ai/minervamath."
+    },
+    {
+      "id": "flair",
+      "name": "FLAIR",
+      "aliases": [],
+      "kind": "dataset",
+      "ambiguous": true,
+      "note": "French land-cover segmentation dataset (FLAIR, arXiv 2310.13336). Many methods share the name, so it counts only where the paper states a role and calls FLAIR data in the same phrase."
     }
   ]
 }
