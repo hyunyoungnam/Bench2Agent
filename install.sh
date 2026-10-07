@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # One-line install for Linux / macOS / Windows-via-WSL:
 #
-#   curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/BenchTrend/main/install.sh | bash
 #
 # While the repo is PRIVATE that URL is a 404 for everyone; a collaborator
 # with the gh CLI signed in (gh auth login) runs instead:
 #
-#   gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
+#   gh api repos/hyunyoungnam/BenchTrend/contents/install.sh --jq .content | base64 -d | bash
 #
 # and the clone below goes through gh's credentials. WNAI_RELEASE=<tag> then
 # fetches that release's bundle the same way (WNAI_BUNDLE is for a public
@@ -22,7 +22,7 @@
 # source), WNAI_BIN (where the wnai symlink goes).
 set -euo pipefail
 
-REPO="${WNAI_REPO:-https://github.com/hyunyoungnam/bellwether}"
+REPO="${WNAI_REPO:-https://github.com/hyunyoungnam/BenchTrend}"
 # an app dir, not a workspace: hidden by default, like other installed tools.
 # Everything inside stays inspectable — the data being auditable is a feature.
 DIR="${WNAI_HOME:-$HOME/.bellwether}"

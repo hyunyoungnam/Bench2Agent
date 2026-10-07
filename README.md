@@ -43,7 +43,7 @@ once) or with `fetch-data --url <release asset>` without it.
 **Linux / macOS** — two lines:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/BenchTrend/main/install.sh | bash
 bellwether fetch-data --release data-20260923      # site + search index, ~450 MB
 ```
 

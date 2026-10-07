@@ -29,7 +29,7 @@ BIN_DIR = ROOT / "bin"
 MEILI_DIR = ROOT / "data" / "meili"
 MEILI_VERSION = "v1.53.1"          # the version the index was built with
 MEILI_ADDR = os.environ.get("WNAI_MEILI_ADDR", "127.0.0.1:7700")
-GH_REPO = os.environ.get("WNAI_GH_REPO", "hyunyoungnam/bellwether")   # for --release
+GH_REPO = os.environ.get("WNAI_GH_REPO", "hyunyoungnam/BenchTrend")   # for --release
 
 # what a fresh install needs to SERVE (the pipeline that builds these never
 # runs on the user's machine): the site, the search index, and the processed
