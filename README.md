@@ -1,216 +1,103 @@
 # BenchTrend
 
-BenchTrend helps researchers choose evaluation benchmarks from what conference
-papers explicitly report: what is used now in a field, how use changes across
-editions, which benchmarks are introduced, and whether other authors adopt them.
-Ask in conversation; computed counts link back to the papers and their verbatim
-experiment or introduction sentences. Counts describe use, not quality.
+Which benchmarks does the field evaluate on right now, how is that changing
+from one conference edition to the next, and which newly introduced
+benchmarks are other people picking up? BenchTrend answers from the papers
+themselves: every count is a count of papers whose own sentence says "we
+evaluate on …" or "we introduce …", and every count opens onto those
+sentences. **Counts describe use, not quality.**
 
-## Terminal package and MCP
+Ask it in a terminal conversation, or give its tools to Claude Code or Codex.
 
-Install the shared package, then either start a BenchTrend conversation or
-connect its tools to an existing AI client:
+## What an answer looks like
+
+Figures from the released data (snapshot `0dd4b9bb`, 2026-10-07), each with
+the tool call that produced it. "Per 1,000" is per 1,000 papers whose full
+text was parsed in that scope — the denominator is always printed.
+
+| Question | Tool | Answer |
+|---|---|---|
+| What do papers evaluate on now? | `benchmark_usage(latest=true)` — the latest edition of each of the ten venues, 26,727 parsed papers | GSM8K 40.3 per 1,000 · CIFAR-10 31.3 · MMLU 28.8 · COCO 27.4 · MATH-500 24.6 |
+| …in robotics? | `benchmark_usage(topic="robotics", latest=true)` — 509 papers that declare the field | LIBERO 157.2 · SIMPLER 80.5 · Meta-World 57.0 · RLBench 45.2 · CALVIN 41.3 |
+| Is CIFAR-10 falling at ICLR? | `benchmark_trend(benchmark="cifar-10", venue="iclr")` | 94.3 → 64.8 → 38.9 per 1,000 over ICLR 2024 → 2025 → 2026 (178 of 1,888; 197 of 3,038; 165 of 4,237). Both steps pass the change test (z = −3.8, −5.0) |
+| Which new benchmarks are others adopting? | `new_benchmarks(sort="adoption")` | MMMU, first claimed at CVPR 2024: evaluated on by 328 later papers with none of its authors, and by 9 with |
+
+In conversation the answer is prose; `/sources` lists every quoted sentence
+with a ✓ or ✗ from a check against the paper's text, and every figure is
+recomputed from the tool call it cites.
+
+## Install
 
 ```bash
 uv tool install git+https://github.com/hyunyoungnam/BenchTrend
 benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
     --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
-benchtrend init --provider anthropic   # ANTHROPIC_API_KEY; OpenAI also supported
-benchtrend                            # direct terminal conversation
-benchtrend mcp --connect claude       # or: --connect codex
+benchtrend status
 ```
 
-The data bundle (16 MB) is the [data-20261007 release](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007):
-28 editions across ten venues, 58,616 parsed papers, 9,332 benchmarks with
-their stated evaluation/training roles and verbatim evidence.
+Python 3.10+; standard library only, so Windows works natively (PowerShell).
+The package is not on PyPI. Then one of two modes:
 
-See [terminal installation and usage](docs/terminal.md) for first-run setup,
-API authentication, saved conversations, data updates and MCP registration.
-The package is not on PyPI; install from the repository URL above. The `bellwether` command remains as the
-compatibility launcher for the existing browser and build-machine exports.
-
-The full-text benchmark snapshot reports its installed editions and parsing
-coverage dynamically. The existing paper-reading index covers six editions of
-ICML, NeurIPS and ICLR and remains the supporting evidence explorer.
-See [benchmark conversation](docs/benchmark-chat.md) for MCP tools, source
-coverage and verification, and [paper-reading principles](docs/paper-view.md)
-for the supporting screens.
-
-## Existing browser installation
-
-The corpus and search engine run on your machine and are served on loopback.
-The agent sends questions and selected evidence to its model provider.
-Requirements: git and Python 3.10+. The data bundle is a GitHub release
-asset, fetched with the [gh CLI](https://cli.github.com) (`gh auth login`
-once) or with `fetch-data --url <release asset>` without it.
-
-**Linux / macOS** — two lines:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/BenchTrend/main/install.sh | bash
-bellwether fetch-data --release data-20260923      # site + search index, ~450 MB
-```
-
-**Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
-open the Ubuntu terminal, and run the same lines. Everything below happens
-inside WSL; the browser on Windows reaches it at the printed address (under
-WSL the server binds to the VM's interfaces rather than its loopback, since
-Windows' localhost relay cannot reach the latter; the VM's NAT keeps it off
-the LAN).
-
-The script installs into `~/.bellwether` (an app directory — everything in it,
-data included, stays inspectable), puts the `bellwether` command on PATH via its
-own venv, and fetches the search-engine binary and keys; the clone and the
-data bundle both go through gh's credentials. (`WNAI_RELEASE=data-20260923`
-before the installer folds the fetch in; `WNAI_BUNDLE=<file>` unpacks a bundle
-you already have.) Then:
-
-```bash
-bellwether serve
-```
-
-which starts everything on one port and prints its address:
-
-```
-  local:    http://127.0.0.1:8001
-```
-
-The server binds to loopback only. It is not reachable from other machines,
-by design: a question asked on this page spawns a coding agent signed in on
-*this* machine, so an address anyone on the network could open would be that
-account handed out without a login. Each reader runs their own copy instead.
-
-Ctrl+C stops everything. `bellwether status` shows what is running and what
-data exists. `bellwether datasets --out DIR` writes three CSV inventories:
-`benchmarks_used.csv` (abstract-named benchmarks and their mapped locations),
-`datasets_released.csv` (paper-owned artifact links with evidence), and
-`benchmarks_introduced.csv` (paper-claimed new benchmark candidates). The
-running server serves them at `/datasets/<filename>` and reports coverage at
-`/datasets/summary.json`; append `?gid=156` or use
-`bellwether datasets --gid 156 --out DIR` for one paper. These files contain
-source links and evidence, not the external datasets' records. Answers are
-written in English; Korean rendering is off by
-default and `WNAI_KO=1 bellwether serve` turns it on.
-
-### VS Code
-
-The [VS Code extension](vscode-extension/README.md) starts this same local
-service automatically and opens chat or paper exploration in an editor tab.
-Open the repository in VS Code, run **Run Bellwether Extension** with F5, then
-use **Bellwether: Ask About Benchmarks** from the Command Palette in the new window.
-The processed data bundle is still required. The current CSV links are source
-inventories; exporting actual evaluation records is tracked in
-[the implementation plan](docs/evaluation-data-downloads.md).
-
-The data bundle is produced by `bellwether bundle` on a build machine and
-published as a GitHub release; a new release reaches an install with one
-`fetch-data --release <tag>`.
-
-### Connect a coding agent (no API key)
-
-The repo ships an MCP server over stdio — `bellwether mcp` — with read-only tools
-for search, similarity, topics, citations, and each paper's verified
-sentences. Claude Code picks it up automatically from `.mcp.json` when opened
-in this directory; the agent brings its own model, so no API key is involved.
-
-## Asking it something
-
-`/` is a conversation. Your question spawns **your own** coding agent (Claude
-Code, signed in on this machine — no API key), armed only with this project's
-MCP tools over the held corpus. Every factual sentence it writes must carry an
-anchor `⟦gid|quote⟧`, and the server checks each quote against the paper's own
-text **before the browser renders it**: a green check means the sentence
-provably exists in that paper, a red one means it does not and is shown as
-such. The agent's prose can still be wrong; the quotes cannot be invented.
-
-That check is measured, not asserted — `scripts/audit/verify_bench.py` samples
-the corpus and reports both directions:
-
-| | |
-|---|---|
-| the papers' own extracted sentences, accepted | 200 / 200 |
-| the same sentences edited (a swapped word, a dropped middle, two papers spliced), rejected | 418 / 418 |
-
-**Numbers are checked the other way round.** A quote can be matched against a
-paper; a figure was never written by anyone, it was computed — so a figure
-carries the tool call that produced it (`⟦gap_scan:healthcare|31 name it, 3
-attack it⟧`), and the server **runs that tool again** and checks every number
-in the claim against the result. Three outcomes, and the third is not a
-failure: matched, not matched, or *not recomputable* — the last for tools whose
-answers are not reproducible (search ranking), which are never marked verified.
-This is possible only because the corpus does not move.
-
-A conversation has an address (`#c<id>`), keeps the tool trail it was answered
-with, and exports as markdown or JSON — questions, answers, and a table of
-every quote with the verdict it was given, stamped with the corpus it was
-answered against.
-
-## How the site is organized
-
-- **Landing** — one card per conference, opening its newest edition, plus
-  *Since last year*: which topics, methods, and benchmarks take a
-  significantly different share of the conference than in the previous
-  edition.
-- **Inside a conference** — search plus three category rows (topic / method /
-  benchmark). Nothing is listed until the reader narrows: showing all 6,637
-  papers is the problem, not the answer. Result cards carry the highlighted
-  passage, the extracted terms (proposes / builds on / compared with / data),
-  the corresponding author where the paper names one, and links out.
-- **Three views of the set you picked** — one card each, one **row** each (a
-  table of the extracted fields, which is how a set gets compared), or the
-  subgroups the embeddings support. Each paper takes a mark — read / later /
-  not mine — kept in your browser; the marks never reorder anything, they only
-  record what you decided. The set leaves as **.bib** or **.csv**.
-- **An earlier year is never a browsing category.** Last year's edition exists
-  as a baseline: it powers *Since last year* and appears among a paper's
-  nearest neighbors (stamped with its year), nowhere else.
-
-## How "Since last year" picks its rows
-
-The chart answers "what is rising?" without ranking by opinion. Shares are
-per-edition (papers per 1,000), because editions differ ~2× in size and raw
-counts would only restate that. A category is shown when it passes **both**
-tests, or is an anchor:
-
-| Test | Rule | Why |
+| | Terminal conversation | Inside an AI client |
 |---|---|---|
-| Real | two-proportion z ≥ 2.576 (99%) | the corpus sizes decide what is sampling noise, not a hand-picked cutoff |
-| Material | share moved ≥ 2 per 1,000, **or** ≥ 1.5× | statistically real but tiny drifts are not worth a row |
-| Anchor | top-2 by current share, any change | the chart must also say what the biggest things are, or "rose" has no context |
+| Start | `benchtrend init --provider anthropic` then `benchtrend` | `benchtrend mcp --connect claude` or `--connect codex`, then a new session |
+| Model access | your `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | the client's own login — no API key |
+| Verification | quotes and figures checked before the answer is shown; `/sources` | the client writes the answer; the tools return verbatim sentences and denominators |
 
-At most 5 risers and 5 fallers are shown, ordered by current share. A category
-with ≤ 2 papers in one year is tagged **new** or **gone** — at that count,
-presence is indistinguishable from noise. In the bar, the pale band is last
-year's share and the dark band is this year's, the longer drawn underneath so
-the tail stays visible — a dark tail grew, a pale tail shrank. The figures are
-"was → is", each as that year's share of its conference.
+`benchtrend status` says which of these is ready. Details — saved
+conversations, data updates, other MCP clients — in
+[docs/terminal.md](docs/terminal.md); the six tools, question routing and
+verification in [docs/benchmark-chat.md](docs/benchmark-chat.md).
 
-The comparison is computed from the same abstract-level extraction for both
-years — never from full text, which only exists for part of one year and
-would make that year look artificially richer.
+## What the data is
 
-## Principles
+Ten venues, the three most recent editions each (two for ICCV and ECCV,
+which alternate years):
 
-- **Extractive, never generative.** The local model selects sentences; rules
-  cut them (pure deletion, verified as an ordered subsequence); nothing on
-  screen is model-written prose. A span that fails verification against the
-  paper is dropped, not repaired.
-- **Show differences, never importance.** Cluster, count, share, and change
-  are measurable and shown; "promising" and "breakthrough" are not. With 83%
-  of papers claiming novelty, ranking by it would rank phrasing.
-- **Coverage is stated.** Topic tags reach about half the corpus; full text
-  exists for ~72% of 2026; contact lines for 65% of full texts. Gaps are
-  shown as gaps.
-- **If a view needs a sentence to be understood, redesign the view.**
+| Venue | Editions | | Venue | Editions |
+|---|---|---|---|---|
+| ICML | 2024 · 2025 · 2026 | | ICCV | 2023 · 2025 |
+| ICLR | 2024 · 2025 · 2026 | | ECCV | 2024 · 2026 |
+| NeurIPS | 2023 · 2024 · 2025 | | ACL | 2024 · 2025 · 2026 |
+| CVPR | 2024 · 2025 · 2026 | | EMNLP | 2023 · 2024 · 2025 |
+| AAAI | 2024 · 2025 · 2026 | | CoRL | 2023 · 2024 · 2025 |
 
-## Pipeline (summary)
+58,616 papers with parsed full text; 9,332 benchmarks and datasets, 8,768 of
+them introduced by a paper inside this corpus, each introduction claim
+reviewed one by one ([the rubric](docs/introduced-review.md)). A benchmark is
+its published name: `MATH` and `MATH-500` are two rows, `CIFAR10` and
+`CIFAR-10` are one, and a relation between two is shown but never merges a
+count.
 
-Feed collection → abstract scrape → normalization (dedup: orals are listed
-twice) → arXiv/PMLR full-text fetch and sectioning → structured extraction
-with verbatim-span verification (local vLLM) → shared frozen taxonomy →
-union embeddings and cross-venue neighbors → the site (`reports/`) plus a
-Meilisearch index, packed by `bellwether bundle` for installs. The pipeline needs a
-GPU machine; an install only serves its output.
+## What it does not say
 
-See `CLAUDE.md` for the full build documentation, data traps, and measured
-quality numbers.
+- **Only stated use is counted.** A paper counts for a benchmark when its
+  own sentence or table caption says it evaluates (or trains) on it. Not
+  stating is not "not used".
+- **Only papers with full text, from arXiv.** 71–91% of each edition is
+  matched and parsed; AAAI is 63–66%. The unmatched papers are absent from
+  every count, never counted as non-users, and the denominator beside each
+  figure is the parsed papers in that scope.
+- **"New" means first claimed in this corpus, which starts in 2023.** MME
+  shows a first claim at NeurIPS 2025 with 82 earlier uses on record; the
+  `before_claim` figure is reported so that case is visible.
+- **A field filter covers papers that declare the field.** Some venues
+  carry no such labels (CoRL, for one), so a field query can exclude a venue
+  entirely; the scope reports how many papers it covered.
+- **Frequency is not quality.** No score, no "best", no ranking of
+  benchmarks by anything but how many papers use them.
+- **Research prototype.** Counts change when the data is re-cut; a
+  conversation records the snapshot it was answered against, and released
+  snapshots are tagged.
+
+## Also in this repository
+
+The earlier paper-reading product — a local site for one conference edition
+with search, topics, verified sentences and a quote-checked chat — is still
+here as the evidence surface: [docs/browser.md](docs/browser.md). It keeps the
+project's earlier name, `bellwether`, for its command and install directory;
+`WNAI_*` environment variables are older still. Build documentation, data
+traps and measured quality are in `CLAUDE.md`; the paper-reading principles in
+[docs/paper-view.md](docs/paper-view.md).
+
+Apache-2.0.
