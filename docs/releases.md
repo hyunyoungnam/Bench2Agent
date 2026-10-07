@@ -13,10 +13,10 @@ As of 2026-10-07:
 | Public GitHub repository | Available | Source code, documentation, and Apache-2.0 license |
 | Code release [`v0.2.0`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
 | Data release `data-20261007` | Available | `benchtrend-data.tar.gz` and its `.sha256` checksum |
-| PyPI package | Not published | Package-name installation such as `uv tool install benchtrend` |
+| [PyPI package](https://pypi.org/project/benchtrend/) | Available (0.2.0, 2026-10-07) | Package-name installation: `uv tool install benchtrend` |
 
-The [README installation](../README.md#get-started) installs the `v0.2.0` tag
-and the public data release; neither needs PyPI.
+The [README installation](../README.md#get-started) installs from PyPI and
+the public data release.
 
 ## Code releases
 
@@ -60,16 +60,18 @@ compatible. Conversations retain their original snapshot identity.
 ## PyPI publication
 
 Publishing the built Python distributions to PyPI makes the package available
-by name. GitHub release publication does not automatically do this.
-After the package is actually published and name-based installation is tested,
-the README can use:
+by name; a GitHub release does not do this by itself. `0.2.0` was uploaded with
+`uv publish dist/benchtrend-0.2.0*` — the same two files attached to the
+GitHub release — using a PyPI API token held only in that command's
+environment. The README installs with:
 
 ```bash
 uv tool install benchtrend
 ```
 
-The data installation remains a separate command. Until then, use the working
-source installation in the README; do not advertise a package-name command.
+The data installation remains a separate command. For the next version, use a
+project-scoped token (the project now exists) and publish right after the
+GitHub release, from the same `dist/` files.
 
 ## Cutting a code release
 
@@ -86,7 +88,8 @@ source installation in the README; do not advertise a package-name command.
 5. `gh release create vX.Y.Z dist/benchtrend-X.Y.Z* dist/SHA256SUMS --title ...
    --notes-file ...`, linking the data release the code was tested against.
 
-Publish to PyPI separately when ready to offer package-name installation.
+6. `uv publish dist/benchtrend-X.Y.Z*` with a project-scoped PyPI token.
+
 Keep code-version and data-date badges distinct so a data tag is not mistaken
 for a software version.
 

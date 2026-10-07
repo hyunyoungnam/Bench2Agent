@@ -15,11 +15,14 @@ the terminal conversation, use the [README quick start](../README.md#get-started
 For an existing AI client login, use the
 [complete MCP setup](#install-for-claude-code-or-codex) below.
 
-From the public repository, or from a checkout:
+From PyPI, from a tagged source archive, or from a checkout:
 
 ```bash
+uv tool install benchtrend
+# A specific tag, without PyPI:
+uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz
+# The development branch, or a checkout:
 uv tool install git+https://github.com/hyunyoungnam/BenchTrend
-# From a checkout:
 uv tool install .
 # Alternatively, in a virtual environment:
 python -m pip install .
@@ -43,14 +46,13 @@ when there is no new installation directory. Set `BENCHTREND_HOME` or pass
 `--home DIR` to choose a different data directory. Code updates preserve data
 and conversations.
 
-This version is prepared for package distribution. `uv tool install benchtrend`
-and `pip install benchtrend` should be advertised only after publishing this
-package to PyPI; these commands are not a promise that a public release exists.
+The package is published on [PyPI](https://pypi.org/project/benchtrend/) as
+`benchtrend`; `uv tool upgrade benchtrend` moves to a newer code release.
 
 ### Windows PowerShell — terminal conversation
 
 Paste this block into PowerShell. It installs `uv` if needed, installs the
-tested source revision and published data, then starts BenchTrend.
+package and published data, then starts BenchTrend.
 Choose the provider and model at the prompt, then enter a hidden API key.
 
 ```powershell
@@ -58,7 +60,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 }
 $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz
+uv tool install benchtrend
 if ($LASTEXITCODE -eq 0) {
     benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
     if ($LASTEXITCODE -eq 0) { benchtrend }
@@ -79,7 +81,7 @@ if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz &&
+uv tool install benchtrend &&
 benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
   --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
 benchtrend mcp --connect codex &&
@@ -93,7 +95,7 @@ if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz &&
+uv tool install benchtrend &&
 benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
   --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
 benchtrend mcp --connect claude &&

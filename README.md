@@ -1,5 +1,6 @@
 # BenchTrend
 
+[![PyPI](https://img.shields.io/pypi/v/benchtrend?label=pypi)](https://pypi.org/project/benchtrend/)
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/BenchTrend?filter=v*&label=release)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0)
 [![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
@@ -55,7 +56,7 @@ if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz &&
+uv tool install benchtrend &&
 benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
   --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
 benchtrend
@@ -125,10 +126,11 @@ and conversations record the snapshot used for their answers.
 ## Releases and development
 
 Code and data are released separately. [v0.2.0](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0)
-is the code — wheel, source distribution and checksums; the install command
-above pins it — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-is the snapshot. The package is not on PyPI, so `uv tool install benchtrend`
-is not yet an installation route. See [how releases work](docs/releases.md).
+is the code — wheel, source distribution and checksums, the same files
+published on [PyPI](https://pypi.org/project/benchtrend/) — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
+is the snapshot. `uv tool upgrade benchtrend` picks up later code releases;
+data updates are a separate `benchtrend data install`. See
+[how releases work](docs/releases.md).
 
 The earlier paper-reading interface remains available as an evidence surface:
 [browser guide](docs/browser.md). Its compatibility command is `bellwether`.
