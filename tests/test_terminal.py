@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -141,6 +142,132 @@ class TerminalTests(unittest.TestCase):
             cli.cmd_mcp(args, self.root)
         run.assert_not_called()
         self.assertIn("mcp add benchtrend", output.getvalue())
+
+    def test_default_data_install_cli_verifies_the_release_checksum(self):
+        bundle = self.root / "release.tar.gz"
+        release = data.bundle(self.root, bundle)
+        original = self.path.read_bytes()
+        self.path.unlink()
+
+        def download(url, dest):
+            self.assertEqual(url, data.DEFAULT_URL)
+            shutil.copyfile(bundle, dest)
+
+        with patch("bellwether.paths.ROOT", self.root), \
+             patch("bellwether.cli._download", side_effect=download) as fetch, \
+             patch.object(data, "DEFAULT_SHA256", release["sha256"]), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(["data", "install"]), 0)
+        fetch.assert_called_once()
+        self.assertEqual(self.path.read_bytes(), original)
+        with patch("bellwether.cli._download", side_effect=download), \
+             patch.object(data, "DEFAULT_SHA256", "0" * 64):
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                data.install(self.root)
+        self.assertEqual(self.path.read_bytes(), original)
+
+    def test_first_launch_downloads_once_and_never_replaces_installed_data(self):
+        bundle = self.root / "release.tar.gz"
+        release = data.bundle(self.root, bundle)
+        self.path.unlink()
+        with patch("bellwether.cli._download", side_effect=lambda url, dest: shutil.copyfile(bundle, dest)) as fetch, \
+             patch.object(data, "DEFAULT_SHA256", release["sha256"]), \
+             patch("builtins.input", side_effect=AssertionError("no URL prompt")), \
+             contextlib.redirect_stderr(io.StringIO()):
+            cli.require_data(self.root, interactive=True)
+            cli.require_data(self.root, interactive=True)
+        fetch.assert_called_once()
+        self.assertEqual(data.status(self.root)["snapshot_id"], "fixture-1")
+
+    def test_headless_query_does_not_download_data_implicitly(self):
+        self.path.unlink()
+        with patch.object(data, "install") as install:
+            with self.assertRaisesRegex(ValueError, "benchtrend data install"):
+                cli.require_data(self.root, interactive=False)
+        install.assert_not_called()
+
+    def test_shortcuts_launch_repeatedly_with_data_bound_to_the_session(self):
+        for name in ("claude", "codex"):
+            with self.subTest(client=name), patch("shutil.which", return_value="/client/" + name), \
+                 patch("subprocess.run") as run, patch.object(data, "install") as install, \
+                 contextlib.redirect_stderr(io.StringIO()):
+                args = type("Args", (), {"command": name, "dry_run": False})()
+                run.return_value.returncode = 0
+                self.assertEqual(cli.cmd_client(args, self.root), 0)
+                self.assertEqual(cli.cmd_client(args, self.root), 0)
+                self.assertEqual(run.call_count, 2)
+                install.assert_not_called()
+                command = run.call_args.args[0]
+                self.assertEqual(command[0], "/client/" + name)
+                self.assertNotIn("add", command)
+                self.assertNotIn("remove", command)
+                if name == "claude":
+                    server = json.loads(command[2])["mcpServers"]["benchtrend"]
+                    self.assertEqual(server["command"], sys.executable)
+                    self.assertEqual(server["env"]["BENCHTREND_HOME"], str(self.root))
+                    self.assertIn(str(self.root), server["args"])
+                    self.assertEqual(command[1], "--mcp-config")
+                    self.assertNotIn("--strict-mcp-config", command)
+                else:
+                    settings = dict(value.split("=", 1) for flag, value in zip(command[1::2], command[2::2]) if flag == "-c")
+                    self.assertEqual(json.loads(settings["mcp_servers.benchtrend.command"]), sys.executable)
+                    self.assertIn(str(self.root), json.loads(settings["mcp_servers.benchtrend.args"]))
+                    self.assertIn(json.dumps(str(self.root)), settings["mcp_servers.benchtrend.env"])
+                    self.assertEqual(command[-2:], ["--model", "gpt-6.1-sol"])
+                run.return_value.returncode = 7
+                self.assertEqual(cli.cmd_client(args, self.root), 7)
+
+    def test_shortcut_missing_client_or_bad_download_never_starts_a_session(self):
+        args = type("Args", (), {"command": "claude", "dry_run": False})()
+        self.path.unlink()
+        with patch("shutil.which", return_value=None), patch.object(data, "install") as install:
+            with self.assertRaisesRegex(ValueError, "Install it first"):
+                cli.cmd_client(args, self.root)
+        install.assert_not_called()
+        with patch("shutil.which", return_value="/client/claude"), patch("subprocess.run") as run, \
+             patch.object(data, "install", side_effect=ValueError("SHA-256 mismatch")), \
+             contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                cli.cmd_client(args, self.root)
+        run.assert_not_called()
+
+    def test_shortcut_dry_run_has_no_download_or_client_side_effects(self):
+        self.path.unlink()
+        args = type("Args", (), {"command": "claude", "dry_run": True})()
+        with patch("shutil.which", return_value="/client/claude"), patch.object(data, "install") as install, \
+             patch("subprocess.run") as run, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(cli.cmd_client(args, self.root), 0)
+        install.assert_not_called()
+        run.assert_not_called()
+        self.assertIn("--mcp-config", output.getvalue())
+
+    def test_shortcut_cli_dispatch(self):
+        for name in ("claude", "codex"):
+            with self.subTest(client=name), patch.object(cli, "cmd_client", return_value=0) as launch:
+                self.assertEqual(cli.main([name]), 0)
+                self.assertEqual(launch.call_args.args[0].command, name)
+
+    def test_default_openai_model_reaches_every_responses_request(self):
+        args = type("Args", (), {"provider": "openai", "model": None, "language": None})()
+        config = cli.configuration(args, self.root)
+        session = Session(self.root, **config)
+        with patch.object(providers, "post", side_effect=self.scripted("openai")) as post:
+            session.ask("Which benchmarks are used?", lambda event: None)
+        self.assertTrue(post.call_args_list)
+        for call in post.call_args_list:
+            self.assertEqual(call.args[0:2], ("openai", "/responses"))
+            self.assertEqual(call.args[2]["model"], "gpt-6.1-sol")
+
+    def test_explicit_and_saved_models_remain_available(self):
+        args = type("Args", (), {"provider": "openai", "model": None, "language": None})()
+        cli.write_json(cli.settings_path(self.root), {"provider": "openai", "model": "custom-model", "language": "en"})
+        self.assertEqual(cli.configuration(args, self.root)["model"], "custom-model")
+        args.model = "gpt-5-mini"
+        self.assertEqual(cli.configuration(args, self.root)["model"], "gpt-5-mini")
+        with patch("shutil.which", return_value="/client/codex"):
+            self.assertEqual(cli.client_command("codex", self.root, model="custom-model")[-2:], ["--model", "custom-model"])
+        with patch("shutil.which", return_value="/client/claude"):
+            self.assertEqual(cli.client_command("claude", self.root, model="custom-model")[-2:], ["--model", "custom-model"])
 
     def test_verified_render_shows_sources_and_marks_fabrications(self):
         from bellwether.chat import segment

@@ -34,7 +34,8 @@ def main():
                 raise AssertionError(result.stderr)
             return result.stdout
 
-        assert "BenchTrend 0.2.0" in run(["--version"])
+        from benchtrend import __version__
+        assert "BenchTrend " + __version__ in run(["--version"])
         assert json.loads(run(["status", "--json"]))["data"]["available"]
         config = json.loads(run(["mcp", "--config"]))["mcpServers"]["benchtrend"]
         assert config["command"] == sys.executable

@@ -12,6 +12,9 @@ from pathlib import Path
 
 SNAPSHOT = "benchmark_snapshot.json"
 MEMBER = "data/processed/" + SNAPSHOT
+# A release-pinned default keeps first-run downloads reproducible and checked.
+DEFAULT_URL = "https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz"
+DEFAULT_SHA256 = "d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e"
 
 
 def digest(path: Path) -> str:
@@ -51,7 +54,10 @@ def status(root: Path) -> dict:
 
 
 def install(root: Path, *, file: str | None = None, url: str | None = None, sha256: str | None = None) -> dict:
-    if bool(file) == bool(url):
+    if not file and not url:
+        url = DEFAULT_URL
+        sha256 = sha256 or DEFAULT_SHA256
+    elif file and url:
         raise ValueError("Choose one --file or --url.")
     target = root / MEMBER
     target.parent.mkdir(parents=True, exist_ok=True)

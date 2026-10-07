@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DEFAULT_MODELS = {"openai": "gpt-5-mini", "anthropic": "claude-opus-5-5"}
+DEFAULT_MODELS = {"openai": "gpt-6.1-sol", "anthropic": "claude-opus-5-5"}
 KEY_NAMES = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
 ENDPOINTS = {"openai": "https://api.openai.com/v1", "anthropic": "https://api.anthropic.com/v1"}
 MAX_ROUNDS = 12
@@ -30,7 +30,8 @@ def post(provider: str, path: str, payload: dict) -> dict:
     parsed = urllib.parse.urlsplit(base)
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
         raise ProviderError("Model endpoint must use HTTPS (HTTP is allowed for localhost).")
-    headers = {"Content-Type": "application/json", "User-Agent": "BenchTrend/0.2.0"}
+    from . import __version__
+    headers = {"Content-Type": "application/json", "User-Agent": "BenchTrend/" + __version__}
     if provider == "openai":
         headers["Authorization"] = "Bearer " + key
     else:

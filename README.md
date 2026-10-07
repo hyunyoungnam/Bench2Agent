@@ -1,7 +1,7 @@
 # BenchTrend
 
 [![PyPI](https://img.shields.io/pypi/v/benchtrend?label=pypi)](https://pypi.org/project/benchtrend/)
-[![Code release](https://img.shields.io/github/v/release/hyunyoungnam/BenchTrend?filter=v*&label=release)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0)
+[![Code release](https://img.shields.io/github/v/release/hyunyoungnam/BenchTrend?filter=v*&label=release)](https://github.com/hyunyoungnam/BenchTrend/releases)
 [![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](docs/terminal.md)
@@ -45,28 +45,37 @@ anything the checker cannot verify is marked in the answer.
 
 ### Terminal conversation — macOS / Linux
 
-Paste the whole block below into your terminal. It installs `uv` if needed,
-installs BenchTrend, downloads its **16 MB research-data snapshot**, verifies
-the download checksum, and starts a conversation. This snapshot contains
-benchmark usage and paper evidence; external benchmarks' questions, labels,
-images, and other underlying records are separate downloads.
+The short commands below require **BenchTrend 0.2.1 or later**. This checkout
+implements them; PyPI currently offers 0.2.0. Until 0.2.1 is published, install
+the latest source and start it:
 
 ```bash
-if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-fi
-export PATH="$HOME/.local/bin:$PATH"
-uv tool install benchtrend &&
-benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
-  --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
+uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
 benchtrend
 ```
+
+From a local checkout, use `uv tool install .`. For the older PyPI version, use the
+[released 0.2.0 setup](docs/terminal.md#benchtrend-020).
+
+With [uv installed](docs/terminal.md#install-uv), the setup is:
+
+```bash
+uv tool install 'benchtrend>=0.2.1'
+benchtrend
+```
+
+The first launch downloads the **16 MB research-data snapshot** and checks
+its checksum automatically. Later launches reuse your installed data.
+This snapshot contains benchmark usage and paper evidence; external
+benchmarks' underlying questions, labels, and images are separate downloads.
 
 Choose OpenAI or Anthropic at the prompt, accept or change the model, and
 enter your API key when asked. The key is hidden and used only for that
 session. Existing `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` environment variables
 also work. API access uses your provider's API billing, separately from a
 ChatGPT or Claude subscription.
+
+New OpenAI setups default to GPT-6.1 Sol (`gpt-6.1-sol`).
 
 Once installed, just run `benchtrend` to return. No GPU is needed.
 [Windows setup, saved conversations, and data updates](docs/terminal.md).
@@ -77,18 +86,20 @@ BenchTrend can supply the same data to your AI client's conversation through
 MCP. The client handles model access through its own login. BenchTrend's MCP
 server needs no separate API key.
 
-If BenchTrend and the snapshot are already installed, register it with one of
-these commands, then open a new client session:
+After installing BenchTrend, open a conversation in your preferred client.
+Claude Code or Codex must already be installed and signed in:
 
 ```bash
-benchtrend mcp --connect claude && claude
+benchtrend claude
 ```
 
 ```bash
-benchtrend mcp --connect codex && codex
+benchtrend codex
 ```
 
-Ask the client to **use BenchTrend** for your benchmark question.
+These commands download the data if needed and open a new session with
+BenchTrend tools available. Ask the client to **use BenchTrend** for your
+benchmark question.
 For a fresh installation using this route, follow the
 [complete MCP setup](docs/terminal.md#install-for-claude-code-or-codex).
 Your client writes its answers; BenchTrend's final-answer checks run in the

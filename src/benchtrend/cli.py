@@ -219,12 +219,11 @@ def require_data(root: Path, *, interactive: bool):
     if (root / "data/processed/benchmark_snapshot.json").is_file():
         return
     if interactive:
-        source = input("Benchmark data file or HTTPS URL: ").strip()
-        if source:
-            from .data import install
-            print(json.dumps(install(root, **({"url": source} if source.startswith("https://") else {"file": source})), indent=2))
-            return
-    raise ValueError("Benchmark data is missing. Run benchtrend data install --file FILE or --url URL.")
+        from .data import install
+        print("Downloading benchmark data (16 MB); checking its checksum…", file=sys.stderr, flush=True)
+        install(root)
+        return
+    raise ValueError("Benchmark data is missing. Run benchtrend data install.")
 
 
 def cmd_chat(args, root: Path) -> int:
@@ -329,6 +328,39 @@ def mcp_command(root: Path) -> list[str]:
     return [sys.executable, "-m", "benchtrend", "--home", str(root), "mcp"]
 
 
+def client_command(client: str, root: Path, *, model: str | None = None) -> list[str]:
+    executable = shutil.which(client)
+    if not executable:
+        raise ValueError(f"{CLIENT_LABELS[client]} is not installed or is not on PATH. Install it first, then run benchtrend {client}.")
+    from bellwether.paths import agent_environment
+    env = {**agent_environment(), "BENCHTREND_HOME": str(root)}
+    command = mcp_command(root)
+    if client == "claude":
+        config = {"mcpServers": {"benchtrend": {"command": command[0], "args": command[1:], "env": env}}}
+        native = [executable, "--mcp-config", json.dumps(config)]
+        if model:
+            native += ["--model", model]
+        return native
+    # Codex's -c values are TOML; JSON-quoted strings and arrays also fit TOML.
+    settings = {"command": json.dumps(command[0]), "args": json.dumps(command[1:]),
+                "env": "{" + ", ".join(json.dumps(k) + "=" + json.dumps(v) for k, v in env.items()) + "}"}
+    native = [executable]
+    for key, value in settings.items():
+        native += ["-c", f"mcp_servers.benchtrend.{key}={value}"]
+    native += ["--model", model or providers.DEFAULT_MODELS["openai"]]
+    return native
+
+
+def cmd_client(args, root: Path) -> int:
+    command = client_command(args.command, root, model=getattr(args, "model", None))
+    if args.dry_run:
+        print(shlex.join(command))
+        return 0
+    require_data(root, interactive=True)
+    print(f"Opening {CLIENT_LABELS[args.command]} with BenchTrend…", file=sys.stderr, flush=True)
+    return subprocess.run(command, check=False).returncode
+
+
 def cmd_mcp(args, root: Path) -> int:
     command = mcp_command(root)
     if args.config:
@@ -405,7 +437,7 @@ def main(argv=None) -> int:
     common_options(data_status, child=True)
     install = actions.add_parser("install")
     common_options(install, child=True)
-    source = install.add_mutually_exclusive_group(required=True)
+    source = install.add_mutually_exclusive_group()
     source.add_argument("--file")
     source.add_argument("--url")
     install.add_argument("--sha256", help="expected SHA-256 of the downloaded file")
@@ -420,6 +452,11 @@ def main(argv=None) -> int:
     mode.add_argument("--connect", choices=["codex", "claude"], help="register via the client's own CLI")
     mcp.add_argument("--dry-run", action="store_true", help="show registration command without changing settings")
     mcp.set_defaults(fn=cmd_mcp)
+    for name in ("claude", "codex"):
+        client = commands.add_parser(name, help=f"open {CLIENT_LABELS[name]} with BenchTrend tools")
+        common_options(client, child=True)
+        client.add_argument("--dry-run", action="store_true", help="show the launch command without downloading data or starting the client")
+        client.set_defaults(fn=cmd_client)
     args = parser.parse_args(argv)
     if args.home:
         os.environ["BENCHTREND_HOME"] = args.home

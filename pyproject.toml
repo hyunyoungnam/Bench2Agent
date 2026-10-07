@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "benchtrend"
-version = "0.2.0"
+version = "0.2.1"
 description = "Ask which benchmarks researchers use, how usage changes, and which new benchmarks are adopted"
 readme = "docs/terminal.md"
 requires-python = ">=3.10"
@@ -13,6 +13,12 @@ license-files = ["LICENSE"]
 # The SERVING layer is stdlib-only by design — it must run on machines that
 # cannot run the build pipeline (Windows, no GPU). Pipeline deps live in .venv.
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/hyunyoungnam/BenchTrend"
+Documentation = "https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/terminal.md"
+Issues = "https://github.com/hyunyoungnam/BenchTrend/issues"
+Changelog = "https://github.com/hyunyoungnam/BenchTrend/releases"
 
 [project.scripts]
 benchtrend = "benchtrend.cli:main"
