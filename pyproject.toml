@@ -8,6 +8,8 @@ version = "0.2.0"
 description = "Ask which benchmarks researchers use, how usage changes, and which new benchmarks are adopted"
 readme = "docs/terminal.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 # The SERVING layer is stdlib-only by design — it must run on machines that
 # cannot run the build pipeline (Windows, no GPU). Pipeline deps live in .venv.
 dependencies = []
