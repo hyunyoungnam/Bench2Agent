@@ -45,8 +45,8 @@ anything the checker cannot verify is marked in the answer.
 
 ### Terminal conversation — macOS / Linux
 
-The short commands below require **BenchTrend 0.2.1 or later**. Until 0.2.1
-is published, install the latest source and start it:
+Version 0.2.1 is not yet published. Install the latest source using **one**
+of the following options. With [uv](docs/terminal.md#install-uv):
 
 ```bash
 uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
@@ -60,25 +60,10 @@ python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/he
 benchtrend
 ```
 
-From a local checkout, use `uv tool install .` or `python -m pip install .`.
-
-Once 0.2.1 is published, install from PyPI using
-[uv](docs/terminal.md#install-uv):
-
-```bash
-uv tool install 'benchtrend>=0.2.1'
-benchtrend
-```
-
-Or using `pip`:
-
-```bash
-python -m pip install 'benchtrend>=0.2.1'
-benchtrend
-```
-
 `uv tool install` creates a separate environment for the app. `pip` installs
 into your active Python environment; a virtual environment is recommended.
+
+From a local checkout, use `uv tool install .` or `python -m pip install .`.
 
 The first launch downloads the **16 MB research-data snapshot** and checks
 its checksum automatically. Later launches reuse your installed data.
