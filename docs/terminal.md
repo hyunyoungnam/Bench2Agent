@@ -275,7 +275,14 @@ process. Running it manually waits for JSON-RPC requests; it is not a chat promp
 The six exposed tools are `benchmark_scope`, `benchmark_usage`,
 `benchmark_trend`, `new_benchmarks`, `benchmark_adoption`, and
 `benchmark_evidence`. All are read-only and use the same invocation/validation
-path as the independent terminal conversation. Server instructions explain
+path as the independent terminal conversation. Each benchmark row carries two
+separate links: `locations`, our mapping from the benchmark id to a Hugging
+Face dataset, GitHub repository or homepage (`check` says whether the id
+answered the API at the registry's last check; `checked_at` is null when the
+installed snapshot does not record that date; an empty list means no
+confirmed location, not that none exists), and `introducing_paper`, the
+reviewed introducing paper in this corpus, or null. A homonym has its own
+links. Nothing ranks or filters on either. Server instructions explain
 coverage, evaluation/training separation and evidence requirements.
 External clients write their own final answers; BenchTrend's automatic final
 answer verification runs in its own conversation interface.

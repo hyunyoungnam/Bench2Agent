@@ -14,8 +14,10 @@ class BenchmarkQuestions(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.write("config/benchmarks.json", {"benchmarks": [
-            {"id": "toy", "name": "Toy"}, {"id": "mirage-old", "name": "Mirage"}]})
+        self.write("config/benchmarks.json", {"checked": "2026-09-17", "benchmarks": [
+            {"id": "toy", "name": "Toy", "gh": "lab/toy", "hf": "lab/toy-broken", "ok": {"gh": True, "hf": False}},
+            {"id": "mirage-old", "name": "Mirage", "url": "https://mirage.example.org"},
+            {"id": "bare", "name": "Bare"}]})
         def intro(bid, name, pid, title, **extra):
             return {"id": bid, "name": name, "fold": name.lower(), "kind": "benchmark",
                     "first_claim": "icml-2025", "developers": ["Alice Smith"],
@@ -71,6 +73,40 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(result["results"][0]["per_1000"], 571.429)
         train = self.store.usage({"role": "trains_on"})
         self.assertEqual(train["results"][0]["papers"], 1)
+
+    def test_links_are_separate_per_id_and_state_their_check(self):
+        rows = {r["id"]: r for r in self.store.usage({"latest": False, "limit": 50})["results"]}
+        # location only: a registered benchmark nobody introduced here; the
+        # Hub id that failed its check is not shown, the GitHub one is dated
+        self.assertEqual(rows["toy"]["locations"], [{"url": "https://github.com/lab/toy", "host": "github",
+                                                     "check": "api", "checked_at": "2026-09-17"}])
+        self.assertIsNone(rows["toy"]["introducing_paper"])
+        # introducing paper only
+        self.assertEqual(rows["fresh"]["locations"], [])
+        self.assertEqual(rows["fresh"]["introducing_paper"]["url"], "https://arxiv.org/abs/2501.00001")
+        self.assertEqual(rows["fresh"]["introducing_paper"]["edition"], "icml-2025")
+        # a homepage is author-registered and never API-checked (mirage-old
+        # has no attributed use: its one mention is an unresolved homonym)
+        self.assertEqual(self.store.trend({"benchmark": "mirage-old"})["locations"],
+                         [{"url": "https://mirage.example.org", "host": "web", "check": "none", "checked_at": None}])
+        # a homonym shares the name, never the link; it has its own paper
+        new = {r["id"]: r for r in self.store.new({})["results"]}
+        self.assertEqual(new["mirage-new"]["locations"], [])
+        self.assertEqual(new["mirage-new"]["introducing_paper"]["paper_id"], "2501.00005")
+        for call in (self.store.trend, self.store.evidence, self.store.adoption):
+            self.assertEqual(call({"benchmark": "fresh"})["introducing_paper"]["paper_id"], "2501.00001")
+        self.assertIn("locations", self.store.usage({})["note"])
+        # a snapshot without the registry's check date says so rather than
+        # borrowing its own export date
+        path = self.root / "data/processed/benchmark_snapshot.json"
+        data = json.loads(path.read_text())
+        del data["registry_checked"]
+        path.write_text(json.dumps(data))
+        rows = {r["id"]: r for r in self.store.usage({"latest": False, "limit": 50})["results"]}
+        self.assertIsNone(rows["toy"]["locations"][0]["checked_at"])
+        # links never enter the figure pool
+        vals = figures.recompute("benchmark_usage", '{"latest":false,"limit":50}', {}, {"benchmark_usage": self.store.usage})
+        self.assertNotIn(2501.00001, vals)
 
     def test_new_includes_zero_adoption_and_uses_body_claims(self):
         result = self.store.new({"topic": "robotics"})

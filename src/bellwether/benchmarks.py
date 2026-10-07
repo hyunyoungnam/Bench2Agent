@@ -19,6 +19,35 @@ from pathlib import Path
 from .paths import ROOT
 SNAPSHOT = "benchmark_snapshot.json"
 ROLES = ("evaluates_on", "trains_on")
+# Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
+# a Hub dataset id or a GitHub repo, shown only when it answered the API at
+# the registry's last check, or an author-registered homepage, never checked.
+HOSTS = (("hf", "huggingface", "https://huggingface.co/datasets/"),
+         ("gh", "github", "https://github.com/"))
+LINK_NOTE = ("locations: our mapping from this benchmark id to where the artifact lives. "
+             "check=api: the Hub/GitHub id answered the API when the registry was last checked "
+             "(checked_at null means the date is not recorded in this snapshot); check=none: an "
+             "author-registered homepage. An empty list is no confirmed location, not none. "
+             "introducing_paper: the reviewed introducing paper in this corpus, null when there is "
+             "none; it is a paper, not a download location. Neither ranks or filters anything.")
+
+
+def locations(entry: dict, checked_at: str | None = None) -> list[dict]:
+    ok = entry.get("ok") or {}
+    out = [{"url": prefix + entry[field], "host": host, "check": "api", "checked_at": checked_at}
+           for field, host, prefix in HOSTS if entry.get(field) and ok.get(field)]
+    if entry.get("url"):
+        out.append({"url": entry["url"], "host": "web", "check": "none", "checked_at": None})
+    return out
+
+
+def introducing_paper(entry: dict) -> dict | None:
+    claims = entry.get("claims") or []
+    if not claims:
+        return None
+    c = next((c for c in claims if c["edition"] == entry.get("first_claim")), claims[0])
+    return {"paper_id": c["arxiv_base"], "url": "https://arxiv.org/abs/" + c["arxiv_base"],
+            "edition": c["edition"], "title": c["title"]}
 
 
 def fold(s: str) -> str:
@@ -226,6 +255,8 @@ def build_snapshot(root: Path = ROOT, out: Path | None = None) -> dict:
     data = {"schema_version": 1, "snapshot_id": source_id,
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "source": "arxiv_html_stated_roles", "editions": editions,
+            # the registry's own API-check date, never the export date
+            "registry_checked": read_json(root / "config/benchmarks.json", {}).get("checked"),
             "benchmarks": entries, "papers": result}
     target = out or root / "data/processed" / SNAPSHOT
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -257,6 +288,11 @@ class BenchmarkStore:
 
     def _base(self, data: dict) -> dict:
         return {k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")}
+
+    def _links(self, data: dict, entry: dict) -> dict:
+        """Keyed by the entry (benchmark id), never by name: a homonym gets its own."""
+        return {"locations": locations(entry, data.get("registry_checked")),
+                "introducing_paper": introducing_paper(entry)}
 
     def _entry(self, data: dict, name: str) -> dict:
         exact = [e for e in data["benchmarks"] if e["id"] == name or name in e.get("merged_ids", [])]
@@ -352,11 +388,13 @@ class BenchmarkStore:
         limit = max(1, min(int(a.get("limit", 10)), 100))
         results = [{"id": bid, "name": cat[bid]["name"], "kind": cat[bid].get("kind"),
                     "papers": len(ps), "per_1000": round(len(ps) / len(papers) * 1000, 3),
+                    **self._links(data, cat[bid]),
                     "evidence": [self._paper(p, bid, role) for p in ps[:2]]}
                    for bid, ps in sorted(counts.items(), key=lambda x: (-len(x[1]), x[0]))[:limit]]
         return {**self._base(data), "role": role, "coverage": coverage, "results": results,
                 "total_benchmarks": len(counts), "truncated": len(counts) > limit,
-                "note": "Counts measure explicitly stated use, not quality. Missing stated roles do not prove non-use."}
+                "note": "Counts measure explicitly stated use, not quality. Missing stated roles do not prove non-use. "
+                        + LINK_NOTE}
 
     def evidence(self, a: dict) -> dict:
         data = self.data()
@@ -369,8 +407,9 @@ class BenchmarkStore:
                    if p["uses"].get(entry["id"], {}).get("roles", {}).get(role)]
         offset, limit = max(0, int(a.get("offset", 0))), max(1, min(int(a.get("limit", 10)), 100))
         return {**self._base(data), "id": entry["id"], "name": entry["name"], "role": role,
+                **self._links(data, entry),
                 "coverage": coverage, "total": len(matches), "results": matches[offset:offset + limit],
-                "truncated": offset + limit < len(matches)}
+                "truncated": offset + limit < len(matches), "note": LINK_NOTE}
 
     def trend(self, a: dict) -> dict:
         data = self.data()
@@ -405,6 +444,7 @@ class BenchmarkStore:
                 comparisons.append({"from": old["edition"], "to": new["edition"],
                                     "z": round(z, 3) if z is not None else None, "state": state})
         return {**self._base(data), "id": entry["id"], "name": entry["name"], "role": role,
+                **self._links(data, entry),
                 "coverage": coverage, "results": results, "comparisons": comparisons,
                 "rule": "Within venue: two-proportion z, abs(z) >= 2.576; 0 to >=8 papers is appearing."}
 
@@ -416,7 +456,8 @@ class BenchmarkStore:
         if not entry.get("claims"):
             return {"error": "No reviewed introducing paper in this corpus; developer attribution is unavailable."}
         papers, coverage = self._select(data, a)
-        return {**self._base(data), **self._adoption(entry, papers), "coverage": coverage}
+        return {**self._base(data), **self._adoption(entry, papers), **self._links(data, entry),
+                "coverage": coverage}
 
     def _adoption(self, entry: dict, papers: list) -> dict:
         claimers = {c["arxiv_base"] for c in entry["claims"]}
@@ -492,13 +533,15 @@ class BenchmarkStore:
         offset, limit = max(0, int(a.get("offset", 0))), max(1, min(int(a.get("limit", 10)), 100))
         return {**self._base(data), "total": len(entries), "kind": kind,
                 "results": [{**{k: e.get(k) for k in ("id", "name", "kind", "first_claim", "claims", "homonym_of")},
+                             **self._links(data, e),
                              **({"adoption": stats[e["id"]]} if e["id"] in stats else {})}
                             for e in entries[offset:offset + limit]],
                 "truncated": offset + limit < len(entries),
                 "sort": sort,
                 "adoption_scope": "All installed editions, no field filter; introduction filters do not filter using papers." if stats else None,
                 "note": "Reviewed introductions are listed regardless of adoption. first_claim is inside this "
-                        "corpus, not global priority. Call benchmark_adoption for use counts; unavailable is not zero."}
+                        "corpus, not global priority. Call benchmark_adoption for use counts; unavailable is not zero. "
+                        + LINK_NOTE}
 
     def verify(self, paper_id: str, quote: str) -> dict | None:
         if len(quote.strip()) < 20:
