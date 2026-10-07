@@ -1,8 +1,8 @@
 {
   "name": "bellwether",
   "displayName": "Bellwether",
-  "description": "Explore conference papers and their source-backed dataset links from VS Code.",
-  "version": "0.1.0",
+  "description": "Ask which evaluation benchmarks researchers use, how use changes, and which new benchmarks are adopted.",
+  "version": "0.2.0",
   "publisher": "bellwether-local",
   "private": true,
   "engines": {
@@ -14,12 +14,16 @@
   "activationEvents": [
     "onCommand:bellwether.openChat",
     "onCommand:bellwether.openBrowse",
+    "onCommand:bellwether.connectOpenAI",
+    "onCommand:bellwether.connectClaude",
     "onCommand:bellwether.openBrowser",
     "onCommand:bellwether.stop"
   ],
   "contributes": {
     "commands": [
-      { "command": "bellwether.openChat", "title": "Bellwether: Open Chat" },
+      { "command": "bellwether.openChat", "title": "Bellwether: Ask About Benchmarks" },
+      { "command": "bellwether.connectOpenAI", "title": "Bellwether: Sign In with Codex" },
+      { "command": "bellwether.connectClaude", "title": "Bellwether: Sign In with Claude Code" },
       { "command": "bellwether.openBrowse", "title": "Bellwether: Explore Papers" },
       { "command": "bellwether.openBrowser", "title": "Bellwether: Open in Browser" },
       { "command": "bellwether.stop", "title": "Bellwether: Stop Local Server" }

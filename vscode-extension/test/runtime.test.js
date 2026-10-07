@@ -55,6 +55,15 @@ test("starts the real server on a free port and stops it", { skip: !isReadyRoot(
     const browse = await get(active.port, "/browse");
     assert.equal(browse.status, 200);
     assert.match(browse.body, /<html/i);
+    const chat = await get(active.port, "/");
+    assert.equal(chat.status, 200);
+    assert.match(chat.body, /data-question/);
+    const scope = await get(active.port, "/benchmarks/status");
+    assert.equal(scope.status, 200);
+    assert.equal(typeof JSON.parse(scope.body).available, "boolean");
+    const inventory = await get(active.port, "/datasets/benchmarks_used.csv?gid=1");
+    assert.equal(inventory.status, 200);
+    assert.match(inventory.body.split("\n")[0], /benchmark,as_written,registry_kind,host,where/);
   } finally {
     await stopServer(active.child);
   }

@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from .paths import ROOT
 BIN_DIR = ROOT / "bin"
 MEILI_DIR = ROOT / "data" / "meili"
 MEILI_VERSION = "v1.53.1"          # the version the index was built with
@@ -44,6 +44,7 @@ BUNDLE_GLOBS = [
     # without this an install answers "no code" for every paper, which
     # reads as a fact about the paper rather than a missing file
     "data/processed/resources.json",
+    "data/processed/benchmark_snapshot.json",
 ]
 
 _IS_WIN = platform.system() == "Windows"
@@ -429,10 +430,24 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--out", default=".", help="directory for the CSV files (default: cwd)")
     d.add_argument("--gid", type=int, help="export one paper by gid")
     d.set_defaults(fn=cmd_datasets)
+    k = sub.add_parser("benchmarks", help="export reviewed full-text benchmark usage into the portable data bundle")
+    k.add_argument("--out", help="snapshot file (default: data/processed/benchmark_snapshot.json)")
+    k.set_defaults(fn=cmd_benchmarks)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
     m.set_defaults(fn=cmd_mcp)
     args = ap.parse_args(argv)
     return args.fn(args)
+
+
+def cmd_benchmarks(args) -> int:
+    from .benchmarks import build_snapshot
+    try:
+        result = build_snapshot(ROOT, Path(args.out) if args.out else None)
+    except (ValueError, FileNotFoundError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":

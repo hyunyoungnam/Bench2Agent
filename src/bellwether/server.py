@@ -22,7 +22,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from .paths import ROOT
 DOCS = str(ROOT / "reports")
 KEY_FILE = ROOT / "data/meili/search_key"
 MEILI_ADDR = os.environ.get("WNAI_MEILI_ADDR", "127.0.0.1:7700")
@@ -88,6 +88,13 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json(400, {"error": str(exc)[:200]})
             except Exception as exc:  # noqa: BLE001
                 self._json(500, {"error": f"{type(exc).__name__}: {exc}"[:200]})
+            return
+        elif self.path == "/benchmarks/status":
+            from .mcp import B
+            try:
+                self._json(200, B.scope({}))
+            except (ValueError, OSError) as exc:
+                self._json(500, {"error": str(exc)[:200]})
             return
         elif self.path == "/features":
             from . import translate

@@ -35,7 +35,7 @@ from pathlib import Path
 
 from . import figures
 
-ROOT = Path(__file__).resolve().parents[2]
+from .paths import ROOT
 TERMS = ROOT / "config" / "ko_terms.json"
 # Off unless asked for. The rendering is a second agent call per turn and the
 # reader sees "rendering Korean…" while it runs; while the English answer is

@@ -1,35 +1,49 @@
-# Bellwether
+# BenchTrend
 
-The flock's lead animal reads where a field is going first. Bellwether is a local-first research platform over major AI conference proceedings — ask in conversation, get answers whose every quote is machine-verified against the papers. One edition of one
-conference is ~6,600 accepted papers; nobody reads a list that long. This
-project turns the proceedings into three answerable questions:
+BenchTrend helps researchers choose evaluation benchmarks from what conference
+papers explicitly report: what is used now in a field, how use changes across
+editions, which benchmarks are introduced, and whether other authors adopt them.
+Ask in conversation; computed counts link back to the papers and their verbatim
+experiment or introduction sentences. Counts describe use, not quality.
 
-1. **Which papers are in my field?** — search, topics, methods, and benchmarks
-   filter the corpus down to the few dozen that are yours.
-2. **What is in the set I picked?** — the selection is counted, grouped, and
-   compared, so deciding what to open is possible at a glance.
-3. **What is new in this paper?** — each card shows the paper's **own
-   sentences**, color-marked: pink for why the work was needed, yellow for
-   what is new, blue for what it achieved. Nothing is paraphrased; every
-   displayed sentence exists verbatim in the paper and is machine-verified
-   against it.
+## Terminal package and MCP
 
-Currently loaded: six editions across three conferences — ICML 2025/2026,
-NeurIPS 2024/2025, ICLR 2025/2026 — 29,605 papers in one cross-venue index.
+Install the shared package, then either start a BenchTrend conversation or
+connect its tools to an existing AI client:
 
-## Install & run
+```bash
+uv tool install .
+benchtrend data install --file ./benchtrend-data.tar.gz
+benchtrend init --provider openai      # OPENAI_API_KEY; Anthropic also supported
+benchtrend                            # direct terminal conversation
+benchtrend mcp --connect codex        # or: --connect claude
+```
 
-Runs entirely on your own machine — each reader installs their own copy and
-serves it on loopback, so the corpus, the search engine and the agent all stay
-local. The repo is private: you need to be a collaborator (repo *Settings →
-Collaborators*, read access is enough) and to have the
-[gh CLI](https://cli.github.com) signed in once with `gh auth login`.
-Requirements beyond that: git and Python 3.10+.
+See [terminal installation and usage](docs/terminal.md) for first-run setup,
+API authentication, saved conversations, data updates and MCP registration.
+An installable wheel and separate data bundle can be shared; public PyPI/data
+hosting must be published separately. The `bellwether` command remains as the
+compatibility launcher for the existing browser and build-machine exports.
+
+The full-text benchmark snapshot reports its installed editions and parsing
+coverage dynamically. The existing paper-reading index covers six editions of
+ICML, NeurIPS and ICLR and remains the supporting evidence explorer.
+See [benchmark conversation](docs/benchmark-chat.md) for MCP tools, source
+coverage and verification, and [paper-reading principles](docs/paper-view.md)
+for the supporting screens.
+
+## Existing browser installation
+
+The corpus and search engine run on your machine and are served on loopback.
+The agent sends questions and selected evidence to its model provider.
+Requirements: git and Python 3.10+. The data bundle is a GitHub release
+asset, fetched with the [gh CLI](https://cli.github.com) (`gh auth login`
+once) or with `fetch-data --url <release asset>` without it.
 
 **Linux / macOS** — two lines:
 
 ```bash
-gh api repos/hyunyoungnam/bellwether/contents/install.sh --jq .content | base64 -d | bash
+curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash
 bellwether fetch-data --release data-20260923      # site + search index, ~450 MB
 ```
 
@@ -74,21 +88,19 @@ source links and evidence, not the external datasets' records. Answers are
 written in English; Korean rendering is off by
 default and `WNAI_KO=1 bellwether serve` turns it on.
 
-### VS Code prototype
+### VS Code
 
 The [VS Code extension](vscode-extension/README.md) starts this same local
 service automatically and opens chat or paper exploration in an editor tab.
 Open the repository in VS Code, run **Run Bellwether Extension** with F5, then
-use **Bellwether: Open Chat** from the Command Palette in the new window.
+use **Bellwether: Ask About Benchmarks** from the Command Palette in the new window.
 The processed data bundle is still required. The current CSV links are source
 inventories; exporting actual evaluation records is tracked in
 [the implementation plan](docs/evaluation-data-downloads.md).
 
 The data bundle is produced by `bellwether bundle` on a build machine and
 published as a GitHub release; a new release reaches an install with one
-`fetch-data --release <tag>`. (If the repo is ever made public, the one-line
-`curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/bellwether/main/install.sh | bash`
-and `fetch-data --url <release asset>` work without gh.)
+`fetch-data --release <tag>`.
 
 ### Connect a coding agent (no API key)
 

@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from .paths import ROOT
 PROCESSED = ROOT / "data" / "processed"
 RDATA = ROOT / "reports" / "data"
 INTERIM = ROOT / "data" / "interim"
@@ -933,7 +933,33 @@ def t_citations(a: dict) -> dict:
 
 _GID = {"type": "integer", "description":
         "global paper id (gid) as returned by the other tools"}
-TOOLS = [
+from .benchmarks import BenchmarkStore
+
+B = BenchmarkStore(ROOT)
+_SCOPE = {
+    "topic": {"type": "string", "description": "Exact field label from benchmark_scope"},
+    "venue": {"type": "string"}, "edition": {"type": "string"},
+    "years": {"type": "array", "items": {"type": "integer"}},
+    "paper_ids": {"type": "array", "items": {"type": "string"}},
+}
+_ROLE = {"type": "string", "enum": ["evaluates_on", "trains_on"], "default": "evaluates_on"}
+
+
+def _benchmark_tools():
+    specs = [
+        ("benchmark_scope", B.scope, "Discover installed full-text editions, coverage and exact field labels. Call before benchmark questions; missing snapshots are NOT zero usage.", {"query": {"type": "string"}}, []),
+        ("benchmark_usage", B.usage, "Rank explicitly stated evaluation use (or training separately). Latest analysed edition per venue by default. Counts, per-1000 parsed-paper rates, coverage and verbatim evidence; not quality.", {**_SCOPE, "role": _ROLE, "latest": {"type": "boolean", "default": True}, "limit": {"type": "integer"}}, []),
+        ("benchmark_trend", B.trend, "Full-text benchmark use over editions, including zeros with observed denominators; within-venue change tests. Pass an unambiguous benchmark ID.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}}, ["benchmark"]),
+        ("new_benchmarks", B.new, "Reviewed introductions, including zero-adoption entries. First claim inside this corpus, not first public release. Separate benchmark/training-data introductions. sort=adoption ranks external evaluation use (training for datasets), across ALL installed using papers; filters select introductions only.", {**_SCOPE, "kind": {"type": "string", "enum": ["benchmark", "dataset"], "default": "benchmark"}, "sort": {"type": "string", "enum": ["introduced", "adoption"]}, "include_adoption": {"type": "boolean"}, "adoption_role": {"type": "string", "enum": ["evaluates_on", "trains_on"]}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, []),
+        ("benchmark_adoption", B.adoption, "Unique using papers for a reviewed introduction: evaluation/training and other/self/unknown authors separately. Introducing papers excluded; homonyms need local citation attribution.", {**_SCOPE, "benchmark": {"type": "string"}}, ["benchmark"]),
+        ("benchmark_evidence", B.evidence, "Paginated using papers and their verbatim role sentences for a benchmark. Cite these with arxiv anchors; inspect before advising what to evaluate on.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, ["benchmark"]),
+    ]
+    return [{"name": name, "description": desc, "fn": fn,
+             "inputSchema": {"type": "object", "properties": props, "required": required}}
+            for name, fn, desc, props, required in specs]
+
+
+TOOLS = _benchmark_tools() + [
     {"name": "search_papers",
      "description": "Full-text search over title+abstract of all six conference "
                     "editions (ICML/NeurIPS/ICLR, 29,605 papers). Typo-tolerant, "
@@ -1071,8 +1097,48 @@ def _reply(msg_id, result=None, error=None) -> None:
     sys.stdout.flush()
 
 
-def serve_stdio() -> int:
-    tools_by = {t["name"]: t for t in TOOLS}
+def _validate_argument(value, schema: dict, label: str) -> None:
+    kind = schema.get("type")
+    valid = {"object": lambda: isinstance(value, dict), "array": lambda: isinstance(value, list),
+             "string": lambda: isinstance(value, str), "integer": lambda: type(value) is int,
+             "boolean": lambda: type(value) is bool, "number": lambda: type(value) in (int, float)}
+    if kind in valid and not valid[kind]():
+        raise ValueError(f"{label} must be {kind}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{label} must be one of {schema['enum']}")
+    if kind == "object":
+        for required in schema.get("required", []):
+            if required not in value:
+                raise ValueError(f"Missing required argument: {required}")
+        for key, item in value.items():
+            if key not in schema.get("properties", {}):
+                raise ValueError(f"Unknown argument: {key}")
+            _validate_argument(item, schema["properties"][key], key)
+    elif kind == "array":
+        for item in value:
+            _validate_argument(item, schema.get("items", {}), label + "[]")
+
+
+def execute_tool(name: str, arguments, tools=None) -> dict:
+    """One invocation/validation path for MCP and direct API conversations."""
+    tool = next((t for t in (TOOLS if tools is None else tools) if t["name"] == name), None)
+    if tool is None:
+        return {"error": f"Unknown tool: {name}"}
+    try:
+        _validate_argument(arguments, tool["inputSchema"], "arguments")
+        return tool["fn"](arguments)
+    except FileNotFoundError:
+        return {"error": "Required local data is missing. Run benchtrend data status or benchtrend data install."}
+    except (ValueError, TypeError) as exc:
+        return {"error": str(exc)}
+    except Exception:  # noqa: BLE001 — protocol error, never a traceback or credentials
+        return {"error": "Local tool failed; check the installed snapshot with benchtrend data status."}
+
+
+def serve_stdio(tools=None, name: str = "bellwether") -> int:
+    from .policy import BENCHMARK_SYSTEM
+    available = TOOLS if tools is None else tools
+    tools_by = {t["name"]: t for t in available}
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -1080,35 +1146,45 @@ def serve_stdio() -> int:
         try:
             msg = json.loads(line)
         except json.JSONDecodeError:
+            _reply(None, error={"code": -32700, "message": "Parse error"})
+            continue
+        if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
+            _reply(None, error={"code": -32600, "message": "Invalid request"})
             continue
         method = msg.get("method", "")
         msg_id = msg.get("id")
+        if msg_id is None:
+            continue
+        params = msg.get("params") or {}
+        if not isinstance(params, dict):
+            _reply(msg_id, error={"code": -32602, "message": "params must be an object"})
+            continue
         if method == "initialize":
+            requested = params.get("protocolVersion")
+            supported = {"2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"}
             _reply(msg_id, {
-                "protocolVersion": msg.get("params", {}).get(
-                    "protocolVersion", "2024-11-05"),
+                "protocolVersion": requested if isinstance(requested, str) and requested in supported else "2025-11-25",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "bellwether", "version": "0.1.0"}})
+                "serverInfo": {"name": name, "version": "0.2.0"},
+                "instructions": BENCHMARK_SYSTEM})
         elif method == "tools/list":
             _reply(msg_id, {"tools": [
-                {k: t[k] for k in ("name", "description", "inputSchema")}
-                for t in TOOLS]})
+                {**{k: t[k] for k in ("name", "description", "inputSchema")},
+                 "annotations": {"readOnlyHint": True, "destructiveHint": False}}
+                for t in available]})
         elif method == "tools/call":
-            p = msg.get("params", {})
+            p = params
+            if not isinstance(p.get("name"), str):
+                _reply(msg_id, error={"code": -32602, "message": "tool name must be a string"})
+                continue
             t = tools_by.get(p.get("name"))
             if t is None:
                 _reply(msg_id, error={"code": -32602,
                                       "message": f"unknown tool {p.get('name')}"})
                 continue
-            try:
-                res = t["fn"](p.get("arguments") or {})
-                _reply(msg_id, {"content": [{"type": "text",
-                                             "text": json.dumps(res, ensure_ascii=False)}],
-                                "isError": "error" in res})
-            except Exception as exc:  # noqa: BLE001
-                _reply(msg_id, {"content": [{"type": "text",
-                                             "text": f"{type(exc).__name__}: {exc}"}],
-                                "isError": True})
+            res = execute_tool(t["name"], p.get("arguments", {}), tools=available)
+            _reply(msg_id, {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False)}],
+                            "isError": "error" in res})
         elif method == "ping":
             _reply(msg_id, {})
         elif msg_id is not None:

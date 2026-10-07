@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "bellwether": {
+    "benchtrend": {
       "command": "python3",
-      "args": ["-m", "bellwether", "mcp"],
+      "args": ["-m", "benchtrend", "mcp"],
       "env": {"PYTHONPATH": "src"}
     }
   }

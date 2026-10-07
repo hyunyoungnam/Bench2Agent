@@ -24,6 +24,7 @@ nohup.out
 bin/
 data/meili/
 src/*.egg-info/
+build/
 report_roadmap.md
 
 # API keys for the eval harnesses (scripts/eval) — never committed

@@ -23,6 +23,7 @@ it at all.
 from __future__ import annotations
 
 import re
+import json
 
 # tool -> the kind of argument it takes
 RECOMPUTABLE = {"field_trend": "topic", "gap_scan": "topic",
@@ -31,6 +32,25 @@ RECOMPUTABLE = {"field_trend": "topic", "gap_scan": "topic",
                 # links and counts read from resources.json / the registry —
                 # no engine, no ranking, the same answer every time
                 "paper_resources": "gid", "benchmark_info": "name"}
+RECOMPUTABLE.update({name: "json" for name in (
+    "benchmark_scope", "benchmark_usage", "benchmark_trend", "new_benchmarks",
+    "benchmark_adoption", "benchmark_evidence")})
+
+
+def benchmark_pool(obj) -> list[float]:
+    """Only computed statistics, excluding IDs, quotes, dates and name digits."""
+    out = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key not in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "id",
+                           "snapshot_id", "generated_at", "schema_version", "authors", "developers"}:
+                out.extend(benchmark_pool(value))
+    elif isinstance(obj, list):
+        for value in obj:
+            out.extend(benchmark_pool(value))
+    elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
+        out.append(float(obj))
+    return out
 
 # Ids are not figures. A gid is a five-digit number that would make almost any
 # claimed count match something, so paper lists never enter the pool.
@@ -85,7 +105,18 @@ _MINUS = str.maketrans({"\u2212": "-"})
 
 
 def claimed(claim: str) -> list[tuple[str, float]]:
-    return [(m, _val(m)) for m in _NUM.findall(claim.translate(_MINUS))]
+    claim = claim.translate(_MINUS)
+    return [(m.group(0), _val(m.group(0))) for m in _NUM.finditer(claim)
+            if not _identifier_number(claim, m)]
+
+
+def _identifier_number(text: str, match) -> bool:
+    """Digits in CIFAR-10, MATH500 and 3D-POPE are names, not statistics."""
+    before, after = text[:match.start()], text[match.end():]
+    if _val(match.group(0)) == 1000 and (re.search(r"\bper\s*$", before, re.I)
+                                      or re.match(r"\s*(?:편|개|논문)\s*당", after)):
+        return True  # the fixed rate unit in "500 per 1,000 papers"
+    return bool(re.search(r"[A-Za-z][-_/]?$", before) or re.match(r"[A-Za-z]", after))
 
 
 def _matches(raw: str, val: float, vals: list[float]) -> bool:
@@ -109,15 +140,19 @@ def recompute(tool: str, arg: str, cache: dict, run=None) -> list[float] | None:
         return cache[key]
     if run is None:                       # imported here: mcp loads the corpus
         from . import mcp
-        run = {t["name"]: t["fn"] for t in mcp.TOOLS}
+        run = {t["name"]: t["fn"] for t in [*mcp.TOOLS, *mcp._benchmark_tools()]}
     fn = run.get(tool)
     if fn is None:
         cache[key] = None
         return None
     try:
         # the kind is the tool's argument name; only gid is numeric
-        out = fn({kind: int(arg) if kind == "gid" else arg})
-        vals = None if (isinstance(out, dict) and out.get("error")) else pool(out)
+        args = json.loads(arg) if kind == "json" else {kind: int(arg) if kind == "gid" else arg}
+        if not isinstance(args, dict):
+            raise ValueError("Expected tool arguments object")
+        out = fn(args)
+        vals = None if (isinstance(out, dict) and out.get("error")) else (
+            benchmark_pool(out) if kind == "json" else pool(out))
     except Exception:                     # noqa: BLE001 — an unresolvable arg
         vals = None
     cache[key] = vals
@@ -199,6 +234,8 @@ def scan(text: str, vals: list[float], deriv: set, skip: set) -> list[tuple]:
     """
     out = []
     for m in _NUM.finditer(text):
+        if _identifier_number(text, m):
+            continue
         raw = m.group(0)
         if _YEAR.fullmatch(raw):
             continue

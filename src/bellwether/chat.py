@@ -1,8 +1,8 @@
 """The conversational loop: browser chat -> the user's own coding agent.
 
 This is the OpenResearch-shaped frame with our difference inside it: the
-agent (Claude Code today; Codex later) runs headless under the USER'S OWN
-subscription login — no API key — with only the bellwether MCP tools, and every
+installed agent CLI runs headless using credentials managed by that CLI,
+with the bellwether MCP tools, and every
 factual sentence it writes must carry an anchor `⟦gid|exact quote⟧`. The
 server verifies each anchor against the locally held corpus BEFORE the
 browser shows it, so the reader sees, per citation, whether the quote really
@@ -16,21 +16,44 @@ import re
 import secrets
 import signal
 import subprocess
+import sys
 import time
+import threading
+from collections import deque
 from pathlib import Path
 
 from . import figures
 from .mcp import Store, _VENUE
 from .verify import Verifier
 
-ROOT = Path(__file__).resolve().parents[2]
+from .paths import ROOT, agent_environment
 CHAT_DIR = ROOT / "data" / "chats"
 
 SYSTEM = (
-    "You are the research assistant of a local literature engine holding six "
-    "conference editions in full: ICML 2025/26, NeurIPS 2024/25, ICLR "
-    "2025/26 — 29,605 papers with verified sentences, embeddings, topics and "
-    "citations. Evidence comes ONLY from the bellwether MCP tools; never answer "
+    "You help researchers choose evaluation benchmarks using Bellwether's local paper evidence. "
+    "BENCHMARK QUESTIONS: first call benchmark_scope to discover installed editions, coverage and field labels. "
+    "For what people evaluate on now, use benchmark_usage with evaluates_on, latest=true and an exact field label. "
+    "For trends use benchmark_trend, for introductions use new_benchmarks, and for uptake use benchmark_adoption. "
+    "Do not substitute benchmark_info's abstract mentions for evaluation use. If the full-text snapshot is absent, "
+    "say usage is unavailable; never invent counts or treat missing data as zero. "
+    "Always name the analysed editions, the parsed-paper denominator and source coverage. Latest analysed "
+    "editions differ by venue and are not necessarily the current calendar year. Keep evaluation and training, "
+    "benchmark and training-resource introductions, and other/self/undetermined authors separate. "
+    "First claim means first reviewed introduction in this corpus, not the world's first release. "
+    "If before_claim is positive, explain the observed use before the claim; do not describe that item "
+    "as newly created at the claim edition. For most-adopted introductions, use new_benchmarks(sort=adoption) "
+    "rather than extrapolating from its default first page. "
+    "Report unresolved same-name uses alongside attributed counts; zero attributed uses with unresolved "
+    "observations is not zero adoption. Field filtering excludes unlabelled papers, including entire "
+    "venues if their labels are absent; state that limit rather than claiming full domain coverage. "
+    "List new benchmarks even without uptake. Usage frequency is not quality. Unknown field labels require "
+    "disambiguation; do not silently broaden the question. Get benchmark_evidence for underlying experiments. "
+    "Cite verbatim role/claim evidence as ⟦arxiv:2301.00001|exact quote⟧, copying the returned paper_id. "
+    "Table-cell evidence ending in :cell is an assembled record, not a verbatim sentence to quote. "
+    "For numbers from benchmark tools, use ⟦benchmark_usage:{\"topic\":\"robotics\"}|figures⟧ with the complete "
+    "JSON arguments of that call (including role, venue, years and latest when supplied). "
+    "Only call evidence tools; do not modify files, execute shell commands or browse independently. "
+    "Evidence comes ONLY from the bellwether MCP tools; never answer "
     "about papers from memory. METHOD for field-level questions (what is "
     "rising, what is new this year, where are the gaps): read the field in "
     "bulk with field_cards, get computed shares from field_trend, then derive "
@@ -53,15 +76,16 @@ SYSTEM = (
     "figure matters enough to bind to one call, anchor it as "
     "⟦tool:argument|the figures⟧, e.g. ⟦gap_scan:healthcare|31 name it, 3 "
     "attack it⟧, using exactly the argument you called. If the corpus cannot "
-    "answer, say so plainly. LINKS, UNASKED: when the answer centres on one "
+    "answer, say so plainly. For benchmark questions, request location links only when asked; "
+    "benchmark_info is a location lookup, never a fallback for usage or evidence. "
+    "LINKS FOR PAPER QUESTIONS: when the answer centres on one "
     "paper or a handful, call paper_resources for each and print what it "
     "returns — the paper's own code / data / model / page URLs, and where "
     "each benchmark it names lives. A reader who now has the paper wants the "
     "artifact next and should not have to ask a second question for it. Print "
     "nothing when it returns none: no link is not evidence of no code, only "
     "that the paper's text on file prints none. Skip this for field-level "
-    "answers that cite many papers; call benchmark_info when a benchmark "
-    "itself is the subject. Their links are either printed in the paper or "
+    "answers that cite many papers. Their links are either printed in the paper or "
     "our API-checked mapping, and stars/downloads are facts to report, never "
     "a reason to rank. ALWAYS write your answer in English, whatever "
     "language the question is in — the reader's Korean is rendered from this "
@@ -80,13 +104,19 @@ def system_for(lang: str | None) -> str:
 #   ⟦gid|quote⟧              a sentence, matched against that paper
 #   ⟦tool:arg|figures⟧       a number, recomputed by running the tool again
 _ANCHOR = re.compile(
-    r"⟦\s*(?:(\d+)\s*\|([^⟧]+)|([a-z_]{3,20})\s*:\s*([^|⟧]{1,90})\|([^⟧]{1,200}))⟧")
+    r"⟦\s*(?:(\d+)\s*\|([^⟧]+)|([a-z_]{3,20})\s*:\s*([^|⟧]{1,2000})\|([^⟧]{1,2000}))⟧")
+
+
+def _mcp_config() -> str:
+    return json.dumps({"mcpServers": {"bellwether": {
+        "command": sys.executable, "args": ["-m", "bellwether", "mcp"],
+        "env": agent_environment()}}})
 
 
 def ask(message: str, sid: str | None = None, timeout: int = 300) -> dict:
     cmd = ["claude", "-p", message, "--output-format", "json",
            "--max-turns", "12",
-           "--mcp-config", str(ROOT / ".mcp.json"), "--strict-mcp-config",
+           "--mcp-config", _mcp_config(), "--strict-mcp-config",
            "--allowedTools", "mcp__bellwether",
            "--append-system-prompt", SYSTEM]
     if sid:
@@ -121,14 +151,31 @@ def segment(text: str, store: Store, ver: Verifier,
             ok = role is not None
             v["checked"] += 1
             v["passed"] += ok
-            r = store.rec(gid)
-            key = store.where(gid)[0] if r else None
+            try:
+                r = store.rec(gid)
+                key = store.where(gid)[0] if r else None
+            except (FileNotFoundError, ValueError, KeyError):
+                # Portable benchmark installs do not need the older gid index.
+                # An invented/legacy anchor remains visibly unverified.
+                r, key = None, None
             venue, year = (key.rsplit("-", 1) if key else (None, None))
             segs.append({"t": "c", "gid": gid, "q": quote, "v": ok, "role": role,
                          "title": r["title"] if r else f"gid {gid}",
                          "venue": _VENUE.get(venue, venue), "year": year})
             continue
         tool, arg, claim = (m.group(3), m.group(4).strip(), m.group(5).strip())
+        if tool == "arxiv":
+            from .mcp import B
+            valid_id = bool(re.fullmatch(r"\d{4}\.\d{4,5}", arg))
+            found = B.verify(arg, claim) if valid_id else None
+            v["checked"] += 1
+            v["passed"] += bool(found)
+            venue, year = found["edition"].rsplit("-", 1) if found else (None, None)
+            segs.append({"t": "c", "paper_id": arg, "q": claim, "v": bool(found),
+                         "title": found["title"] if found else arg,
+                         "url": "https://arxiv.org/abs/" + arg if valid_id else None,
+                         "venue": _VENUE.get(venue, venue), "year": year})
+            continue
         fig = figures.check(tool, arg, claim, fcache)
         if fig["state"] != "na":                         # 'na' claims nothing
             v["fchecked"] += 1
@@ -152,7 +199,7 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict) -> list:
     if not vals:
         return segs
     deriv = figures.derived_set(vals)
-    skip = {float(s["gid"]) for s in segs if s.get("t") == "c"}
+    skip = {float(s["gid"]) for s in segs if s.get("t") == "c" and s.get("gid")}
     out: list = []
     for seg in segs:
         if seg.get("t") != "p":
@@ -202,54 +249,63 @@ def handle(body: dict) -> dict:
 # ------------------------------------------------------------- agents
 # Like orx: the machine's installed, signed-in agent CLIs are what "connect".
 
-def _claude_account() -> str | None:
+def _agent_status(name: str) -> dict:
+    import shutil
+    path = shutil.which(name) or (
+        str(Path.home() / ".local/bin" / name)
+        if (Path.home() / ".local/bin" / name).exists() else None)
+    result = {"installed": bool(path), "authenticated": None,
+              "status": "unknown" if path else "not_installed",
+              "login_command": "codex login --device-auth" if name == "codex" else "claude auth login"}
+    if not path:
+        return result
+    cmd = [path, "login", "status"] if name == "codex" else [path, "auth", "status", "--json"]
     try:
-        d = json.loads((Path.home() / ".claude.json").read_text())
-        return (d.get("oauthAccount") or {}).get("emailAddress")
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _codex_account() -> str | None:
-    """The email inside the id_token JWT — best-effort, display only."""
-    try:
-        import base64
-        d = json.loads((Path.home() / ".codex" / "auth.json").read_text())
-        tok = (d.get("tokens") or {}).get("id_token") or ""
-        pay = tok.split(".")[1]
-        pay += "=" * (-len(pay) % 4)
-        return json.loads(base64.urlsafe_b64decode(pay)).get("email")
-    except Exception:  # noqa: BLE001
-        return None
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=8,
+                              stdin=subprocess.DEVNULL, cwd=ROOT)
+        if name == "claude":
+            state = json.loads(done.stdout)
+            connected = state.get("loggedIn")
+            if isinstance(connected, bool):
+                result["authenticated"] = connected
+        else:
+            # Only recognize documented status responses. Errors and timeouts
+            # are unknown, not proof the user has signed out.
+            message = (done.stdout + done.stderr).lower()
+            if done.returncode == 0 and "logged in" in message:
+                result["authenticated"] = True
+            elif "not logged in" in message:
+                result["authenticated"] = False
+        if result["authenticated"] is not None:
+            result["status"] = "connected" if result["authenticated"] else "sign_in_required"
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        pass
+    # Never read credential files or forward the CLI's raw output/tokens.
+    return result
 
 
 def agents() -> dict:
-    import shutil
-    out = {}
-    for name, binname, acct in (("claude", "claude", _claude_account),
-                                ("codex", "codex", _codex_account)):
-        path = shutil.which(binname) or (
-            str(Path.home() / ".local/bin" / binname)
-            if (Path.home() / ".local/bin" / binname).exists() else None)
-        out[name] = {"installed": bool(path),
-                     "account": acct() if path else None}
-    return out
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        values = list(pool.map(_agent_status, ("claude", "codex")))
+    return dict(zip(("claude", "codex"), values))
 
 
-_CODEX_MCP = """
-[mcp_servers.bellwether]
-command = "python3"
-args = ["-m", "wnai", "mcp"]
-env = { PYTHONPATH = "%s" }
-"""
-
-
-def _ensure_codex_mcp() -> None:
-    cfg = Path.home() / ".codex" / "config.toml"
-    cfg.parent.mkdir(exist_ok=True)
-    text = cfg.read_text() if cfg.exists() else ""
-    if "mcp_servers.bellwether" not in text:
-        cfg.write_text(text + _CODEX_MCP % (ROOT / "src"))
+def _codex_config_args() -> list[str]:
+    # Per-process overrides preserve the user's global MCP configuration.
+    values = {"mcp_servers.bellwether.command": sys.executable,
+              "mcp_servers.bellwether.args": ["-m", "bellwether", "mcp"],
+              "mcp_servers.bellwether.env": agent_environment(),
+              "mcp_servers.bellwether.default_tools_approval_mode": "writes",
+              "sandbox_mode": "read-only"}
+    args = []
+    for key, value in values.items():
+        if isinstance(value, dict):
+            literal = "{ " + ", ".join(k + " = " + json.dumps(v) for k, v in value.items()) + " }"
+        else:
+            literal = json.dumps(value)
+        args += ["-c", key + "=" + literal]
+    return args
 
 
 def card(gid: int) -> dict:
@@ -390,10 +446,22 @@ def _corpus_id(store) -> dict:
 
 
 def _summ(tool_input: dict) -> str:
-    for k in ("query", "topic", "gid"):
+    for k in ("query", "topic", "benchmark", "venue", "edition", "gid"):
         if k in (tool_input or {}):
             return str(tool_input[k])[:60]
     return ""
+
+
+def _cli_failure(code: int, stderr: str) -> str:
+    """Useful failure classes without forwarding credentials or raw CLI logs."""
+    message = stderr.lower()
+    if "read-only file system" in message:
+        return "The agent CLI could not initialize its local state because its directory is read-only."
+    if "not logged in" in message or "authentication" in message or "unauthorized" in message:
+        return "The agent CLI requires sign-in. Open Settings, sign in with the CLI, then refresh status."
+    if "rate limit" in message or "usage limit" in message:
+        return "The agent CLI reports a usage limit. Try again after the account's limit resets."
+    return f"The agent CLI exited with status {code}. Check its login and MCP configuration in Settings."
 
 
 def stream(body: dict, emit) -> None:
@@ -407,7 +475,10 @@ def stream(body: dict, emit) -> None:
         emit({"t": "error", "error": "empty question"})
         return
     cid = body.get("chat") or secrets.token_hex(6)
-    agent = body.get("agent") or "claude"
+    agent = body.get("agent") or "codex"
+    if agent not in ("codex", "claude"):
+        emit({"t": "error", "error": "Choose codex or claude"})
+        return
     doc = None
     if _doc_path(cid).exists():
         doc = json.loads(_doc_path(cid).read_text())
@@ -418,17 +489,17 @@ def stream(body: dict, emit) -> None:
 
     system = system_for(body.get("lang"))
     if agent == "codex":
-        _ensure_codex_mcp()
         cmd = ["codex", "exec", "--json", "--skip-git-repo-check"]
         if sid:
             cmd = ["codex", "exec", "resume", sid, "--json",
                    "--skip-git-repo-check"]
+        cmd += _codex_config_args()
         cmd.append(system + "\n\nUSER QUESTION:\n" + q)
     else:
         cmd = ["claude", "-p", q, "--output-format", "stream-json", "--verbose",
                "--include-partial-messages",
                "--max-turns", "12",
-               "--mcp-config", str(ROOT / ".mcp.json"), "--strict-mcp-config",
+               "--mcp-config", _mcp_config(), "--strict-mcp-config",
                "--allowedTools", "mcp__bellwether",
                "--append-system-prompt", system]
         if sid:
@@ -445,7 +516,8 @@ def stream(body: dict, emit) -> None:
         # the trail is evidence about HOW the answer was reached, so it is
         # stored with the turn — until now it lived only in the open tab and
         # vanished when the conversation was reopened
-        trail.append({"name": name, "arg": _summ(arg_map)})
+        trail.append({"name": name, "arg": json.dumps(arg_map or {}, sort_keys=True)
+                      if figures.RECOMPUTABLE.get(name) == "json" else _summ(arg_map)})
         # the derivation tree renders as a component, not prose: recompute the
         # same deterministic scan server-side and hand it to the page directly
         if name == "gap_scan" and (arg_map or {}).get("topic"):
@@ -464,6 +536,14 @@ def stream(body: dict, emit) -> None:
                               stdin=subprocess.DEVNULL,
                               start_new_session=True) as p:
             entry["proc"] = p
+            errors = deque(maxlen=12)
+
+            def drain_errors():
+                for line in p.stderr:
+                    errors.append(line[-1000:])
+
+            reader = threading.Thread(target=drain_errors, daemon=True)
+            reader.start()
             for line in p.stdout:
                 try:
                     ev = json.loads(line)
@@ -510,6 +590,10 @@ def stream(body: dict, emit) -> None:
                         new_sid = ev.get("session_id")
                         if ev.get("is_error"):
                             failed = (result_text or "agent failed")[:300]
+            code = p.wait()
+            reader.join(timeout=1)
+            if code and not failed:
+                failed = _cli_failure(code, "".join(errors))
     except Exception as exc:  # noqa: BLE001
         emit({"t": "error", "error": f"{type(exc).__name__}: {exc}"[:300]})
         return
@@ -528,6 +612,10 @@ def stream(body: dict, emit) -> None:
             # what it was answered against, so the same question can be put to
             # the same shelf later — the corpus is fixed, that is the point
             "on": _corpus_id(store)}
+    if any(step["name"] in figures.RECOMPUTABLE and figures.RECOMPUTABLE[step["name"]] == "json" for step in trail):
+        from .mcp import B
+        current = B.data()
+        turn["on"]["benchmarks"] = {k: current.get(k) for k in ("snapshot_id", "generated_at", "source", "available")}
     if trail:
         turn["trail"] = trail
     if trees:

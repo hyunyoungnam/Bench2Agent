@@ -25,7 +25,7 @@ FULLTEXT = INTERIM / "fulltext.jsonl"
 RESOLVED = RAW / "arxiv" / "resolved.jsonl"
 OUT = PROCESSED / "contacts.json"
 
-# "Correspondence to: Tae-Hoon Lee <th.lee@kaist.ac.kr>, Min-Soo Kim <...>."
+# "Correspondence to: First Author <first.author@univ.edu>, Second Author <...>."
 _BLOCK = re.compile(r"correspondence\s+to\s*:?\s*(.{0,300})", re.I | re.S)
 # The sentence that follows in the template, which must not be swallowed.
 _STOP = re.compile(r"(proceedings of the|preprint|copyright|\d{4} by the author)", re.I)
@@ -33,7 +33,7 @@ _PAIR = re.compile(r"([A-Z][\w.'\-]*(?:\s+[A-Z][\w.'\-]*){0,3})\s*"
                    r"[<(\[]\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})\s*[>)\]]")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _WS = re.compile(r"\s+")
-# PDF line breaks split names AND addresses: "Li- jie Yang", "zhi- haoz3@cs.cmu.edu".
+# PDF line breaks split names AND addresses: "Li- jie Yang", "zhi- hao3@cs.univ.edu".
 # Inside a correspondence line the hyphen is always the break, never a real one —
 # genuinely hyphenated names are written without a space around the hyphen — so
 # the join is unconditional here, unlike the suffix-aware repair used for prose.

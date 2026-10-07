@@ -3,19 +3,21 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bellwether"
-version = "0.1.0"
-description = "Local-first conference-paper research platform: install, serve locally, connect your coding agent"
+name = "benchtrend"
+version = "0.2.0"
+description = "Ask which benchmarks researchers use, how usage changes, and which new benchmarks are adopted"
+readme = "docs/terminal.md"
 requires-python = ">=3.10"
 # The SERVING layer is stdlib-only by design — it must run on machines that
 # cannot run the build pipeline (Windows, no GPU). Pipeline deps live in .venv.
 dependencies = []
 
 [project.scripts]
+benchtrend = "benchtrend.cli:main"
 # `wnai` stays as a transition alias
 bellwether = "bellwether.cli:main"
 wnai = "bellwether.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["bellwether*"]
+include = ["bellwether*", "benchtrend*"]

@@ -295,7 +295,7 @@ const STR={
      sUsed:'논문에 명시된 벤치마크', sReleased:'공개 데이터', sIntroduced:'새 벤치마크 후보',
      sCounts:s=>`전체 ${s.papers.toLocaleString()}편 중 원문 확보 ${s.fulltext_papers.toLocaleString()}편 · 벤치마크 ${s.used_rows.toLocaleString()}행 · 공개 링크 ${s.rel_rows.toLocaleString()}행 · 새 벤치마크 후보 ${s.introduced_rows.toLocaleString()}행`,
      delQ:'이 대화를 삭제할까요?', renQ:'대화 이름', pubHd:'예시 대화',
-     ph:'자율주행 연구는 지금 어떤 한계와 싸우고 있나요?', ph2:'이어서 질문하기',
+     ph:'최근 분석한 학회에서 로보틱스 평가에 주로 쓰는 벤치마크는 뭐야?', ph2:'이어서 질문하기',
      stop:'생성 중단', stopped:'중단했습니다', retry:'다시 시도',
      failed:'답변을 받지 못했습니다.', copy:'복사', copied:'복사됨', again:'다시 실행',
      figs:'수치', figOk:'이 기기에서 다시 계산해 일치함', figNa:'재계산할 수 없는 수치',
@@ -318,7 +318,7 @@ const STR={
      sUsed:'Benchmarks named', sReleased:'Released datasets', sIntroduced:'New benchmark candidates',
      sCounts:s=>`${s.fulltext_papers.toLocaleString()} of ${s.papers.toLocaleString()} papers have full text · ${s.used_rows.toLocaleString()} benchmark rows · ${s.rel_rows.toLocaleString()} release links · ${s.introduced_rows.toLocaleString()} new benchmark candidates`,
      delQ:'Delete this conversation?', renQ:'Conversation name', pubHd:'Examples',
-     ph:'What limitations is autonomous-driving research fighting right now?',
+     ph:'Which benchmarks are used most in robotics in the latest analysed editions?',
      ph2:'Ask a follow-up', stop:'Stop generating', stopped:'Stopped',
      retry:'Retry', failed:'No answer came back.', copy:'Copy', copied:'Copied',
      again:'Ask again', figs:'figures',
@@ -364,10 +364,11 @@ function applyTheme(){
 mq.addEventListener('change',applyTheme);
 
 // ---- agent choice: which signed-in CLI answers
-let AGENT=localStorage.getItem('wn_agent')||'claude';
+let AGENT=localStorage.getItem('wn_agent')||'codex';
 let AGENTS=null;
 async function loadAgents(){
   try{ AGENTS=await (await fetch('/agents')).json(); }catch(e){ AGENTS={}; }
+  if(!localStorage.getItem('wn_agent')&&!BUSY&&AGENTS.codex?.authenticated!==true&&AGENTS.claude?.authenticated===true)AGENT='claude';
   if($('.set'))showSettings();
 }
 
@@ -385,20 +386,21 @@ function showSettings(){
   const A=AGENTS||{};
   const arow=(k,label,beta)=>{
     const a=A[k]||{};
-    const st=a.installed
-      ?`<span class="astat"><i>✓</i>${esc(a.account||t('sIn'))}</span>`
-      :`<span class="astat off"><i>·</i>${t('sOut')}</span>`;
+    const labelStatus=a.authenticated===true?'Connected':a.authenticated===false?'Sign in required':a.installed?'Login status unknown':'CLI not installed';
+    const st=`<span class="astat ${a.authenticated===true?'':'off'}">${esc(labelStatus)}</span>
+      <span>${esc(a.login_command||'')} · <button data-connect="${k}">Sign in</button></span>`;
     return `<div class="srow"><div class="sl"><b>${label}${beta?` <span style="color:var(--mut);font-weight:500">(${t('sBeta')})</span>`:''}</b>${st}</div>
       <div class="seg" role="radiogroup"><button data-ag="${k}" role="radio"
         aria-checked="${AGENT===k}" class="${AGENT===k?'on':''}"
-        ${a.installed?'':'disabled'}>${AGENT===k?'✓ ':''}${t('sDefault')}</button></div></div>`;
+        ${a.installed&&a.authenticated!==false?'':'disabled'}>${AGENT===k?'✓ ':''}${t('sDefault')}</button></div></div>`;
   };
   $('#main').innerHTML=`<div class="thread"><div class="set">
     <h1>${t('sTitle')}</h1>
     <div class="sgrp">
       <div class="srow"><div class="sl"><b>${t('sAgents')}</b><span>${t('sAgentD')}</span></div></div>
       ${arow('claude','Claude Code',false)}
-      ${arow('codex','Codex',true)}
+      ${arow('codex','Codex',false)}
+      <div class="srow"><span>Sign in opens the installed CLI in VS Code. In a browser, run the command above in your terminal.</span><button id="refreshagents">Refresh status</button></div>
     </div>
     <div class="sgrp">
       <div class="srow"><div class="sl"><b>${t('sTheme')}</b></div>
@@ -412,8 +414,7 @@ function showSettings(){
             class="${LANG==='en'?'on':''}">English</button></div></div>`:''}
     </div>
     <div class="sgrp">
-      <div class="srow"><div class="sl"><b>${t('sCorpus')}</b><span>ICML 2025/26 · NeurIPS 2024/25 · ICLR 2025/26</span></div>
-        <span class="astat">29,605 papers</span></div>
+      <div class="srow"><div class="sl"><b>${t('sCorpus')}</b><span id="bcov">Checking full-text benchmark coverage…</span></div></div>
       <div class="srow"><div class="sl"><b>${t('sAddr')}</b></div>
         <span class="astat">${esc(location.origin)}</span></div>
     </div>
@@ -425,6 +426,15 @@ function showSettings(){
       </div><div class="dcov" id="dcov"></div></div>
   </div></div>`;
   showDatasetSummary();
+  fetch('/benchmarks/status').then(r=>r.json()).then(d=>{
+    const el=$('#bcov'); if(!el)return;
+    el.textContent=d.available?Object.entries(d.editions).map(([ed,c])=>`${ed}: ${c.parsed_papers}/${c.total_papers} parsed`).join(' · '):'Evaluation-use data is not installed. Reviewed introductions and paper evidence remain available.';
+  }).catch(()=>{if($('#bcov'))$('#bcov').textContent='Benchmark coverage unavailable';});
+  $('#refreshagents').onclick=()=>{AGENTS=null;loadAgents();};
+  $('#main').querySelectorAll('[data-connect]').forEach(b=>b.onclick=()=>{
+    if(window.parent!==window)window.parent.postMessage({type:'bellwether.connect',provider:b.dataset.connect},'*');
+    else alert(`Run ${A[b.dataset.connect]?.login_command||''} in your terminal, then refresh status.`);
+  });
   markHist();
   $('#main').querySelectorAll('[data-ag]').forEach(b=>b.onclick=()=>{
     AGENT=b.dataset.ag; localStorage.setItem('wn_agent',AGENT); showSettings(); });
@@ -459,7 +469,13 @@ function heroHTML(){
     ${PUBS.slice(0,4).map(r=>`<button class="pubrow" data-id="${esc(r.id)}">${esc(r.title)}</button>`).join('')}
   </div>`:'';
   return `<div class="hero">
-    ${composerHTML(true)}${ex}
+    ${composerHTML(true)}
+    <div class="pubs"><div class="pubhd">${t('pubHd')}</div>${[
+      'Which benchmarks are used most in robotics in the latest analysed editions?',
+      'How has evaluation on CIFAR-10 changed across ICML editions?',
+      'Which new evaluation benchmarks appeared at CVPR 2025?',
+      'Are other authors adopting LIBERO? Separate evaluation from training.'
+    ].map(q=>`<button class="pubrow" data-question="${esc(q)}">${esc(q)}</button>`).join('')}</div>${ex}
   </div>`;
 }
 function threadHTML(){
@@ -472,8 +488,14 @@ function threadHTML(){
 function citeHTML(s,seen){
   const role=s.v&&('LKR'.includes(s.role))?' r'+s.role:'';
   const name=(s.venue||'')+' '+(s.year||'')+' · '+s.title;
-  const again=seen&&seen.has(s.gid);
-  if(seen)seen.add(s.gid);
+  const key=s.paper_id||s.gid;
+  const again=seen&&seen.has(key);
+  if(seen)seen.add(key);
+  if(s.paper_id){
+    const label=`<b>${s.v?'✓':'✗'}</b>${again?'':esc(name)}`;
+    const attrs=`class="cite ${s.v?'ok':'no'}${again?' mini':''}" title="${esc(name+'\n\n'+s.q)}"`;
+    return s.url?`<a ${attrs} href="${esc(s.url)}" target="_blank" rel="noopener">${label}</a>`:`<span ${attrs}>${label}</span>`;
+  }
   return `<button class="cite ${s.v?'ok':'no'}${role}${again?' mini':''}" data-pg="${s.gid}"
     title="${esc(name+'\n\n'+s.q)}"><b>${s.v?'✓':'✗'}</b>${again?'':esc(name)}</button>`;
 }
@@ -705,7 +727,8 @@ function showEmpty(){
   if(location.hash)history.replaceState(null,'',location.pathname);
   $('#main').innerHTML=heroHTML();
   wireComposer(); markHist();
-  document.querySelectorAll('.pubrow').forEach(el=>el.onclick=()=>openChat(el.dataset.id));
+  document.querySelectorAll('[data-question]').forEach(el=>el.onclick=()=>{if(!BUSY)send(el.dataset.question);});
+  document.querySelectorAll('.pubrow[data-id]').forEach(el=>el.onclick=()=>openChat(el.dataset.id));
 }
 function showThread(turns){
   clearSide();
@@ -923,5 +946,5 @@ function routeHash(boot){
   if(boot||CHAT)showEmpty();
 }
 window.addEventListener('hashchange',()=>{ if(!BUSY)routeHash(false); });
-applyTheme(); applyLang(); loadFeatures(); routeHash(true); loadHist();
+applyTheme(); applyLang(); loadFeatures(); routeHash(true); loadHist(); loadAgents();
 </script></body></html>
