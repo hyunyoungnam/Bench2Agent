@@ -12,17 +12,21 @@ Install the shared package, then either start a BenchTrend conversation or
 connect its tools to an existing AI client:
 
 ```bash
-uv tool install .
-benchtrend data install --file ./benchtrend-data.tar.gz
-benchtrend init --provider openai      # OPENAI_API_KEY; Anthropic also supported
+uv tool install git+https://github.com/hyunyoungnam/BenchTrend
+benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
+    --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
+benchtrend init --provider anthropic   # ANTHROPIC_API_KEY; OpenAI also supported
 benchtrend                            # direct terminal conversation
-benchtrend mcp --connect codex        # or: --connect claude
+benchtrend mcp --connect claude       # or: --connect codex
 ```
+
+The data bundle (16 MB) is the [data-20261007 release](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007):
+28 editions across ten venues, 58,616 parsed papers, 9,332 benchmarks with
+their stated evaluation/training roles and verbatim evidence.
 
 See [terminal installation and usage](docs/terminal.md) for first-run setup,
 API authentication, saved conversations, data updates and MCP registration.
-An installable wheel and separate data bundle can be shared; public PyPI/data
-hosting must be published separately. The `bellwether` command remains as the
+The package is not on PyPI; install from the repository URL above. The `bellwether` command remains as the
 compatibility launcher for the existing browser and build-machine exports.
 
 The full-text benchmark snapshot reports its installed editions and parsing

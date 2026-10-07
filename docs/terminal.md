@@ -10,9 +10,11 @@ no GPU, search engine, VS Code extension or extraction pipeline is needed.
 
 ## Install
 
-From a checkout:
+From the public repository, or from a checkout:
 
 ```bash
+uv tool install git+https://github.com/hyunyoungnam/BenchTrend
+# From a checkout:
 uv tool install .
 # Alternatively, in a virtual environment:
 python -m pip install .
@@ -45,9 +47,11 @@ package to PyPI; these commands are not a promise that a public release exists.
 Use a separately distributed snapshot or BenchTrend data bundle:
 
 ```bash
+# The published bundle (GitHub release data-20261007, 16 MB):
+benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
+    --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
+# Or a local copy:
 benchtrend data install --file ./benchtrend-data.tar.gz
-# Or a publisher-provided public HTTPS URL:
-benchtrend data install --url https://YOUR_HOST/benchtrend-data.tar.gz --sha256 EXPECTED_SHA256
 benchtrend data status
 ```
 
