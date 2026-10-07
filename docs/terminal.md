@@ -10,6 +10,11 @@ no GPU, search engine, VS Code extension or extraction pipeline is needed.
 
 ## Install
 
+For a copy-and-paste macOS/Linux installation that includes data and starts
+the terminal conversation, use the [README quick start](../README.md#get-started).
+For an existing AI client login, use the
+[complete MCP setup](#install-for-claude-code-or-codex) below.
+
 From the public repository, or from a checkout:
 
 ```bash
@@ -41,6 +46,63 @@ and conversations.
 This version is prepared for package distribution. `uv tool install benchtrend`
 and `pip install benchtrend` should be advertised only after publishing this
 package to PyPI; these commands are not a promise that a public release exists.
+
+### Windows PowerShell — terminal conversation
+
+Paste this block into PowerShell. It installs `uv` if needed, installs the
+tested source revision and published data, then starts BenchTrend.
+Choose the provider and model at the prompt, then enter a hidden API key.
+
+```powershell
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+}
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz
+if ($LASTEXITCODE -eq 0) {
+    benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
+    if ($LASTEXITCODE -eq 0) { benchtrend }
+}
+```
+
+### Install for Claude Code or Codex
+
+These macOS/Linux blocks assume the selected AI client is already installed
+and signed in. Each installs BenchTrend and its data, registers the MCP
+server, and opens a new client session. No BenchTrend API key is required.
+Ask the client to use BenchTrend for benchmark questions.
+
+For Codex:
+
+```bash
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz &&
+benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
+  --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
+benchtrend mcp --connect codex &&
+codex
+```
+
+For Claude Code:
+
+```bash
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz &&
+benchtrend data install --url https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz \
+  --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e &&
+benchtrend mcp --connect claude &&
+claude
+```
+
+On Windows, use the PowerShell installation above, replacing the final
+`benchtrend` with `benchtrend mcp --connect codex` or
+`benchtrend mcp --connect claude`, then launch that client.
 
 ## Install benchmark data
 
@@ -173,6 +235,9 @@ to your chosen model provider during inference. API authentication for the
 independent terminal is separate from ChatGPT/Claude subscription login.
 
 ## Build a release
+
+Code versions, data snapshots, and PyPI publication are explained in the
+[release guide](releases.md).
 
 ```bash
 python -m pip install build
