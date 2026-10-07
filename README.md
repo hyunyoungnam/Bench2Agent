@@ -53,12 +53,10 @@ guarantee a direct data download. Missing links mean no confirmed location.
 
 ### Terminal conversation — macOS / Linux
 
-With Python 3.10+ in your environment, install and start BenchTrend.
-GitHub v0.2.1 is available; its PyPI upload is awaiting authentication.
-Until then, install the fixed release directly:
+With Python 3.10+ in your environment, install and start BenchTrend:
 
 ```bash
-python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.1.tar.gz
+python -m pip install benchtrend
 benchtrend
 ```
 
@@ -68,7 +66,7 @@ benchtrend
 Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md#install-uv):
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.1.tar.gz
+uv tool install benchtrend
 benchtrend
 ```
 
@@ -146,8 +144,8 @@ and conversations record the snapshot used for their answers.
 ## Releases and development
 
 Code and data are released separately. [v0.2.1](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.1)
-is the code — wheel, source distribution and checksums, with those same files
-prepared for [PyPI](https://pypi.org/project/benchtrend/) — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
+is the code — wheel, source distribution and checksums, the same files
+published on [PyPI](https://pypi.org/project/benchtrend/) — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
 is the snapshot. Update code with `python -m pip install --upgrade benchtrend`
 or `uv tool upgrade benchtrend`, using the method you installed with;
 data updates are a separate `benchtrend data install`. See
