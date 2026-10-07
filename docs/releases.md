@@ -14,14 +14,14 @@ As of 2026-10-07:
 | Code release [`v0.2.0`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
 | Data release `data-20261007` | Available | `benchtrend-data.tar.gz` and its `.sha256` checksum |
 | [PyPI package](https://pypi.org/project/benchtrend/) | Available (0.2.0, 2026-10-07) | Package-name installation: `uv tool install benchtrend` |
-| Next code version `0.2.1` | Prepared; publication on hold for owner review | First-run data download, short client launch commands, GPT-6.1 Sol defaults, and project links |
+| Next code version `0.2.1` | Publication authorized; final artifacts being verified | First-run data download, short client launch commands, benchmark and paper links, updated model defaults, and PyPI project links |
 
-The owner has requested a review before releasing 0.2.1. Do not publish its
-GitHub release or PyPI package until the owner explicitly authorizes publication.
+The owner authorized publication of 0.2.1 on 2026-10-07 after the code review.
+Upload the same verified wheel and source distribution to GitHub and PyPI.
 
-The [README](../README.md#get-started) describes the shorter setup requiring
-0.2.1. Until that version is published, use its local-checkout install or the
-[working 0.2.0 instructions](terminal.md#benchtrend-020).
+The [README](../README.md#get-started) describes the package-name setup for 0.2.1.
+Its first launch installs the existing `data-20261007` snapshot automatically;
+this code release does not require a new data release.
 
 ## Code releases
 
@@ -74,9 +74,10 @@ environment. The README installs with:
 uv tool install benchtrend
 ```
 
-The data installation remains a separate command. For the next version, use a
-project-scoped token (the project now exists) and publish right after the
-GitHub release, from the same `dist/` files.
+Starting with 0.2.1, the first interactive launch installs missing data
+automatically. `benchtrend data install` remains available for explicit
+installation and data updates. Use a project-scoped token and publish from
+the same verified files attached to the GitHub release.
 
 ## Cutting a code release
 

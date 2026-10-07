@@ -17,22 +17,24 @@ the terminal conversation, use the [README quick start](../README.md#get-started
 For an existing AI client login, use the
 [complete MCP setup](#install-for-claude-code-or-codex) below.
 
-Once 0.2.1 is published, install it from PyPI with `uv` or `pip`.
-Until then, use the development branch or a local checkout for the new commands:
+Install from PyPI using **one** of the following methods. With Python 3.10+
+in your environment:
 
 ```bash
-uv tool install 'benchtrend>=0.2.1'
-# Alternatively, in a virtual environment:
-python -m pip install 'benchtrend>=0.2.1'
-# A specific tag, without PyPI:
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz
-# The development branch, or a checkout:
-uv tool install git+https://github.com/hyunyoungnam/BenchTrend
-uv tool install .
-# Alternatively, in a virtual environment:
-python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
-python -m pip install .
+python -m pip install benchtrend
+benchtrend
 ```
+
+Or, with [uv installed](#install-uv):
+
+```bash
+uv tool install benchtrend
+benchtrend
+```
+
+`pip` installs in your active Python environment; a virtual environment is
+recommended. `uv tool install` creates a separate environment for the app.
+The first launch automatically downloads and checks the research-data snapshot.
 
 If the browser installation (`install.sh`) is already on this machine, it has
 put a `bellwether` command on PATH, and `uv` will stop with "Executables
@@ -54,6 +56,7 @@ and conversations.
 
 The package is published on [PyPI](https://pypi.org/project/benchtrend/) as
 `benchtrend`; `uv tool upgrade benchtrend` moves to a newer code release.
+For a pip installation, use `python -m pip install --upgrade benchtrend`.
 
 ### Install uv
 
@@ -80,7 +83,7 @@ package and starts BenchTrend. The first launch downloads and checks its data.
 Choose the provider and model at the prompt, then enter a hidden API key.
 
 ```powershell
-uv tool install 'benchtrend>=0.2.1'
+uv tool install benchtrend
 if ($LASTEXITCODE -eq 0) { benchtrend }
 ```
 
@@ -94,14 +97,14 @@ Ask the client to use BenchTrend for benchmark questions.
 For Codex:
 
 ```bash
-uv tool install 'benchtrend>=0.2.1'
+uv tool install benchtrend
 benchtrend codex
 ```
 
 For Claude Code:
 
 ```bash
-uv tool install 'benchtrend>=0.2.1'
+uv tool install benchtrend
 benchtrend claude
 ```
 
@@ -292,6 +295,13 @@ to your chosen model provider during inference. API authentication for the
 independent terminal is separate from ChatGPT/Claude subscription login.
 
 ## Build a release
+
+For development, install from a local checkout with `uv tool install .` or
+`python -m pip install .`. To install a fixed source version without PyPI:
+
+```bash
+python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.1.tar.gz
+```
 
 Code versions, data snapshots, and PyPI publication are explained in the
 [release guide](releases.md).

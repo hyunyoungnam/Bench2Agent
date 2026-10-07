@@ -3,8 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/benchtrend?label=pypi)](https://pypi.org/project/benchtrend/)
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/BenchTrend?filter=v*&label=release)](https://github.com/hyunyoungnam/BenchTrend/releases)
 [![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](docs/terminal.md)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md)
 
 Find which benchmarks researchers evaluate on, how their use changes, and
 which new benchmarks other researchers adopt. Ask in a terminal conversation,
@@ -13,8 +13,8 @@ or use BenchTrend inside Claude Code or Codex.
 Answers include usage counts, the papers covered, and original paper evidence.
 **Usage frequency describes adoption, not benchmark quality.**
 
-[Install](#get-started) · [User guide](docs/terminal.md) ·
-[Releases](docs/releases.md) · [License](LICENSE)
+[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md) ·
+[Releases](https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/releases.md) · [License](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE)
 
 ## Ask a question
 
@@ -24,8 +24,12 @@ returned tool results; model wording can vary.
 
 > **You:** What benchmarks are researchers using in robotics lately?
 >
-> **BenchTrend:** Among 509 analysed papers labelled robotics, LIBERO appears
-> in 80 evaluation papers, SIMPLER in 41, and Meta-World in 29. This covers
+> **BenchTrend:** Among 509 analysed papers labelled robotics,
+> [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) appears in 80
+> evaluation papers ([introducing paper](https://arxiv.org/abs/2306.03310)),
+> [SIMPLER](https://github.com/simpler-env/SimplerEnv) in 41
+> ([introducing paper](https://arxiv.org/abs/2405.05941)), and
+> [Meta-World](https://github.com/Farama-Foundation/Metaworld) in 29. This covers
 > ICLR 2026, ICML 2026, and NeurIPS 2025. Unlabelled papers, including CoRL,
 > are outside this field filter.
 
@@ -41,29 +45,35 @@ ask for the evidence behind a result. In the standalone terminal, `/sources`
 shows the original sentences and paper links. Quotes and figures are checked;
 anything the checker cannot verify is marked in the answer.
 
+Answers include repository, dataset or homepage links and reviewed introducing
+papers where available. Locations are our mapping; a repository link does not
+guarantee a direct data download. Missing links mean no confirmed location.
+
 ## Get started
 
 ### Terminal conversation — macOS / Linux
 
-Version 0.2.1 is not yet published. Install the latest source using **one**
-of the following options. With [uv](docs/terminal.md#install-uv):
+With Python 3.10+ in your environment, install and start BenchTrend:
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
+python -m pip install benchtrend
 benchtrend
 ```
 
-Or install the same source with `pip` in your Python environment:
+<details>
+<summary>Alternative: install with uv</summary>
+
+Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md#install-uv):
 
 ```bash
-python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
+uv tool install benchtrend
 benchtrend
 ```
+
+</details>
 
 `uv tool install` creates a separate environment for the app. `pip` installs
 into your active Python environment; a virtual environment is recommended.
-
-From a local checkout, use `uv tool install .` or `python -m pip install .`.
 
 The first launch downloads the **16 MB research-data snapshot** and checks
 its checksum automatically. Later launches reuse your installed data.
@@ -77,7 +87,7 @@ also work. API access uses your provider's API billing, separately from a
 ChatGPT or Claude subscription.
 
 Once installed, just run `benchtrend` to return. No GPU is needed.
-[Windows setup, saved conversations, and data updates](docs/terminal.md).
+[Windows setup, saved conversations, and data updates](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md).
 
 ### Use your existing Claude Code or Codex login
 
@@ -88,19 +98,17 @@ server needs no separate API key.
 After installing BenchTrend, open a conversation in your preferred client.
 Claude Code or Codex must already be installed and signed in:
 
-```bash
-benchtrend claude
-```
-
-```bash
-benchtrend codex
-```
+| Command | Model access |
+|---|---|
+| `benchtrend` | OpenAI or Anthropic API key, with separate API billing |
+| `benchtrend claude` | Your existing Claude Code login |
+| `benchtrend codex` | Your existing Codex login |
 
 These commands download the data if needed and open a new session with
 BenchTrend tools available. Ask the client to **use BenchTrend** for your
 benchmark question.
 For a fresh installation using this route, follow the
-[complete MCP setup](docs/terminal.md#install-for-claude-code-or-codex).
+[complete MCP setup](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md#install-for-claude-code-or-codex).
 Your client writes its answers; BenchTrend's final-answer checks run in the
 standalone terminal interface.
 
@@ -109,7 +117,7 @@ standalone terminal interface.
 The current snapshot covers **28 editions of 10 conferences**, with
 **58,616 parsed paper-edition observations** and **9,332 benchmark and dataset
 entries**. Of those entries, 8,768 have reviewed introduction claims inside
-this corpus ([review rubric](docs/introduced-review.md)).
+this corpus ([review rubric](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/introduced-review.md)).
 
 | Venue | Editions | Venue | Editions |
 |---|---|---|---|
@@ -131,19 +139,20 @@ separately. Recent introductions have less time to accumulate adoption.
 
 BenchTrend is a research prototype. Released snapshots have fixed identities,
 and conversations record the snapshot used for their answers.
-[Data rules and tool details](docs/benchmark-chat.md).
+[Data rules and tool details](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/benchmark-chat.md).
 
 ## Releases and development
 
-Code and data are released separately. [v0.2.0](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0)
+Code and data are released separately. [v0.2.1](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.1)
 is the code — wheel, source distribution and checksums, the same files
 published on [PyPI](https://pypi.org/project/benchtrend/) — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-is the snapshot. `uv tool upgrade benchtrend` picks up later code releases;
+is the snapshot. Update code with `python -m pip install --upgrade benchtrend`
+or `uv tool upgrade benchtrend`, using the method you installed with;
 data updates are a separate `benchtrend data install`. See
-[how releases work](docs/releases.md).
+[how releases work](https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/releases.md).
 
 The earlier paper-reading interface remains available as an evidence surface:
-[browser guide](docs/browser.md). Its compatibility command is `bellwether`.
-Paper-view principles are in [docs/paper-view.md](docs/paper-view.md).
+[browser guide](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/browser.md). Its compatibility command is `bellwether`.
+Paper-view principles are in [docs/paper-view.md](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/paper-view.md).
 
-BenchTrend's code is licensed under [Apache-2.0](LICENSE).
+BenchTrend's code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE).
