@@ -18,6 +18,11 @@ uv tool install .
 python -m pip install .
 ```
 
+If the browser installation (`install.sh`) is already on this machine, it has
+put a `bellwether` command on PATH, and `uv` will stop with "Executables
+already exist". Add `--force`; the installed package provides the same
+`bellwether` command.
+
 An installable wheel can be shared without the source checkout:
 
 ```bash
