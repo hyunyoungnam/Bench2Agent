@@ -45,9 +45,8 @@ anything the checker cannot verify is marked in the answer.
 
 ### Terminal conversation — macOS / Linux
 
-The short commands below require **BenchTrend 0.2.1 or later**. This checkout
-implements them; PyPI currently offers 0.2.0. Until 0.2.1 is published, install
-the latest source and start it:
+The short commands below require **BenchTrend 0.2.1 or later**. Until 0.2.1
+is published, install the latest source and start it:
 
 ```bash
 uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
@@ -62,8 +61,6 @@ benchtrend
 ```
 
 From a local checkout, use `uv tool install .` or `python -m pip install .`.
-For the older PyPI version, use the
-[released 0.2.0 setup](docs/terminal.md#benchtrend-020).
 
 Once 0.2.1 is published, install from PyPI using
 [uv](docs/terminal.md#install-uv):
