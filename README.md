@@ -134,7 +134,6 @@ data updates are a separate `benchtrend data install`. See
 
 The earlier paper-reading interface remains available as an evidence surface:
 [browser guide](docs/browser.md). Its compatibility command is `bellwether`.
-Development and data rules are in [CLAUDE.md](CLAUDE.md), with paper-view
-principles in [docs/paper-view.md](docs/paper-view.md).
+Paper-view principles are in [docs/paper-view.md](docs/paper-view.md).
 
 BenchTrend's code is licensed under [Apache-2.0](LICENSE).

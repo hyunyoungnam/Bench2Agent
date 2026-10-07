@@ -39,3 +39,15 @@ data/interim/html/
 # Rule-found benchmark mentions (icml.bench_mentions): 200 MB, rebuilt from
 # data/interim/html in ~45 min, no model involved.
 data/interim/mentions/
+
+# Maintainers' working notes, agent instructions and internal evaluations —
+# kept locally, never published (removed from the repository 2026-10-07).
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+/docs/platform-survey-*.md
+/docs/similar-projects-survey.md
+/docs/figure-verification-prior-work.md
+/docs/blue-ocean-eval-*.md
+/docs/harness-comparison-*.md
+/scripts/eval/

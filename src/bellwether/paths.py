@@ -11,8 +11,10 @@ def runtime_root() -> Path:
     configured = os.environ.get("BENCHTREND_HOME")
     if configured:
         return Path(configured).expanduser().resolve()
-    # Source checkouts keep their existing data and browser routes.
-    if (CODE_ROOT / "pyproject.toml").is_file() and (CODE_ROOT / "CLAUDE.md").is_file():
+    # Source checkouts keep their existing data and browser routes. The
+    # pipeline package src/icml exists only in a checkout — the wheel ships
+    # bellwether and benchtrend alone — so it identifies one.
+    if (CODE_ROOT / "pyproject.toml").is_file() and (CODE_ROOT / "src" / "icml").is_dir():
         return CODE_ROOT
     home = Path.home() / ".benchtrend"
     legacy = Path.home() / ".bellwether"

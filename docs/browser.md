@@ -186,5 +186,5 @@ union embeddings and cross-venue neighbors → the site (`reports/`) plus a
 Meilisearch index, packed by `bellwether bundle` for installs. The pipeline needs a
 GPU machine; an install only serves its output.
 
-See `CLAUDE.md` for the full build documentation, data traps, and measured
-quality numbers.
+The full build documentation, data traps and measured quality numbers are
+in the maintainers' notes, which are not part of this repository.

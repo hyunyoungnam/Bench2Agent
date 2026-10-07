@@ -1,15 +1,15 @@
 # The paper-reading surface — principles
 
-These sections were the core of `CLAUDE.md` until 2026-10-02, when the project
-re-centred on benchmarks (see `CLAUDE.md`, *What moved on 2026-10-02*). They
+These sections were the core of the maintainers' build notes until 2026-10-02,
+when the project re-centred on benchmarks. They
 are moved here verbatim, not retired: the cards, the selected-set views, the
 chat shell and the verifier are still in the code and still serve as the
 evidence surface behind every benchmark count. **These principles bind any
 change to those screens.**
 
 Section references such as *Guardrails*, *Two extraction passes*, *Traps* and
-*Problem 1* point back to `CLAUDE.md` (*Problem 1* is now titled *Domains and
-topics*; *Problem 4* is *Where to get it*).
+*Problem 1* point to those notes, which are not part of this repository
+(*Problem 1* is now titled *Domains and topics*; *Problem 4* is *Where to get it*).
 
 ---
 
@@ -448,7 +448,7 @@ against.
     an anchor passes only when EVERY number in it matches.
   This is only possible because the corpus does not move — the provenance
   literature verifies against a recorded trace precisely because re-calling a
-  web tool would answer differently (see `docs/figure-verification-prior-work.md`).
+  web tool would answer differently (a survey of prior work on this is in the maintainers' notes).
 - **The check does not wait for the agent to declare it** (added 2026-09-09,
   after measuring). Asking the agent to anchor its figures reached **38%
   coverage**: it anchored some numbers and printed bare copies of the same ones
