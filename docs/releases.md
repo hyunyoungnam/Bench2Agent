@@ -11,13 +11,14 @@ As of 2026-10-07:
 | Part | Status | What a user gets |
 |---|---|---|
 | Public GitHub repository | Available | Source code, documentation, and Apache-2.0 license |
-| Code release [`v0.2.0`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
+| Code release [`v0.2.1`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.1) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
 | Data release `data-20261007` | Available | `benchtrend-data.tar.gz` and its `.sha256` checksum |
-| [PyPI package](https://pypi.org/project/benchtrend/) | Available (0.2.0, 2026-10-07) | Package-name installation: `uv tool install benchtrend` |
-| Next code version `0.2.1` | Publication authorized; final artifacts being verified | First-run data download, short client launch commands, benchmark and paper links, updated model defaults, and PyPI project links |
+| [PyPI package](https://pypi.org/project/benchtrend/) | 0.2.0 available; 0.2.1 upload awaiting authentication | Package-name installation; 0.2.1 will use the same verified files as GitHub |
 
 The owner authorized publication of 0.2.1 on 2026-10-07 after the code review.
-Upload the same verified wheel and source distribution to GitHub and PyPI.
+GitHub publication is complete; upload those same verified files to PyPI once
+the project's publishing token is available. All 76 tests, Python 3.10/3.14 CI,
+package metadata checks, fresh installation and real-data MCP checks passed.
 
 The [README](../README.md#get-started) describes the package-name setup for 0.2.1.
 Its first launch installs the existing `data-20261007` snapshot automatically;
