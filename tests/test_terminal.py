@@ -309,3 +309,45 @@ class TerminalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientStatusTests(unittest.TestCase):
+    """status reports MCP registration from the clients' CLIs, never their files."""
+
+    def test_registered_and_connected_is_read_from_the_cli(self):
+        from unittest import mock
+        from benchtrend import cli as terminal
+
+        class Done:
+            returncode = 0
+            stdout = "benchtrend:\n  Scope: User config (available in all your projects)\n  Status: ✔ Connected\n"
+
+        agent = {"installed": True, "authenticated": True}
+        with mock.patch("bellwether.chat._agent_status", return_value=agent):
+            clients = terminal.client_status(run=lambda *a, **k: Done())
+        self.assertEqual(clients["claude"], {"installed": True, "signed_in": True, "mcp_registered": True,
+                                             "mcp_scope": "user", "mcp_connected": True})
+        self.assertIn("registered (user scope)", terminal._client_line("claude", clients["claude"]))
+        self.assertIn("connected", terminal._client_line("claude", clients["claude"]))
+
+    def test_missing_registration_names_the_connect_command(self):
+        from unittest import mock
+        from benchtrend import cli as terminal
+
+        class Missing:
+            returncode = 1
+            stdout = "Error: No MCP server named 'benchtrend' found."
+
+        agent = {"installed": True, "authenticated": None}
+        with mock.patch("bellwether.chat._agent_status", return_value=agent):
+            line = terminal._client_line("codex", terminal.client_status(run=lambda *a, **k: Missing())["codex"])
+        self.assertIn("not registered", line)
+        self.assertIn("benchtrend mcp --connect codex", line)
+        self.assertIn("sign-in unknown", line)
+
+    def test_not_installed(self):
+        from unittest import mock
+        from benchtrend import cli as terminal
+        with mock.patch("bellwether.chat._agent_status", return_value={"installed": False, "authenticated": None}):
+            clients = terminal.client_status(run=lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run")))
+        self.assertEqual(terminal._client_line("claude", clients["claude"]), "Claude Code: not installed")

@@ -105,18 +105,74 @@ def cmd_init(args, root: Path) -> int:
     return 0
 
 
+CLIENT_LABELS = {"claude": "Claude Code", "codex": "Codex"}
+
+
+def client_status(run=subprocess.run) -> dict:
+    """Is BenchTrend reachable through Claude Code and Codex?
+
+    Asked of the clients' own CLIs (`<client> mcp get benchtrend`), never read
+    from their config or credential files. `signed_in` comes from the same
+    login probes the browser settings use; None means the probe gave no answer.
+    """
+    from bellwether.chat import _agent_status
+    out = {}
+    for name in ("claude", "codex"):
+        info = _agent_status(name)
+        entry = {"installed": info["installed"], "signed_in": info["authenticated"],
+                 "mcp_registered": None, "mcp_scope": None, "mcp_connected": None}
+        if info["installed"]:
+            try:
+                done = run([name, "mcp", "get", "benchtrend"], capture_output=True, text=True,
+                           timeout=20, stdin=subprocess.DEVNULL)
+                entry["mcp_registered"] = done.returncode == 0
+                if name == "claude" and done.returncode == 0:
+                    scope = re.search(r"Scope:\s*(\w+)", done.stdout or "")
+                    state = re.search(r"Status:\s*\S*\s*(\w+)", done.stdout or "")
+                    entry["mcp_scope"] = scope.group(1).lower() if scope else None
+                    entry["mcp_connected"] = (state.group(1).lower() == "connected") if state else None
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        out[name] = entry
+    return out
+
+
+def _client_line(name: str, c: dict) -> str:
+    label = CLIENT_LABELS[name]
+    if not c["installed"]:
+        return f"{label}: not installed"
+    parts = ["installed",
+             {True: "signed in", False: "not signed in", None: "sign-in unknown"}[c["signed_in"]]]
+    if c["mcp_registered"]:
+        where = f" ({c['mcp_scope']} scope)" if c["mcp_scope"] else ""
+        parts.append("benchtrend MCP server registered" + where)
+        if c["mcp_connected"] is True:
+            parts.append("connected")
+        elif c["mcp_connected"] is False:
+            parts.append("NOT connecting — check `benchtrend data status` and the registered command")
+    elif c["mcp_registered"] is False:
+        parts.append(f"benchtrend MCP server not registered → run: benchtrend mcp --connect {name}")
+    else:
+        parts.append("MCP registration unknown")
+    return f"{label}: " + " · ".join(parts)
+
+
 def cmd_status(args, root: Path) -> int:
     from .data import status
     result = {"version": __version__, "home": str(root), "data": status(root),
               "settings": settings(root), "api_keys_present": {
-                  provider: bool(os.environ.get(name)) for provider, name in providers.KEY_NAMES.items()}}
+                  provider: bool(os.environ.get(name)) for provider, name in providers.KEY_NAMES.items()},
+              "clients": client_status()}
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
         print(f"BenchTrend {__version__} · {root}")
         print(json.dumps(result["data"], ensure_ascii=False, indent=2))
-        for provider, present in result["api_keys_present"].items():
-            print(f"{provider}: {'API key present' if present else 'API key not set'}")
+        keys = ", ".join(f"{p}: {'set' if v else 'not set'}" for p, v in result["api_keys_present"].items())
+        print(f"Standalone conversation (`benchtrend`): needs an API key — {keys}")
+        print("Through an AI client (no API key; uses the client's own login):")
+        for name, c in result["clients"].items():
+            print("  " + _client_line(name, c))
     return 0
 
 

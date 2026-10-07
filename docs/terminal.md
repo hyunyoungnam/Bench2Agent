@@ -115,7 +115,7 @@ Commands inside a conversation:
 | `/new` | Start a new conversation with the same model |
 | `/chats` | List saved conversations |
 | `/resume ID` | Continue a saved conversation |
-| `/status` | Inspect installed data and API key presence |
+| `/status` | Inspect installed data, API key presence, and whether Claude Code / Codex have the MCP server registered and connecting |
 | `/help` | List conversation commands |
 | `/exit` | Exit |
 
