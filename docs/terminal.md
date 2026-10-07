@@ -17,16 +17,20 @@ the terminal conversation, use the [README quick start](../README.md#get-started
 For an existing AI client login, use the
 [complete MCP setup](#install-for-claude-code-or-codex) below.
 
-From PyPI, from a tagged source archive, or from a checkout:
+Once 0.2.1 is published, install it from PyPI with `uv` or `pip`.
+Until then, use the development branch or a local checkout for the new commands:
 
 ```bash
 uv tool install 'benchtrend>=0.2.1'
+# Alternatively, in a virtual environment:
+python -m pip install 'benchtrend>=0.2.1'
 # A specific tag, without PyPI:
 uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/tags/v0.2.0.tar.gz
 # The development branch, or a checkout:
 uv tool install git+https://github.com/hyunyoungnam/BenchTrend
 uv tool install .
 # Alternatively, in a virtual environment:
+python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
 python -m pip install .
 ```
 

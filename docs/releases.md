@@ -14,7 +14,10 @@ As of 2026-10-07:
 | Code release [`v0.2.0`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.0) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
 | Data release `data-20261007` | Available | `benchtrend-data.tar.gz` and its `.sha256` checksum |
 | [PyPI package](https://pypi.org/project/benchtrend/) | Available (0.2.0, 2026-10-07) | Package-name installation: `uv tool install benchtrend` |
-| Next code version `0.2.1` | Prepared in this checkout; not published | First-run data download, short client launch commands, GPT-6.1 Sol defaults, and project links |
+| Next code version `0.2.1` | Prepared; publication on hold for owner review | First-run data download, short client launch commands, GPT-6.1 Sol defaults, and project links |
+
+The owner has requested a review before releasing 0.2.1. Do not publish its
+GitHub release or PyPI package until the owner explicitly authorizes publication.
 
 The [README](../README.md#get-started) describes the shorter setup requiring
 0.2.1. Until that version is published, use its local-checkout install or the

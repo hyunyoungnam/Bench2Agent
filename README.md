@@ -54,15 +54,34 @@ uv tool install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/ma
 benchtrend
 ```
 
-From a local checkout, use `uv tool install .`. For the older PyPI version, use the
+Or install the same source with `pip` in your Python environment:
+
+```bash
+python -m pip install https://github.com/hyunyoungnam/BenchTrend/archive/refs/heads/main.tar.gz
+benchtrend
+```
+
+From a local checkout, use `uv tool install .` or `python -m pip install .`.
+For the older PyPI version, use the
 [released 0.2.0 setup](docs/terminal.md#benchtrend-020).
 
-With [uv installed](docs/terminal.md#install-uv), the setup is:
+Once 0.2.1 is published, install from PyPI using
+[uv](docs/terminal.md#install-uv):
 
 ```bash
 uv tool install 'benchtrend>=0.2.1'
 benchtrend
 ```
+
+Or using `pip`:
+
+```bash
+python -m pip install 'benchtrend>=0.2.1'
+benchtrend
+```
+
+`uv tool install` creates a separate environment for the app. `pip` installs
+into your active Python environment; a virtual environment is recommended.
 
 The first launch downloads the **16 MB research-data snapshot** and checks
 its checksum automatically. Later launches reuse your installed data.
@@ -74,8 +93,6 @@ enter your API key when asked. The key is hidden and used only for that
 session. Existing `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` environment variables
 also work. API access uses your provider's API billing, separately from a
 ChatGPT or Claude subscription.
-
-New OpenAI setups default to GPT-6.1 Sol (`gpt-6.1-sol`).
 
 Once installed, just run `benchtrend` to return. No GPU is needed.
 [Windows setup, saved conversations, and data updates](docs/terminal.md).
