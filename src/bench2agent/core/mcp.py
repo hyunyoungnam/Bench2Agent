@@ -9,7 +9,7 @@ from data/processed/ — the same guarantee the site gives, now for agents.
 Protocol: JSON-RPC 2.0, one message per line (MCP stdio transport). Stdlib
 only, read-only, no network beyond the local search engine.
 
-    bellwether mcp                      # normally launched by the agent, via .mcp.json
+    bench2agent mcp                      # normally launched by the agent, via .mcp.json
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ _FT = {
     "iclr-2025": ("fulltext_iclr_2025.jsonl", "resolved_iclr-2025.jsonl"),
     "iclr-2026": ("fulltext_iclr_2026.jsonl", "resolved_iclr-2026.jsonl"),
 }
-MEILI_ADDR = os.environ.get("WNAI_MEILI_ADDR", "127.0.0.1:7700")
+MEILI_ADDR = os.environ.get("BENCH2AGENT_MEILI_ADDR", "127.0.0.1:7700")
 
 _VENUE = {"icml": "ICML", "neurips": "NeurIPS", "iclr": "ICLR"}
 
@@ -1128,14 +1128,14 @@ def execute_tool(name: str, arguments, tools=None) -> dict:
         _validate_argument(arguments, tool["inputSchema"], "arguments")
         return tool["fn"](arguments)
     except FileNotFoundError:
-        return {"error": "Required local data is missing. Run benchtrend data status or benchtrend data install."}
+        return {"error": "Required local data is missing. Run bench2agent data status or bench2agent data install."}
     except (ValueError, TypeError) as exc:
         return {"error": str(exc)}
     except Exception:  # noqa: BLE001 — protocol error, never a traceback or credentials
-        return {"error": "Local tool failed; check the installed snapshot with benchtrend data status."}
+        return {"error": "Local tool failed; check the installed snapshot with bench2agent data status."}
 
 
-def serve_stdio(tools=None, name: str = "bellwether") -> int:
+def serve_stdio(tools=None, name: str = "bench2agent") -> int:
     from .policy import BENCHMARK_SYSTEM
     available = TOOLS if tools is None else tools
     tools_by = {t["name"]: t for t in available}

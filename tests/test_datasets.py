@@ -1,7 +1,7 @@
 """Boundary examples for a paper-claimed introduced benchmark export."""
 import unittest
 
-from bellwether.datasets import _intro_claim, to_csv
+from bench2agent.core.datasets import _intro_claim, to_csv
 
 
 class IntroducedBenchmarkTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bellwether</title>
+<title>Bench2Agent</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='10' width='13' height='13' rx='4' fill='%23e88fa4'/%3E%3Crect x='9.5' y='10' width='13' height='13' rx='4' fill='%23e6b83f'/%3E%3Crect x='18' y='10' width='13' height='13' rx='4' fill='%236aa5e0'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#f2f3f5;--card:#fff;--ink:#1c1e21;--ink2:#43474d;--mut:#9096a0;--ring:#e4e6ea;
@@ -265,7 +265,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 </style></head><body>
 <div class="app">
   <nav class="rail">
-    <button class="mark" id="homebtn"><i></i><i></i><i></i>Bellwether</button>
+    <button class="mark" id="homebtn"><i></i><i></i><i></i>Bench2Agent</button>
     <button class="newq" id="newq">새 질문</button>
     <div class="hist" id="hist"></div>
     <div class="railfoot"><a href="#" id="settingsbtn">⚙ Settings</a></div>
@@ -329,7 +329,7 @@ const STR={
      vTipF:(p,c)=>`${p} of ${c} figures matched the tool run again`,
      vTip:(p,c)=>`${p} of ${c} quotes found verbatim in the papers`,
      pubGrp:'Published'}};
-// Korean is a server-side feature (WNAI_KO=1); until /features says it is
+// Korean is a server-side feature (BENCH2AGENT_KO=1); until /features says it is
 // on, the page is English and the toggle stays hidden.
 let KO_ON=false;
 let LANG=localStorage.getItem('wn_lang')||'en';
@@ -432,7 +432,7 @@ function showSettings(){
   }).catch(()=>{if($('#bcov'))$('#bcov').textContent='Benchmark coverage unavailable';});
   $('#refreshagents').onclick=()=>{AGENTS=null;loadAgents();};
   $('#main').querySelectorAll('[data-connect]').forEach(b=>b.onclick=()=>{
-    if(window.parent!==window)window.parent.postMessage({type:'bellwether.connect',provider:b.dataset.connect},'*');
+    if(window.parent!==window)window.parent.postMessage({type:'bench2agent.connect',provider:b.dataset.connect},'*');
     else alert(`Run ${A[b.dataset.connect]?.login_command||''} in your terminal, then refresh status.`);
   });
   markHist();

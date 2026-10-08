@@ -1,9 +1,9 @@
 {
-  "name": "bellwether",
-  "displayName": "Bellwether",
+  "name": "bench2agent",
+  "displayName": "Bench2Agent",
   "description": "Ask which evaluation benchmarks researchers use, how use changes, and which new benchmarks are adopted.",
   "version": "0.2.0",
-  "publisher": "bellwether-local",
+  "publisher": "bench2agent-local",
   "private": true,
   "engines": {
     "vscode": "^1.85.0"
@@ -12,41 +12,41 @@
   "extensionKind": ["workspace"],
   "main": "./extension.js",
   "activationEvents": [
-    "onCommand:bellwether.openChat",
-    "onCommand:bellwether.openBrowse",
-    "onCommand:bellwether.connectOpenAI",
-    "onCommand:bellwether.connectClaude",
-    "onCommand:bellwether.openBrowser",
-    "onCommand:bellwether.stop"
+    "onCommand:bench2agent.openChat",
+    "onCommand:bench2agent.openBrowse",
+    "onCommand:bench2agent.connectOpenAI",
+    "onCommand:bench2agent.connectClaude",
+    "onCommand:bench2agent.openBrowser",
+    "onCommand:bench2agent.stop"
   ],
   "contributes": {
     "commands": [
-      { "command": "bellwether.openChat", "title": "Bellwether: Ask About Benchmarks" },
-      { "command": "bellwether.connectOpenAI", "title": "Bellwether: Sign In with Codex" },
-      { "command": "bellwether.connectClaude", "title": "Bellwether: Sign In with Claude Code" },
-      { "command": "bellwether.openBrowse", "title": "Bellwether: Explore Papers" },
-      { "command": "bellwether.openBrowser", "title": "Bellwether: Open in Browser" },
-      { "command": "bellwether.stop", "title": "Bellwether: Stop Local Server" }
+      { "command": "bench2agent.openChat", "title": "Bench2Agent: Ask About Benchmarks" },
+      { "command": "bench2agent.connectOpenAI", "title": "Bench2Agent: Sign In with Codex" },
+      { "command": "bench2agent.connectClaude", "title": "Bench2Agent: Sign In with Claude Code" },
+      { "command": "bench2agent.openBrowse", "title": "Bench2Agent: Explore Papers" },
+      { "command": "bench2agent.openBrowser", "title": "Bench2Agent: Open in Browser" },
+      { "command": "bench2agent.stop", "title": "Bench2Agent: Stop Local Server" }
     ],
     "configuration": {
-      "title": "Bellwether",
+      "title": "Bench2Agent",
       "properties": {
-        "bellwether.installPath": {
+        "bench2agent.installPath": {
           "type": "string",
           "default": "",
-          "description": "Bellwether checkout or install directory. Leave empty to use the current workspace when ready, then ~/.bellwether."
+          "description": "Bench2Agent checkout or install directory. Leave empty to use the current workspace when ready, then ~/.bench2agent."
         },
-        "bellwether.pythonPath": {
+        "bench2agent.pythonPath": {
           "type": "string",
           "default": "",
           "description": "Python 3.10+ executable. Leave empty to use the install's serving venv, then python3 (python on Windows)."
         },
-        "bellwether.extraPath": {
+        "bench2agent.extraPath": {
           "type": "string",
           "default": "",
           "description": "Optional executable directory for the Codex or Claude CLI when VS Code's extension host cannot find it."
         },
-        "bellwether.useMeilisearch": {
+        "bench2agent.useMeilisearch": {
           "type": "boolean",
           "default": true,
           "description": "Start the installed Meilisearch engine when available."

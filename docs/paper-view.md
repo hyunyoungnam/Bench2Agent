@@ -231,7 +231,7 @@ progress through the set, and hiding the excluded ones leaves the set COUNT
 unchanged — the list narrows, the number still says how big the field is.
 
 **The set can leave**: `.bib` and `.csv` from the rail, built server-side
-(`bellwether/export.py`) because BibTeX needs the full author list, which the
+(`bench2agent/export.py`) because BibTeX needs the full author list, which the
 page payload does not carry. A conversation exports the same way, as markdown
 or a JSON bundle with every quote, its verdict, and the corpus it was answered
 against.
@@ -245,8 +245,8 @@ against.
   briefs-landing earlier the same day).** `/` serves the chat shell
   (`reports/chat.html`, shown name: **Frontier**, provisional): the reader's
   question spawns their own logged-in coding agent (Claude CLI headless, no
-  API key) armed with only the bellwether MCP tools; every anchor `⟦gid|quote⟧` is
-  verified server-side BEFORE display (`bellwether/verify.py`), tool calls stream
+  API key) armed with only the bench2agent MCP tools; every anchor `⟦gid|quote⟧` is
+  verified server-side BEFORE display (`bench2agent/verify.py`), tool calls stream
   live as the trail, conversations persist in `data/chats/`. The built corpus
   view moved to `/browse` and remains the evidence surface — cite chips open
   `/browse#p<gid>`, that paper's card selected and unfolded. Guardrails
@@ -261,7 +261,7 @@ against.
   quiet all-fields index. The digest/since-last-year/struggles charts left the
   landing — do not restore them there; their computations remain build-time
   material destined for agent tools. A brief is written by the reader's own
-  coding agent (Claude Code/Codex via the bellwether MCP server, `.claude/skills/
+  coding agent (Claude Code/Codex via the bench2agent MCP server, `.claude/skills/
   research-brief`), saved to `reports/briefs/`, and verified by
   `scripts/verify_brief.py`: prose is the agent's, every cite carries a
   verbatim quote checked against the paper, unverified quotes are marked on
@@ -482,6 +482,6 @@ against.
 - **Look at what you built** before calling it done:
   ```bash
   firefox --headless --window-size=1400,1200 \
-    --screenshot ~/bellwether/reports/.preview/shot.png \
-    file:///home/hyunyoungnam/bellwether/reports/<file>.html
+    --screenshot ~/bench2agent/reports/.preview/shot.png \
+    file:///home/hyunyoungnam/bench2agent/reports/<file>.html
   ```

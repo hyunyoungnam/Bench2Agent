@@ -15,10 +15,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from benchtrend import cli, data, providers
-from benchtrend.session import Session
-from bellwether import mcp
-from bellwether.benchmarks import BenchmarkStore
+from bench2agent import cli, data, providers
+from bench2agent.session import Session
+from bench2agent.core import mcp
+from bench2agent.core.benchmarks import BenchmarkStore
 
 
 QUOTE = "We evaluate our policies on the Toy benchmark."
@@ -101,10 +101,10 @@ class TerminalTests(unittest.TestCase):
             {"jsonrpc": "2.0", "id": 5, "method": "ping"}]
         output = io.StringIO()
         with patch("sys.stdin", io.StringIO("\n".join(map(json.dumps, messages)))), patch("sys.stdout", output):
-            mcp.serve_stdio(mcp._benchmark_tools(), name="benchtrend")
+            mcp.serve_stdio(mcp._benchmark_tools(), name="bench2agent")
         responses = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual([r["id"] for r in responses], [1, 2, 3, 4, 5])
-        self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "benchtrend")
+        self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "bench2agent")
         self.assertNotEqual(responses[0]["result"]["protocolVersion"], "2099-01-01")
         self.assertIn("denominator", responses[0]["result"]["instructions"])
         tools = responses[1]["result"]["tools"]
@@ -129,7 +129,7 @@ class TerminalTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[:3], ["/client/claude", "mcp", "add"])
         self.assertEqual(command[command.index("--transport"):command.index("--transport") + 5],
-                         ["--transport", "stdio", "--scope", "user", "benchtrend"])
+                         ["--transport", "stdio", "--scope", "user", "bench2agent"])
         self.assertIn("user", command)
         index = command.index("--")
         self.assertEqual(command[index + 1], sys.executable)
@@ -141,7 +141,7 @@ class TerminalTests(unittest.TestCase):
         with patch("shutil.which", return_value="/client/codex"), patch("subprocess.run") as run, contextlib.redirect_stdout(io.StringIO()) as output:
             cli.cmd_mcp(args, self.root)
         run.assert_not_called()
-        self.assertIn("mcp add benchtrend", output.getvalue())
+        self.assertIn("mcp add bench2agent", output.getvalue())
 
     def test_default_data_install_cli_verifies_the_release_checksum(self):
         bundle = self.root / "release.tar.gz"
@@ -153,14 +153,14 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(url, data.DEFAULT_URL)
             shutil.copyfile(bundle, dest)
 
-        with patch("bellwether.paths.ROOT", self.root), \
-             patch("bellwether.cli._download", side_effect=download) as fetch, \
+        with patch("bench2agent.core.paths.ROOT", self.root), \
+             patch("bench2agent.core.cli._download", side_effect=download) as fetch, \
              patch.object(data, "DEFAULT_SHA256", release["sha256"]), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(["data", "install"]), 0)
         fetch.assert_called_once()
         self.assertEqual(self.path.read_bytes(), original)
-        with patch("bellwether.cli._download", side_effect=download), \
+        with patch("bench2agent.core.cli._download", side_effect=download), \
              patch.object(data, "DEFAULT_SHA256", "0" * 64):
             with self.assertRaisesRegex(ValueError, "SHA-256"):
                 data.install(self.root)
@@ -170,7 +170,7 @@ class TerminalTests(unittest.TestCase):
         bundle = self.root / "release.tar.gz"
         release = data.bundle(self.root, bundle)
         self.path.unlink()
-        with patch("bellwether.cli._download", side_effect=lambda url, dest: shutil.copyfile(bundle, dest)) as fetch, \
+        with patch("bench2agent.core.cli._download", side_effect=lambda url, dest: shutil.copyfile(bundle, dest)) as fetch, \
              patch.object(data, "DEFAULT_SHA256", release["sha256"]), \
              patch("builtins.input", side_effect=AssertionError("no URL prompt")), \
              contextlib.redirect_stderr(io.StringIO()):
@@ -182,7 +182,7 @@ class TerminalTests(unittest.TestCase):
     def test_headless_query_does_not_download_data_implicitly(self):
         self.path.unlink()
         with patch.object(data, "install") as install:
-            with self.assertRaisesRegex(ValueError, "benchtrend data install"):
+            with self.assertRaisesRegex(ValueError, "bench2agent data install"):
                 cli.require_data(self.root, interactive=False)
         install.assert_not_called()
 
@@ -202,17 +202,17 @@ class TerminalTests(unittest.TestCase):
                 self.assertNotIn("add", command)
                 self.assertNotIn("remove", command)
                 if name == "claude":
-                    server = json.loads(command[2])["mcpServers"]["benchtrend"]
+                    server = json.loads(command[2])["mcpServers"]["bench2agent"]
                     self.assertEqual(server["command"], sys.executable)
-                    self.assertEqual(server["env"]["BENCHTREND_HOME"], str(self.root))
+                    self.assertEqual(server["env"]["BENCH2AGENT_HOME"], str(self.root))
                     self.assertIn(str(self.root), server["args"])
                     self.assertEqual(command[1], "--mcp-config")
                     self.assertNotIn("--strict-mcp-config", command)
                 else:
                     settings = dict(value.split("=", 1) for flag, value in zip(command[1::2], command[2::2]) if flag == "-c")
-                    self.assertEqual(json.loads(settings["mcp_servers.benchtrend.command"]), sys.executable)
-                    self.assertIn(str(self.root), json.loads(settings["mcp_servers.benchtrend.args"]))
-                    self.assertIn(json.dumps(str(self.root)), settings["mcp_servers.benchtrend.env"])
+                    self.assertEqual(json.loads(settings["mcp_servers.bench2agent.command"]), sys.executable)
+                    self.assertIn(str(self.root), json.loads(settings["mcp_servers.bench2agent.args"]))
+                    self.assertIn(json.dumps(str(self.root)), settings["mcp_servers.bench2agent.env"])
                     self.assertEqual(command[-2:], ["--model", "gpt-6.1-sol"])
                 run.return_value.returncode = 7
                 self.assertEqual(cli.cmd_client(args, self.root), 7)
@@ -270,7 +270,7 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(cli.client_command("claude", self.root, model="custom-model")[-2:], ["--model", "custom-model"])
 
     def test_verified_render_shows_sources_and_marks_fabrications(self):
-        from bellwether.chat import segment
+        from bench2agent.core.chat import segment
         segs, status = segment("Toy ⟦benchmark_usage:{}|1 paper⟧ ⟦arxiv:2501.00001|" + QUOTE +
                                "⟧ ⟦arxiv:2501.00001|This sentence was never written in the paper.⟧", None, None)
         text = cli.render({"segs": segs, "verified": status}, sources=True)
@@ -280,12 +280,12 @@ class TerminalTests(unittest.TestCase):
         self.assertIn("https://arxiv.org/abs/2501.00001", text)
         self.assertIn("Quotes 1/2", text)
         self.assertNotIn("\x1b", cli.safe_text("\x1b[2Jtitle\x00"))
-        from bellwether.figures import claimed
+        from bench2agent.core.figures import claimed
         self.assertEqual(claimed("500 per 1,000 parsed papers, 1000 uses"), [("500", 500), ("1000", 1000)])
         self.assertEqual(claimed("논문 1,000편당 500편, 전체 1000편"), [("500", 500), ("1000", 1000)])
 
     def test_default_interactive_conversation_sources_and_new(self):
-        from benchtrend.session import conversations
+        from bench2agent.session import conversations
         args = type("Args", (), {"provider": "openai", "model": "fixture-model", "language": "ko",
                                  "resume": None, "json": False})()
         lines = ["로보틱스에서 무엇을 쓰나요?", "/sources", "/new", "새로운 질문", "/exit"]
@@ -296,7 +296,7 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(cli.cmd_chat(args, self.root), 0)
         self.assertIn(QUOTE, output.getvalue())
         self.assertIn("New conversation", output.getvalue())
-        self.assertIn("Continue: benchtrend --resume", output.getvalue())
+        self.assertIn("Continue: bench2agent --resume", output.getvalue())
         self.assertEqual(len(conversations(self.root)), 2)
         self.assertNotIn("fixture-secret", cli.settings_path(self.root).read_text())
 
@@ -306,8 +306,8 @@ class TerminalTests(unittest.TestCase):
         chat.assert_called_once()
 
     def test_legacy_quote_without_gid_index_stays_unverified(self):
-        from bellwether.chat import segment
-        from bellwether.verify import Verifier
+        from bench2agent.core.chat import segment
+        from bench2agent.core.verify import Verifier
         store = mcp.Store()
         with patch.object(store, "rec", side_effect=FileNotFoundError):
             segments, status = segment("⟦9|This invented quote has no paper in the installed data.⟧", store, Verifier(store))
@@ -412,8 +412,8 @@ class TerminalTests(unittest.TestCase):
                 thread.start()
                 env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
                        providers.KEY_NAMES[provider]: "fixture-secret",
-                       "BENCHTREND_" + provider.upper() + "_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1"}
-                command = [sys.executable, "-m", "benchtrend", "--home", str(self.root), "--provider", provider,
+                       "BENCH2AGENT_" + provider.upper() + "_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1"}
+                command = [sys.executable, "-m", "bench2agent", "--home", str(self.root), "--provider", provider,
                            "ask", "What do researchers use?", "--json"]
                 try:
                     first = subprocess.run(command, cwd=self.tmp.name, env=env, capture_output=True, text=True, timeout=20)
@@ -425,7 +425,7 @@ class TerminalTests(unittest.TestCase):
                     self.assertEqual(second.returncode, 0, second.stderr)
                     self.assertEqual(json.loads(second.stdout)["chat"], turn["chat"])
                     self.assertNotIn("fixture-secret", first.stdout + first.stderr + second.stdout + second.stderr)
-                    history = (self.root / "data/benchtrend/chats" / (turn["chat"] + ".json")).read_text()
+                    history = (self.root / "data/bench2agent/chats" / (turn["chat"] + ".json")).read_text()
                     self.assertNotIn("fixture-secret", history)
                     self.assertEqual(len(requests), 6)
                 finally:
@@ -443,14 +443,14 @@ class ClientStatusTests(unittest.TestCase):
 
     def test_registered_and_connected_is_read_from_the_cli(self):
         from unittest import mock
-        from benchtrend import cli as terminal
+        from bench2agent import cli as terminal
 
         class Done:
             returncode = 0
-            stdout = "benchtrend:\n  Scope: User config (available in all your projects)\n  Status: ✔ Connected\n"
+            stdout = "bench2agent:\n  Scope: User config (available in all your projects)\n  Status: ✔ Connected\n"
 
         agent = {"installed": True, "authenticated": True}
-        with mock.patch("bellwether.chat._agent_status", return_value=agent):
+        with mock.patch("bench2agent.core.chat._agent_status", return_value=agent):
             clients = terminal.client_status(run=lambda *a, **k: Done())
         self.assertEqual(clients["claude"], {"installed": True, "signed_in": True, "mcp_registered": True,
                                              "mcp_scope": "user", "mcp_connected": True})
@@ -459,22 +459,22 @@ class ClientStatusTests(unittest.TestCase):
 
     def test_missing_registration_names_the_connect_command(self):
         from unittest import mock
-        from benchtrend import cli as terminal
+        from bench2agent import cli as terminal
 
         class Missing:
             returncode = 1
-            stdout = "Error: No MCP server named 'benchtrend' found."
+            stdout = "Error: No MCP server named 'bench2agent' found."
 
         agent = {"installed": True, "authenticated": None}
-        with mock.patch("bellwether.chat._agent_status", return_value=agent):
+        with mock.patch("bench2agent.core.chat._agent_status", return_value=agent):
             line = terminal._client_line("codex", terminal.client_status(run=lambda *a, **k: Missing())["codex"])
         self.assertIn("not registered", line)
-        self.assertIn("benchtrend mcp --connect codex", line)
+        self.assertIn("bench2agent mcp --connect codex", line)
         self.assertIn("sign-in unknown", line)
 
     def test_not_installed(self):
         from unittest import mock
-        from benchtrend import cli as terminal
-        with mock.patch("bellwether.chat._agent_status", return_value={"installed": False, "authenticated": None}):
+        from bench2agent import cli as terminal
+        with mock.patch("bench2agent.core.chat._agent_status", return_value={"installed": False, "authenticated": None}):
             clients = terminal.client_status(run=lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not run")))
         self.assertEqual(terminal._client_line("claude", clients["claude"]), "Claude Code: not installed")

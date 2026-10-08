@@ -13,7 +13,7 @@ const panels = new Map();
 async function ensureServer() {
   if (session && session.child.exitCode === null && session.child.signalCode === null) return session;
   if (starting) return starting;
-  const config = vscode.workspace.getConfiguration("bellwether");
+  const config = vscode.workspace.getConfiguration("bench2agent");
   const folders = (vscode.workspace.workspaceFolders || []).map((folder) => folder.uri.fsPath);
   starting = (async () => {
     const root = resolveRoot(config.get("installPath", ""), folders);
@@ -60,8 +60,8 @@ async function openPanel(kind) {
   const pathname = kind === "browse" ? "browse" : "";
   const target = await forwardedUrl(pathname);
   const panel = vscode.window.createWebviewPanel(
-    `bellwether.${kind}`,
-    kind === "browse" ? "Bellwether · Papers" : "Bellwether · Chat",
+    `bench2agent.${kind}`,
+    kind === "browse" ? "Bench2Agent · Papers" : "Bench2Agent · Chat",
     vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true }
   );
@@ -71,12 +71,12 @@ async function openPanel(kind) {
   panel.webview.html = `<!doctype html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'">
 <style>html,body,iframe{width:100%;height:100%;margin:0;border:0;background:#10141b}</style>
-</head><body><iframe title="Bellwether ${kind}" src="${src}" allow="clipboard-read; clipboard-write"></iframe>
+</head><body><iframe title="Bench2Agent ${kind}" src="${src}" allow="clipboard-read; clipboard-write"></iframe>
 <script nonce="${nonce}">
 const api=acquireVsCodeApi(), frame=document.querySelector('iframe');
 window.addEventListener('message', e=>{
   if(e.source!==frame.contentWindow || e.origin!==new URL(frame.src).origin)return;
-  if(e.data?.type==='bellwether.connect' && ['codex','claude'].includes(e.data.provider))
+  if(e.data?.type==='bench2agent.connect' && ['codex','claude'].includes(e.data.provider))
     api.postMessage({type:'connect',provider:e.data.provider});
 });
 </script></body></html>`;
@@ -101,30 +101,30 @@ async function command(action) {
 
 async function connectAccount(provider) {
   const active = await ensureServer();
-  const extraPath = vscode.workspace.getConfiguration("bellwether").get("extraPath", "");
+  const extraPath = vscode.workspace.getConfiguration("bench2agent").get("extraPath", "");
   const env = extraPath.trim() ? {
     PATH: [path.resolve(extraPath.trim().replace(/^~(?=[/\\])/, require("node:os").homedir())), process.env.PATH]
       .filter(Boolean).join(path.delimiter)
   } : undefined;
-  const terminal = vscode.window.createTerminal({name: `Bellwether · ${provider} sign in`, cwd: active.root, env});
+  const terminal = vscode.window.createTerminal({name: `Bench2Agent · ${provider} sign in`, cwd: active.root, env});
   terminal.show();
   terminal.sendText(provider === "codex" ? "codex login --device-auth" : "claude auth login", true);
-  vscode.window.showInformationMessage("Finish the CLI sign-in, then refresh agent status in Bellwether settings.");
+  vscode.window.showInformationMessage("Finish the CLI sign-in, then refresh agent status in Bench2Agent settings.");
 }
 
 function activate(context) {
-  output = vscode.window.createOutputChannel("Bellwether");
+  output = vscode.window.createOutputChannel("Bench2Agent");
   context.subscriptions.push(output);
   context.subscriptions.push(
-    vscode.commands.registerCommand("bellwether.openChat", () => command(() => openPanel("chat"))),
-    vscode.commands.registerCommand("bellwether.openBrowse", () => command(() => openPanel("browse"))),
-    vscode.commands.registerCommand("bellwether.connectOpenAI", () => command(() => connectAccount("codex"))),
-    vscode.commands.registerCommand("bellwether.connectClaude", () => command(() => connectAccount("claude"))),
-    vscode.commands.registerCommand("bellwether.openBrowser", () => command(async () => {
+    vscode.commands.registerCommand("bench2agent.openChat", () => command(() => openPanel("chat"))),
+    vscode.commands.registerCommand("bench2agent.openBrowse", () => command(() => openPanel("browse"))),
+    vscode.commands.registerCommand("bench2agent.connectOpenAI", () => command(() => connectAccount("codex"))),
+    vscode.commands.registerCommand("bench2agent.connectClaude", () => command(() => connectAccount("claude"))),
+    vscode.commands.registerCommand("bench2agent.openBrowser", () => command(async () => {
       const target = await forwardedUrl("");
       await vscode.env.openExternal(target);
     })),
-    vscode.commands.registerCommand("bellwether.stop", () => command(async () => {
+    vscode.commands.registerCommand("bench2agent.stop", () => command(async () => {
       if (starting) await starting;
       if (session) await stopServer(session.child);
       for (const panel of panels.values()) panel.dispose();

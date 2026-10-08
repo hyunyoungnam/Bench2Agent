@@ -25,7 +25,7 @@ from pathlib import Path
 from .paths import ROOT
 DOCS = str(ROOT / "reports")
 KEY_FILE = ROOT / "data/meili/search_key"
-MEILI_ADDR = os.environ.get("WNAI_MEILI_ADDR", "127.0.0.1:7700")
+MEILI_ADDR = os.environ.get("BENCH2AGENT_MEILI_ADDR", "127.0.0.1:7700")
 MEILI_BASE = f"http://{MEILI_ADDR}/indexes/papers"
 ROUTES = {"/meili/search": MEILI_BASE + "/search",
           "/meili/similar": MEILI_BASE + "/similar"}
@@ -143,7 +143,7 @@ class Handler(SimpleHTTPRequestHandler):
                 else:
                     body = export.conversation_md(doc).encode()
                     ctype, ext = "text/markdown; charset=utf-8", "md"
-                self._file(body, ctype, f"bellwether-{cid}.{ext}")
+                self._file(body, ctype, f"bench2agent-{cid}.{ext}")
             except FileNotFoundError:
                 self._json(404, {"error": "no such chat"})
             except Exception as exc:  # noqa: BLE001
@@ -222,10 +222,10 @@ class Handler(SimpleHTTPRequestHandler):
                 gids = [int(g) for g in (body.get("gids") or [])][:2000]
                 if body.get("fmt") == "csv":
                     out, ctype, name = (export.as_csv(gids), "text/csv; charset=utf-8",
-                                        "bellwether-selection.csv")
+                                        "bench2agent-selection.csv")
                 else:
                     out, ctype, name = (export.bibtex(gids), "application/x-bibtex",
-                                        "bellwether-selection.bib")
+                                        "bench2agent-selection.bib")
                 self._file(out.encode(), ctype, name)
             except Exception as exc:  # noqa: BLE001
                 self._json(400, {"error": f"{type(exc).__name__}: {exc}"[:200]})

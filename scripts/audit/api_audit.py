@@ -42,14 +42,14 @@ def jget(path: str):
 
 # ---------------------------------------------------------------- static
 code, raw = req("GET", "/")
-check("GET / serves the chat shell", code == 200 and b"Bellwether" in raw)
+check("GET / serves the chat shell", code == 200 and b"Bench2Agent" in raw)
 check("GET / has a favicon", b'rel="icon"' in raw)
 code, raw = req("GET", "/browse")
 check("GET /browse serves the corpus view", code == 200 and b"<h1 id=\"ttl\"" in raw)
 check("GET /browse carries the home link", b'id="homelink"' in raw)
 code, _ = req("GET", "/nope.html")
 check("missing file 404s", code == 404)
-code, raw = req("GET", "/../src/bellwether/chat.py")
+code, raw = req("GET", "/../src/bench2agent/core/chat.py")
 check("path traversal refused", code != 200 or b"SYSTEM" not in raw)
 
 # ---------------------------------------------------------------- json api
@@ -159,7 +159,7 @@ check("no other Meilisearch path is exposed", code == 404)
 
 # ---------------------------------------------------------------- mcp tools
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
-from bellwether import mcp  # noqa: E402
+from bench2agent.core import mcp  # noqa: E402
 
 ARGS = {"verify_quote": {"gid": 19662, "quote": "the KV cache"},
         "search_papers": {"query": "kv cache compression", "limit": 3},
@@ -197,10 +197,10 @@ for spec in mcp.TOOLS:
         check(f"mcp {name}", False, f"{type(exc).__name__}: {exc}"[:80])
 
 # ---- figures: a number is checked by running its tool again
-from bellwether import figures        # noqa: E402
-from bellwether.mcp import Store      # noqa: E402
-from bellwether.chat import segment   # noqa: E402
-from bellwether.verify import Verifier as _V   # noqa: E402
+from bench2agent.core import figures        # noqa: E402
+from bench2agent.core.mcp import Store      # noqa: E402
+from bench2agent.core.chat import segment   # noqa: E402
+from bench2agent.core.verify import Verifier as _V   # noqa: E402
 
 _st = Store()
 _cache: dict = {}
@@ -239,7 +239,7 @@ check("a wrong figure names the number that failed",
       [x for x in _segs if x["t"] == "n" and x["v"] == "no"][0]["missing"] == ["99"])
 
 # ---- Korean rendering: prose only, figures guarded, verdicts untouched
-from bellwether import translate  # noqa: E402
+from bench2agent.core import translate  # noqa: E402
 if translate.up():
     if pubs:
         code, raw = req("GET", f"/chats/{pubs[0]['id']}/ko")
@@ -317,8 +317,8 @@ except Exception as exc:  # noqa: BLE001
 
 # verification, the invariant everything else rests on
 try:
-    from bellwether.verify import Verifier
-    from bellwether.mcp import Store
+    from bench2agent.core.verify import Verifier
+    from bench2agent.core.mcp import Store
     v = Verifier(Store())
     card = mcp.t_paper({"gid": 19662})
     vs = card.get("verified_sentences") or {}
@@ -331,7 +331,7 @@ except Exception as exc:  # noqa: BLE001
 
 # the agent always writes English now — Korean is rendered from it, so the
 # system prompt must NOT bend to the interface language
-from bellwether.chat import SYSTEM, system_for  # noqa: E402
+from bench2agent.core.chat import SYSTEM, system_for  # noqa: E402
 check("the agent writes one canonical language",
       system_for("ko") == SYSTEM == system_for("en")
       and "ALWAYS write your answer in English" in SYSTEM)

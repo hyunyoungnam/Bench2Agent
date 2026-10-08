@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 os.environ.setdefault("HF_HOME", str(ROOT / ".cache/hf"))
 
-from bellwether import figures  # noqa: E402
+from bench2agent.core import figures  # noqa: E402
 
 SRC = ROOT / "run/mt/en_answers.jsonl"
 OUT = ROOT / "run/mt"

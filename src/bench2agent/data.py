@@ -13,7 +13,7 @@ from pathlib import Path
 SNAPSHOT = "benchmark_snapshot.json"
 MEMBER = "data/processed/" + SNAPSHOT
 # A release-pinned default keeps first-run downloads reproducible and checked.
-DEFAULT_URL = "https://github.com/hyunyoungnam/BenchTrend/releases/download/data-20261007/benchtrend-data.tar.gz"
+DEFAULT_URL = "https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261007/bench2agent-data.tar.gz"
 DEFAULT_SHA256 = "d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e"
 
 
@@ -63,7 +63,7 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
     target.parent.mkdir(parents=True, exist_ok=True)
     # Stage on the same filesystem so os.replace is atomic. A failed download,
     # invalid bundle or bad checksum leaves the previous snapshot untouched.
-    with tempfile.TemporaryDirectory(prefix=".benchtrend-", dir=target.parent) as directory:
+    with tempfile.TemporaryDirectory(prefix=".bench2agent-", dir=target.parent) as directory:
         stage = Path(directory)
         if file:
             source = Path(file).expanduser().resolve()
@@ -71,7 +71,7 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
             parsed = urllib.parse.urlsplit(url)
             if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
                 raise ValueError("Data URL must use HTTPS (HTTP is allowed for localhost).")
-            from bellwether.cli import _download
+            from bench2agent.core.cli import _download
             source = stage / "download"
             _download(url, source)
         if sha256 and digest(source).lower() != sha256.lower():
@@ -105,14 +105,14 @@ def bundle(root: Path, output: Path) -> dict:
     if output == source:
         raise ValueError("Bundle output cannot replace the source snapshot.")
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".benchtrend-", dir=output.parent) as directory:
+    with tempfile.TemporaryDirectory(prefix=".bench2agent-", dir=output.parent) as directory:
         stage = Path(directory)
         # A frozen copy binds metadata and checksum to the exact bytes shipped.
         frozen = stage / SNAPSHOT
         shutil.copyfile(source, frozen)
         metadata = validate(frozen)
         manifest = stage / "manifest.json"
-        manifest.write_text(json.dumps({"format": "benchtrend-data-v1", "sha256": digest(frozen), **metadata}), encoding="utf-8")
+        manifest.write_text(json.dumps({"format": "bench2agent-data-v1", "sha256": digest(frozen), **metadata}), encoding="utf-8")
         pending = stage / "bundle.tar.gz"
         with tarfile.open(pending, "w:gz") as archive:
             archive.add(frozen, arcname=MEMBER)

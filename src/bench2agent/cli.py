@@ -1,4 +1,4 @@
-"""BenchTrend terminal conversations and a local MCP service."""
+"""Bench2Agent terminal conversations and a local MCP service."""
 from __future__ import annotations
 
 import argparse
@@ -54,7 +54,7 @@ def render(turn: dict, *, sources: bool = False) -> str:
 
 
 def settings_path(root: Path) -> Path:
-    return root / "data/benchtrend/settings.json"
+    return root / "data/bench2agent/settings.json"
 
 
 def settings(root: Path) -> dict:
@@ -62,7 +62,7 @@ def settings(root: Path) -> dict:
         with settings_path(root).open(encoding="utf-8") as source:
             value = json.load(source)
         if not isinstance(value, dict):
-            raise ValueError("Invalid settings. Run benchtrend init.")
+            raise ValueError("Invalid settings. Run bench2agent init.")
         return value
     except FileNotFoundError:
         return {}
@@ -87,7 +87,7 @@ def ensure_key(config: dict, *, interactive: bool):
     name = providers.KEY_NAMES[config["provider"]]
     if not os.environ.get(name):
         if not interactive:
-            raise ValueError(f"Set {name} or start benchtrend interactively to enter a key for this session.")
+            raise ValueError(f"Set {name} or start bench2agent interactively to enter a key for this session.")
         key = getpass.getpass(name + " (this session only): ").strip()
         if not key:
             raise ValueError("API key is required.")
@@ -100,8 +100,8 @@ def cmd_init(args, root: Path) -> int:
         config["model"] = input(f"Model [{config['model']}]: ").strip() or config["model"]
     write_json(settings_path(root), config)
     print(f"Saved {config['provider']} / {config['model']} · data: {root}")
-    print(f"Set {providers.KEY_NAMES[config['provider']]} in your environment, or enter it when benchtrend starts.")
-    print("Next: benchtrend")
+    print(f"Set {providers.KEY_NAMES[config['provider']]} in your environment, or enter it when bench2agent starts.")
+    print("Next: bench2agent")
     return 0
 
 
@@ -109,13 +109,13 @@ CLIENT_LABELS = {"claude": "Claude Code", "codex": "Codex"}
 
 
 def client_status(run=subprocess.run) -> dict:
-    """Is BenchTrend reachable through Claude Code and Codex?
+    """Is Bench2Agent reachable through Claude Code and Codex?
 
-    Asked of the clients' own CLIs (`<client> mcp get benchtrend`), never read
+    Asked of the clients' own CLIs (`<client> mcp get bench2agent`), never read
     from their config or credential files. `signed_in` comes from the same
     login probes the browser settings use; None means the probe gave no answer.
     """
-    from bellwether.chat import _agent_status
+    from bench2agent.core.chat import _agent_status
     out = {}
     for name in ("claude", "codex"):
         info = _agent_status(name)
@@ -123,7 +123,7 @@ def client_status(run=subprocess.run) -> dict:
                  "mcp_registered": None, "mcp_scope": None, "mcp_connected": None}
         if info["installed"]:
             try:
-                done = run([name, "mcp", "get", "benchtrend"], capture_output=True, text=True,
+                done = run([name, "mcp", "get", "bench2agent"], capture_output=True, text=True,
                            timeout=20, stdin=subprocess.DEVNULL)
                 entry["mcp_registered"] = done.returncode == 0
                 if name == "claude" and done.returncode == 0:
@@ -145,13 +145,13 @@ def _client_line(name: str, c: dict) -> str:
              {True: "signed in", False: "not signed in", None: "sign-in unknown"}[c["signed_in"]]]
     if c["mcp_registered"]:
         where = f" ({c['mcp_scope']} scope)" if c["mcp_scope"] else ""
-        parts.append("benchtrend MCP server registered" + where)
+        parts.append("bench2agent MCP server registered" + where)
         if c["mcp_connected"] is True:
             parts.append("connected")
         elif c["mcp_connected"] is False:
-            parts.append("NOT connecting — check `benchtrend data status` and the registered command")
+            parts.append("NOT connecting — check `bench2agent data status` and the registered command")
     elif c["mcp_registered"] is False:
-        parts.append(f"benchtrend MCP server not registered → run: benchtrend mcp --connect {name}")
+        parts.append(f"bench2agent MCP server not registered → run: bench2agent mcp --connect {name}")
     else:
         parts.append("MCP registration unknown")
     return f"{label}: " + " · ".join(parts)
@@ -166,10 +166,10 @@ def cmd_status(args, root: Path) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        print(f"BenchTrend {__version__} · {root}")
+        print(f"Bench2Agent {__version__} · {root}")
         print(json.dumps(result["data"], ensure_ascii=False, indent=2))
         keys = ", ".join(f"{p}: {'set' if v else 'not set'}" for p, v in result["api_keys_present"].items())
-        print(f"Standalone conversation (`benchtrend`): needs an API key — {keys}")
+        print(f"Standalone conversation (`bench2agent`): needs an API key — {keys}")
         print("Through an AI client (no API key; uses the client's own login):")
         for name, c in result["clients"].items():
             print("  " + _client_line(name, c))
@@ -223,7 +223,7 @@ def require_data(root: Path, *, interactive: bool):
         print("Downloading benchmark data (16 MB); checking its checksum…", file=sys.stderr, flush=True)
         install(root)
         return
-    raise ValueError("Benchmark data is missing. Run benchtrend data install.")
+    raise ValueError("Benchmark data is missing. Run bench2agent data install.")
 
 
 def cmd_chat(args, root: Path) -> int:
@@ -249,10 +249,10 @@ def cmd_chat(args, root: Path) -> int:
         answer(args.question)
         return 0
     if not args.json:
-        from bellwether.mcp import B
+        from bench2agent.core.mcp import B
         snapshot = B.data()
         editions = ", ".join(sorted(snapshot["editions"]))
-        print(f"BenchTrend · {session.doc['provider']} / {session.doc['model']} · {session.doc['id']}")
+        print(f"Bench2Agent · {session.doc['provider']} / {session.doc['model']} · {session.doc['id']}")
         print(safe_text("Data: " + editions))
         print(HELP + "\n")
         if last:
@@ -318,25 +318,25 @@ def cmd_chat(args, root: Path) -> int:
             if not interactive:
                 break
     if not args.json and session.doc["turns"]:
-        print("Continue: benchtrend --resume " + session.doc["id"])
+        print("Continue: bench2agent --resume " + session.doc["id"])
     return 1 if failed else 0
 
 
 def mcp_command(root: Path) -> list[str]:
     # An absolute Python/module command survives venv installations and does
-    # not depend on benchtrend being discoverable in the MCP host's PATH.
-    return [sys.executable, "-m", "benchtrend", "--home", str(root), "mcp"]
+    # not depend on bench2agent being discoverable in the MCP host's PATH.
+    return [sys.executable, "-m", "bench2agent", "--home", str(root), "mcp"]
 
 
 def client_command(client: str, root: Path, *, model: str | None = None) -> list[str]:
     executable = shutil.which(client)
     if not executable:
-        raise ValueError(f"{CLIENT_LABELS[client]} is not installed or is not on PATH. Install it first, then run benchtrend {client}.")
-    from bellwether.paths import agent_environment
-    env = {**agent_environment(), "BENCHTREND_HOME": str(root)}
+        raise ValueError(f"{CLIENT_LABELS[client]} is not installed or is not on PATH. Install it first, then run bench2agent {client}.")
+    from bench2agent.core.paths import agent_environment
+    env = {**agent_environment(), "BENCH2AGENT_HOME": str(root)}
     command = mcp_command(root)
     if client == "claude":
-        config = {"mcpServers": {"benchtrend": {"command": command[0], "args": command[1:], "env": env}}}
+        config = {"mcpServers": {"bench2agent": {"command": command[0], "args": command[1:], "env": env}}}
         native = [executable, "--mcp-config", json.dumps(config)]
         if model:
             native += ["--model", model]
@@ -346,7 +346,7 @@ def client_command(client: str, root: Path, *, model: str | None = None) -> list
                 "env": "{" + ", ".join(json.dumps(k) + "=" + json.dumps(v) for k, v in env.items()) + "}"}
     native = [executable]
     for key, value in settings.items():
-        native += ["-c", f"mcp_servers.benchtrend.{key}={value}"]
+        native += ["-c", f"mcp_servers.bench2agent.{key}={value}"]
     native += ["--model", model or providers.DEFAULT_MODELS["openai"]]
     return native
 
@@ -357,25 +357,25 @@ def cmd_client(args, root: Path) -> int:
         print(shlex.join(command))
         return 0
     require_data(root, interactive=True)
-    print(f"Opening {CLIENT_LABELS[args.command]} with BenchTrend…", file=sys.stderr, flush=True)
+    print(f"Opening {CLIENT_LABELS[args.command]} with Bench2Agent…", file=sys.stderr, flush=True)
     return subprocess.run(command, check=False).returncode
 
 
 def cmd_mcp(args, root: Path) -> int:
     command = mcp_command(root)
     if args.config:
-        from bellwether.paths import agent_environment
-        print(json.dumps({"mcpServers": {"benchtrend": {"command": command[0], "args": command[1:],
+        from bench2agent.core.paths import agent_environment
+        print(json.dumps({"mcpServers": {"bench2agent": {"command": command[0], "args": command[1:],
                                                       "env": agent_environment()}}}, indent=2))
         return 0
     if args.connect:
         client = shutil.which(args.connect)
         if not client:
             raise ValueError(f"{args.connect} is not installed or is not on PATH.")
-        from bellwether.paths import agent_environment
+        from bench2agent.core.paths import agent_environment
         env = agent_environment()
         if args.connect == "codex":
-            native = [client, "mcp", "add", "benchtrend"]
+            native = [client, "mcp", "add", "bench2agent"]
             for key, value in env.items():
                 native += ["--env", key + "=" + value]
         else:
@@ -384,24 +384,24 @@ def cmd_mcp(args, root: Path) -> int:
                 native += ["--env", key + "=" + value]
             # Claude's --env is variadic; another option must terminate it
             # before the positional server name.
-            native += ["--transport", "stdio", "--scope", "user", "benchtrend"]
+            native += ["--transport", "stdio", "--scope", "user", "bench2agent"]
         native += ["--", *command]
         if args.dry_run:
             print(shlex.join(native))
             return 0
         result = subprocess.run(native, check=False)
         if not result.returncode:
-            print(f"Connected BenchTrend to {args.connect}. Start a new {args.connect} session to use it.")
+            print(f"Connected Bench2Agent to {args.connect}. Start a new {args.connect} session to use it.")
         return result.returncode
     if args.dry_run:
         raise ValueError("--dry-run requires --connect codex or --connect claude.")
-    from bellwether.mcp import _benchmark_tools, serve_stdio
-    return serve_stdio(tools=_benchmark_tools(), name="benchtrend")
+    from bench2agent.core.mcp import _benchmark_tools, serve_stdio
+    return serve_stdio(tools=_benchmark_tools(), name="bench2agent")
 
 
 def common_options(parser, *, child=False):
     default = argparse.SUPPRESS if child else None
-    parser.add_argument("--home", default=default, help="runtime data directory (or BENCHTREND_HOME)")
+    parser.add_argument("--home", default=default, help="runtime data directory (or BENCH2AGENT_HOME)")
     parser.add_argument("--provider", choices=list(providers.KEY_NAMES), default=default)
     parser.add_argument("--model", default=default, help="model ID supported by your account")
     parser.add_argument("--language", choices=["auto", "ko", "en"], default=default)
@@ -409,9 +409,18 @@ def common_options(parser, *, child=False):
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS if child else False)
 
 
+def cmd_service(args, root: Path) -> int:
+    """Use the same service implementation from the public terminal command."""
+    from .core import cli as service
+    handlers = {"serve": service.cmd_serve, "setup": service.cmd_setup,
+                "bundle": service.cmd_bundle, "fetch-data": service.cmd_fetch,
+                "datasets": service.cmd_datasets, "benchmarks": service.cmd_benchmarks}
+    return handlers[args.command](args)
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="benchtrend", description=__doc__)
-    parser.add_argument("--version", action="version", version="BenchTrend " + __version__)
+    parser = argparse.ArgumentParser(prog="bench2agent", description=__doc__)
+    parser.add_argument("--version", action="version", version="Bench2Agent " + __version__)
     common_options(parser)
     commands = parser.add_subparsers(dest="command")
     chat = commands.add_parser("chat", help="start a conversation (also the default)")
@@ -453,14 +462,40 @@ def main(argv=None) -> int:
     mcp.add_argument("--dry-run", action="store_true", help="show registration command without changing settings")
     mcp.set_defaults(fn=cmd_mcp)
     for name in ("claude", "codex"):
-        client = commands.add_parser(name, help=f"open {CLIENT_LABELS[name]} with BenchTrend tools")
+        client = commands.add_parser(name, help=f"open {CLIENT_LABELS[name]} with Bench2Agent tools")
         common_options(client, child=True)
         client.add_argument("--dry-run", action="store_true", help="show the launch command without downloading data or starting the client")
         client.set_defaults(fn=cmd_client)
+    serve = commands.add_parser("serve", help="start the local web interface")
+    common_options(serve, child=True)
+    serve.add_argument("--port", type=int, default=8001)
+    serve.add_argument("--no-meili", action="store_true", help="do not start the optional search engine")
+    serve.set_defaults(fn=cmd_service)
+    for name, description in (("setup", "install the optional browser search engine"),
+                              ("bundle", "bundle the full browser data on the build machine")):
+        service = commands.add_parser(name, help=description)
+        common_options(service, child=True)
+        service.set_defaults(fn=cmd_service)
+    fetch = commands.add_parser("fetch-data", help="install a full browser data bundle")
+    common_options(fetch, child=True)
+    source = fetch.add_mutually_exclusive_group()
+    source.add_argument("--file")
+    source.add_argument("--url")
+    source.add_argument("--release", metavar="TAG")
+    fetch.set_defaults(fn=cmd_service)
+    datasets = commands.add_parser("datasets", help="export paper and dataset source inventories")
+    common_options(datasets, child=True)
+    datasets.add_argument("--out", default=".")
+    datasets.add_argument("--gid", type=int)
+    datasets.set_defaults(fn=cmd_service)
+    benchmarks = commands.add_parser("benchmarks", help="build the benchmark snapshot from reviewed extraction")
+    common_options(benchmarks, child=True)
+    benchmarks.add_argument("--out")
+    benchmarks.set_defaults(fn=cmd_service)
     args = parser.parse_args(argv)
     if args.home:
-        os.environ["BENCHTREND_HOME"] = args.home
-    from bellwether.paths import ROOT
+        os.environ["BENCH2AGENT_HOME"] = args.home
+    from bench2agent.core.paths import ROOT
     try:
         return getattr(args, "fn", cmd_chat)(args, ROOT)
     except KeyboardInterrupt:

@@ -40,10 +40,10 @@ TERMS = ROOT / "config" / "ko_terms.json"
 # Off unless asked for. The rendering is a second agent call per turn and the
 # reader sees "rendering Korean…" while it runs; while the English answer is
 # what is being tested, that wait and the mixed-language fallbacks are noise.
-# WNAI_KO=1 turns it on; nothing below is removed.
-ENABLED = os.environ.get("WNAI_KO", "0") == "1"
-MODEL = os.environ.get("WNAI_MT_AGENT_MODEL", "claude-haiku-4-5-20251001")
-TIMEOUT = float(os.environ.get("WNAI_MT_TIMEOUT", "240"))
+# BENCH2AGENT_KO=1 turns it on; nothing below is removed.
+ENABLED = os.environ.get("BENCH2AGENT_KO", "0") == "1"
+MODEL = os.environ.get("BENCH2AGENT_MT_AGENT_MODEL", "claude-haiku-4-5-20251001")
+TIMEOUT = float(os.environ.get("BENCH2AGENT_MT_TIMEOUT", "240"))
 
 _SYSTEM: str | None = None
 _BLOCK = re.compile(r"⟪(\d+)⟫\s*(.*?)(?=⟪\d+⟫|\Z)", re.S)

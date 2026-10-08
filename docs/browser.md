@@ -1,13 +1,13 @@
-# The browser interface (bellwether)
+# The browser interface (bench2agent)
 
 This is the project's earlier product: a local site for reading one
 conference edition — search, topics, methods, the sentences a paper is
 built on — with a chat whose every quote is machine-verified against the
 paper. Since the 2026-10-02 re-centering on benchmarks it is the supporting
 evidence surface: a benchmark's count opens onto these pages. Its design
-principles are in [paper-view.md](paper-view.md). The command and the
-install directory keep the earlier name, `bellwether`; `WNAI_*` environment
-variables are older still.
+principles are in [paper-view.md](paper-view.md). The browser and terminal share the `bench2agent` command and
+`BENCH2AGENT_*` environment variables. The hosted service design is in
+[database-and-hosting.md](database-and-hosting.md).
 
 ## Install
 
@@ -20,8 +20,8 @@ once) or with `fetch-data --url <release asset>` without it.
 **Linux / macOS** — two lines:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/BenchTrend/main/install.sh | bash
-bellwether fetch-data --release data-20260923      # site + search index, ~450 MB
+curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/Bench2Agent/main/install.sh | bash
+bench2agent fetch-data --release data-20260923      # site + search index, ~450 MB
 ```
 
 **Windows** — install WSL once (PowerShell: `wsl --install`, then reboot),
@@ -31,15 +31,15 @@ WSL the server binds to the VM's interfaces rather than its loopback, since
 Windows' localhost relay cannot reach the latter; the VM's NAT keeps it off
 the LAN).
 
-The script installs into `~/.bellwether` (an app directory — everything in it,
-data included, stays inspectable), puts the `bellwether` command on PATH via its
+The script installs into `~/.bench2agent` (an app directory — everything in it,
+data included, stays inspectable), puts the `bench2agent` command on PATH via its
 own venv, and fetches the search-engine binary and keys; the clone and the
-data bundle both go through gh's credentials. (`WNAI_RELEASE=data-20260923`
-before the installer folds the fetch in; `WNAI_BUNDLE=<file>` unpacks a bundle
+data bundle both go through gh's credentials. (`BENCH2AGENT_RELEASE=data-20260923`
+before the installer folds the fetch in; `BENCH2AGENT_BUNDLE=<file>` unpacks a bundle
 you already have.) Then:
 
 ```bash
-bellwether serve
+bench2agent serve
 ```
 
 which starts everything on one port and prints its address:
@@ -53,19 +53,19 @@ by design: a question asked on this page spawns a coding agent signed in on
 *this* machine, so an address anyone on the network could open would be that
 account handed out without a login. Each reader runs their own copy instead.
 
-Ctrl+C stops everything. `bellwether status` shows what is running and what
-data exists. `bellwether datasets --out DIR` writes three CSV inventories:
+Ctrl+C stops everything. `bench2agent status` shows benchmark data and model
+connections; `python -m bench2agent.core status` shows the browser processes. `bench2agent datasets --out DIR` writes three CSV inventories:
 `benchmarks_used.csv` (abstract-named benchmarks and their mapped locations),
 `datasets_released.csv` (paper-owned artifact links with evidence), and
 `benchmarks_introduced.csv` (paper-claimed new benchmark candidates). The
 running server serves them at `/datasets/<filename>` and reports coverage at
 `/datasets/summary.json`; append `?gid=156` or use
-`bellwether datasets --gid 156 --out DIR` for one paper. These files contain
+`bench2agent datasets --gid 156 --out DIR` for one paper. These files contain
 source links and evidence, not the external datasets' records. Answers are
 written in English; Korean rendering is off by
-default and `WNAI_KO=1 bellwether serve` turns it on.
+default and `BENCH2AGENT_KO=1 bench2agent serve` turns it on.
 
-The data bundle is produced by `bellwether bundle` on a build machine and
+The data bundle is produced by `bench2agent bundle` on a build machine and
 published as a GitHub release; a new release reaches an install with one
 `fetch-data --release <tag>`.
 
@@ -73,18 +73,18 @@ published as a GitHub release; a new release reaches an install with one
 
 The [VS Code extension](../vscode-extension/README.md) starts this same local
 service automatically and opens chat or paper exploration in an editor tab.
-Open the repository in VS Code, run **Run Bellwether Extension** with F5, then
-use **Bellwether: Ask About Benchmarks** from the Command Palette in the new window.
+Open the repository in VS Code, run **Run Bench2Agent Extension** with F5, then
+use **Bench2Agent: Ask About Benchmarks** from the Command Palette in the new window.
 The processed data bundle is still required. The current CSV links are source
 inventories; exporting actual evaluation records is tracked in
 [the implementation plan](evaluation-data-downloads.md).
 
 ### Connect a coding agent (no API key)
 
-`bellwether mcp` is an MCP server over stdio with read-only tools for search,
+`python -m bench2agent.core mcp` is the browser MCP server over stdio with read-only tools for search,
 similarity, topics, citations, each paper's verified sentences, and the six
 benchmark tools. (The repository's `.mcp.json` registers only the benchmark
-tools, through `benchtrend mcp`; see [terminal.md](terminal.md).) The agent
+tools, through `bench2agent mcp`; see [terminal.md](terminal.md).) The agent
 brings its own model, so no API key is involved.
 
 ## Asking it something
@@ -183,7 +183,7 @@ Feed collection → abstract scrape → normalization (dedup: orals are listed
 twice) → arXiv/PMLR full-text fetch and sectioning → structured extraction
 with verbatim-span verification (local vLLM) → shared frozen taxonomy →
 union embeddings and cross-venue neighbors → the site (`reports/`) plus a
-Meilisearch index, packed by `bellwether bundle` for installs. The pipeline needs a
+Meilisearch index, packed by `bench2agent bundle` for installs. The pipeline needs a
 GPU machine; an install only serves its output.
 
 The full build documentation, data traps and measured quality numbers are

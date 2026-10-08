@@ -32,7 +32,7 @@ def write_json(path: Path, value: dict) -> None:
 class Session:
     def __init__(self, root: Path, provider: str, model: str, *, cid: str | None = None, language: str = "auto"):
         self.root = root
-        self.directory = root / "data/benchtrend/chats"
+        self.directory = root / "data/bench2agent/chats"
         self.doc = {"id": secrets.token_hex(6), "provider": provider, "model": model, "language": language,
                     "title": "New conversation", "ts": int(time.time()), "messages": [], "turns": []}
         if cid:
@@ -45,17 +45,17 @@ class Session:
 
     def load(self, cid: str) -> dict:
         if not re.fullmatch(r"[0-9a-f]{12}", cid):
-            raise ValueError("Invalid conversation ID. Use benchtrend chats.")
+            raise ValueError("Invalid conversation ID. Use bench2agent chats.")
         with (self.directory / (cid + ".json")).open(encoding="utf-8") as source:
             return json.load(source)
 
     def ask(self, question: str, emit) -> dict:
-        from bellwether import chat, mcp
-        from bellwether.policy import BENCHMARK_SYSTEM
-        from bellwether.verify import Verifier
+        from bench2agent.core import chat, mcp
+        from bench2agent.core.policy import BENCHMARK_SYSTEM
+        from bench2agent.core.verify import Verifier
         snapshot = mcp.B.data()
         if not snapshot["available"]:
-            raise ValueError("Benchmark data is missing. Run benchtrend data install --file FILE or --url URL.")
+            raise ValueError("Benchmark data is missing. Run bench2agent data install --file FILE or --url URL.")
         sid = snapshot.get("snapshot_id")
         if self.doc.get("snapshot_id") and self.doc["snapshot_id"] != sid:
             raise ValueError("The dataset changed since this conversation. Start /new, or reinstall its snapshot.")
@@ -87,7 +87,7 @@ class Session:
 
 def conversations(root: Path) -> list[dict]:
     result = []
-    for path in (root / "data/benchtrend/chats").glob("*.json"):
+    for path in (root / "data/bench2agent/chats").glob("*.json"):
         try:
             with path.open(encoding="utf-8") as source:
                 doc = json.load(source)

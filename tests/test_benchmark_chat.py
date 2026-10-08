@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bellwether import chat, figures, mcp
-from bellwether.benchmarks import BenchmarkStore, build_snapshot
+from bench2agent.core import chat, figures, mcp
+from bench2agent.core.benchmarks import BenchmarkStore, build_snapshot
 
 
 class BenchmarkQuestions(unittest.TestCase):
@@ -207,7 +207,7 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(self.store.evidence({"benchmark": "toy"})["total"], 2)
 
     def test_export_rejects_source_changed_while_reading(self):
-        from bellwether import benchmarks
+        from bench2agent.core import benchmarks
         original = benchmarks.catalogue
         def mutate(root):
             entries = original(root)
@@ -236,9 +236,9 @@ class AccountStatus(unittest.TestCase):
     def test_mcp_overrides_use_current_python_without_global_write(self):
         import sys
         config = json.loads(chat._mcp_config())
-        self.assertEqual(config["mcpServers"]["bellwether"]["command"], sys.executable)
+        self.assertEqual(config["mcpServers"]["bench2agent"]["command"], sys.executable)
         self.assertIn("sandbox_mode=\"read-only\"", chat._codex_config_args())
-        self.assertIn('mcp_servers.bellwether.default_tools_approval_mode="writes"', chat._codex_config_args())
+        self.assertIn('mcp_servers.bench2agent.default_tools_approval_mode="writes"', chat._codex_config_args())
 
     def test_mcp_read_only_annotations_are_advertised(self):
         import io

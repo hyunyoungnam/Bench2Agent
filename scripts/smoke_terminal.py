@@ -13,7 +13,7 @@ from pathlib import Path
 def main():
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
-    env.pop("BENCHTREND_HOME", None)
+    env.pop("BENCH2AGENT_HOME", None)
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         snapshot = root / "data/processed/benchmark_snapshot.json"
@@ -28,16 +28,21 @@ def main():
         }), encoding="utf-8")
 
         def run(args, input=None):
-            result = subprocess.run([sys.executable, "-m", "benchtrend", "--home", str(root), *args],
+            result = subprocess.run([sys.executable, "-m", "bench2agent", "--home", str(root), *args],
                                     cwd=root, env=env, input=input, capture_output=True, text=True, timeout=20)
             if result.returncode:
                 raise AssertionError(result.stderr)
             return result.stdout
 
-        from benchtrend import __version__
-        assert "BenchTrend " + __version__ in run(["--version"])
+        from bench2agent import __version__
+        assert "Bench2Agent " + __version__ in run(["--version"])
+        executable = Path(sys.executable).parent / ("bench2agent.exe" if os.name == "nt" else "bench2agent")
+        assert executable.is_file(), "The installed bench2agent console command is missing"
+        assert subprocess.run([str(executable), "--version"], cwd=root, env=env,
+                              capture_output=True, text=True, check=True).stdout.strip() == "Bench2Agent " + __version__
+        assert "--no-meili" in run(["serve", "--help"])
         assert json.loads(run(["status", "--json"]))["data"]["available"]
-        config = json.loads(run(["mcp", "--config"]))["mcpServers"]["benchtrend"]
+        config = json.loads(run(["mcp", "--config"]))["mcpServers"]["bench2agent"]
         assert config["command"] == sys.executable
         assert str(root) in config["args"]
         assert "PYTHONPATH" not in config["env"]  # installed code, no source checkout
@@ -49,6 +54,7 @@ def main():
         ]) + "\n"
         response = [json.loads(line) for line in run(["mcp"], request).splitlines()]
         assert len(response) == 3
+        assert response[0]["result"]["serverInfo"]["name"] == "bench2agent"
         assert len(response[1]["result"]["tools"]) == 6
         usage = json.loads(response[2]["result"]["content"][0]["text"])
         assert usage["results"][0]["papers"] == 1

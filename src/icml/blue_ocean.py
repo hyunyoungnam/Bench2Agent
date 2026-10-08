@@ -18,7 +18,7 @@ its top picks the future actually filled:
   cf         collaborative filtering: fields that share techniques with F
              already use T, techniques that share fields with T already
              serve F — the classical link-prediction baseline
-  lim        Bellwether's instrument: cosine between F's failure-term
+  lim        Bench2Agent's instrument: cosine between F's failure-term
              profile (its papers' limitation sentences) and T's claim-term
              profile (key_change/result sentences of papers using T)
   lim_cf     lim x cf (both min-max normalised) — evidence + structure
@@ -39,7 +39,7 @@ import math
 import random
 from collections import Counter, defaultdict
 
-from bellwether.mcp import RDATA, Store, _GAP_STOP, _TOK
+from bench2agent.core.mcp import RDATA, Store, _GAP_STOP, _TOK
 from .common import PROCESSED, dump_json, load_json
 
 TRAIN = ["neurips-2024", "icml-2025", "neurips-2025", "iclr-2025"]

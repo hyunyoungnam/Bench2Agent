@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "benchtrend": {
+    "bench2agent": {
       "command": "python3",
-      "args": ["-m", "benchtrend", "mcp"],
+      "args": ["-m", "bench2agent", "mcp"],
       "env": {"PYTHONPATH": "src"}
     }
   }

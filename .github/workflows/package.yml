@@ -1,10 +1,10 @@
-name: BenchTrend package
+name: Bench2Agent package
 
 on:
   push:
-    paths: ["src/bellwether/**", "src/benchtrend/**", "tests/**", "pyproject.toml", "docs/terminal.md", "scripts/smoke_terminal.py", ".github/workflows/package.yml"]
+    paths: ["src/bench2agent/**", "tests/**", "vscode-extension/**", "pyproject.toml", "docs/terminal.md", "scripts/smoke_terminal.py", ".github/workflows/package.yml"]
   pull_request:
-    paths: ["src/bellwether/**", "src/benchtrend/**", "tests/**", "pyproject.toml", "docs/terminal.md", "scripts/smoke_terminal.py", ".github/workflows/package.yml"]
+    paths: ["src/bench2agent/**", "tests/**", "vscode-extension/**", "pyproject.toml", "docs/terminal.md", "scripts/smoke_terminal.py", ".github/workflows/package.yml"]
   workflow_dispatch:
 
 permissions:
@@ -22,15 +22,19 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: PYTHONPATH=src python -m unittest discover -s tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test vscode-extension/test/*.test.js
       - run: python -m pip install build twine
       - run: python -m build
       - run: python -m twine check dist/*
       - name: Install and exercise wheel outside the checkout
         run: |
-          python -m venv "$RUNNER_TEMP/benchtrend-wheel"
-          "$RUNNER_TEMP/benchtrend-wheel/bin/python" -m pip install --no-deps dist/*.whl
-          "$RUNNER_TEMP/benchtrend-wheel/bin/python" scripts/smoke_terminal.py
+          python -m venv "$RUNNER_TEMP/bench2agent-wheel"
+          "$RUNNER_TEMP/bench2agent-wheel/bin/python" -m pip install --no-deps dist/*.whl
+          "$RUNNER_TEMP/bench2agent-wheel/bin/python" scripts/smoke_terminal.py
       - uses: actions/upload-artifact@v4
         with:
-          name: benchtrend-package-python-${{ matrix.python }}
+          name: bench2agent-package-python-${{ matrix.python }}
           path: dist/

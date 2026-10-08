@@ -1,6 +1,6 @@
 # Benchmark conversation
 
-BenchTrend answers benchmark questions through its terminal conversation and
+Bench2Agent answers benchmark questions through its terminal conversation and
 the same local Python MCP tools in Codex, Claude Code and the existing VS Code
 prototype. See [terminal usage](terminal.md) for installation and registration.
 The agent explains results;
@@ -12,14 +12,14 @@ quality measure.
 After the full-text mention run and reviewed identity catalogue are stable:
 
 ```bash
-PYTHONPATH=src python3 -m bellwether benchmarks
-PYTHONPATH=src python3 -m bellwether serve --no-meili
+PYTHONPATH=src python3 -m bench2agent benchmarks
+PYTHONPATH=src python3 -m bench2agent serve --no-meili
 ```
 
 The exporter joins `mentions_<edition>.jsonl`, normalized paper metadata,
 arXiv mappings, available topic labels and the reviewed catalogue. It writes
 `data/processed/benchmark_snapshot.json` atomically and rejects source changes
-during export. The snapshot travels in `bellwether bundle`; neither the corpus
+during export. The snapshot travels in `bench2agent bundle`; neither the corpus
 nor that artifact belongs in Git. `/benchmarks/status` exposes coverage.
 
 The snapshot is self-contained for benchmark queries. Unreviewed provisional
@@ -83,7 +83,7 @@ interpretation; the agent can still overstate scope or draw a poor conclusion.
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests
-PYTHONPATH=src python3 -m bellwether datasets --out /tmp/bellwether-datasets
+PYTHONPATH=src python3 -m bench2agent datasets --out /tmp/bench2agent-datasets
 node --test vscode-extension/test/*.test.js
 python3 vscode-extension/build_vsix.py
 ```

@@ -1,20 +1,19 @@
-# BenchTrend
+# Bench2Agent
 
-[![PyPI](https://img.shields.io/pypi/v/benchtrend?label=pypi)](https://pypi.org/project/benchtrend/)
-[![Code release](https://img.shields.io/github/v/release/hyunyoungnam/BenchTrend?filter=v*&label=release)](https://github.com/hyunyoungnam/BenchTrend/releases)
-[![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md)
+[![Code release](https://img.shields.io/github/v/release/hyunyoungnam/Bench2Agent?filter=v*&label=release)](https://github.com/hyunyoungnam/Bench2Agent/releases)
+[![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md)
 
 Find which benchmarks researchers evaluate on, how their use changes, and
 which new benchmarks other researchers adopt. Ask in a terminal conversation,
-or use BenchTrend inside Claude Code or Codex.
+or use Bench2Agent inside Claude Code or Codex.
 
 Answers include usage counts, the papers covered, and original paper evidence.
 **Usage frequency describes adoption, not benchmark quality.**
 
-[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md) ·
-[Releases](https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/releases.md) · [License](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE)
+[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md) ·
+[Releases](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/releases.md) · [License](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
 
 ## Ask a question
 
@@ -24,7 +23,7 @@ returned tool results; model wording can vary.
 
 > **You:** What benchmarks are researchers using in robotics lately?
 >
-> **BenchTrend:** Among 509 analysed papers labelled robotics,
+> **Bench2Agent:** Among 509 analysed papers labelled robotics,
 > [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) appears in 80
 > evaluation papers ([introducing paper](https://arxiv.org/abs/2306.03310)),
 > [SIMPLER](https://github.com/simpler-env/SimplerEnv) in 41
@@ -35,7 +34,7 @@ returned tool results; model wording can vary.
 
 > **You:** How has CIFAR-10 usage changed at ICLR from 2024 to 2026?
 >
-> **BenchTrend:** Its stated evaluation use fell from 94.3 to 64.8 to 38.9
+> **Bench2Agent:** Its stated evaluation use fell from 94.3 to 64.8 to 38.9
 > per 1,000 analysed papers: 178 of 1,888 in 2024, 197 of 3,038 in 2025,
 > and 165 of 4,237 in 2026. The counts use papers with parsed full text;
 > usage in unparsed papers is unknown.
@@ -53,21 +52,22 @@ guarantee a direct data download. Missing links mean no confirmed location.
 
 ### Terminal conversation — macOS / Linux
 
-With Python 3.10+ in your environment, install and start BenchTrend:
+With Python 3.10+ in your environment, install and start Bench2Agent.
+The renamed package is installed from GitHub until its first PyPI release:
 
 ```bash
-python -m pip install benchtrend
-benchtrend
+python -m pip install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+bench2agent
 ```
 
 <details>
 <summary>Alternative: install with uv</summary>
 
-Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md#install-uv):
+Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md#install-uv):
 
 ```bash
-uv tool install benchtrend
-benchtrend
+uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+bench2agent
 ```
 
 </details>
@@ -86,38 +86,46 @@ session. Existing `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` environment variables
 also work. API access uses your provider's API billing, separately from a
 ChatGPT or Claude subscription.
 
-Once installed, just run `benchtrend` to return. No GPU is needed.
-[Windows setup, saved conversations, and data updates](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md).
+Once installed, just run `bench2agent` to return. No GPU is needed.
+[Windows setup, saved conversations, and data updates](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
 ### Use your existing Claude Code or Codex login
 
-BenchTrend can supply the same data to your AI client's conversation through
-MCP. The client handles model access through its own login. BenchTrend's MCP
+Bench2Agent can supply the same data to your AI client's conversation through
+MCP. The client handles model access through its own login. Bench2Agent's MCP
 server needs no separate API key.
 
-After installing BenchTrend, open a conversation in your preferred client.
+After installing Bench2Agent, open a conversation in your preferred client.
 Claude Code or Codex must already be installed and signed in:
 
 | Command | Model access |
 |---|---|
-| `benchtrend` | OpenAI or Anthropic API key, with separate API billing |
-| `benchtrend claude` | Your existing Claude Code login |
-| `benchtrend codex` | Your existing Codex login |
+| `bench2agent` | OpenAI or Anthropic API key, with separate API billing |
+| `bench2agent claude` | Your existing Claude Code login |
+| `bench2agent codex` | Your existing Codex login |
 
 These commands download the data if needed and open a new session with
-BenchTrend tools available. Ask the client to **use BenchTrend** for your
+Bench2Agent tools available. Ask the client to **use Bench2Agent** for your
 benchmark question.
 For a fresh installation using this route, follow the
-[complete MCP setup](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/terminal.md#install-for-claude-code-or-codex).
-Your client writes its answers; BenchTrend's final-answer checks run in the
+[complete MCP setup](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md#install-for-claude-code-or-codex).
+Your client writes its answers; Bench2Agent's final-answer checks run in the
 standalone terminal interface.
+
+## Web service direction
+
+`bench2agent serve` starts the existing local browser interface. A hosted
+conversation service is planned around the same benchmark tools, with a
+relational database, per-user conversations and a separate collection worker.
+See the [database and hosting design](docs/database-and-hosting.md) for the
+terminal, web and future Mac server architecture.
 
 ## Data coverage
 
 The current snapshot covers **28 editions of 10 conferences**, with
 **58,616 parsed paper-edition observations** and **9,332 benchmark and dataset
 entries**. Of those entries, 8,768 have reviewed introduction claims inside
-this corpus ([review rubric](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/introduced-review.md)).
+this corpus ([review rubric](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/introduced-review.md)).
 
 | Venue | Editions | Venue | Editions |
 |---|---|---|---|
@@ -137,22 +145,22 @@ in 2023; it does not establish the first public release. Earlier observed use,
 self-use, use by other authors, and uncertain attribution are recorded
 separately. Recent introductions have less time to accumulate adoption.
 
-BenchTrend is a research prototype. Released snapshots have fixed identities,
+Bench2Agent is a research prototype. Released snapshots have fixed identities,
 and conversations record the snapshot used for their answers.
-[Data rules and tool details](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/benchmark-chat.md).
+[Data rules and tool details](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md).
 
 ## Releases and development
 
-Code and data are released separately. [v0.2.1](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.1)
-is the code — wheel, source distribution and checksums, the same files
-published on [PyPI](https://pypi.org/project/benchtrend/) — and [data-20261007](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-is the snapshot. Update code with `python -m pip install --upgrade benchtrend`
-or `uv tool upgrade benchtrend`, using the method you installed with;
-data updates are a separate `benchtrend data install`. See
-[how releases work](https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/releases.md).
+Code and data are distributed separately. The current Bench2Agent code is
+available from this repository; its first package-index release is pending.
+Earlier code tags retain the installation artifacts published before the
+rename. The [data-20261007 release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
+is the current research snapshot. Update code using the GitHub installation
+command above; data updates use `bench2agent data install`. See
+[how releases work](docs/releases.md).
 
 The earlier paper-reading interface remains available as an evidence surface:
-[browser guide](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/browser.md). Its compatibility command is `bellwether`.
-Paper-view principles are in [docs/paper-view.md](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/docs/paper-view.md).
+[browser guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/browser.md). Start it with `bench2agent serve`.
+Paper-view principles are in [docs/paper-view.md](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/paper-view.md).
 
-BenchTrend's code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/BenchTrend/blob/v0.2.1/LICENSE).
+Bench2Agent's code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE).

@@ -371,7 +371,7 @@ _SSL.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
 
 
 def _get(url: str, headers: dict) -> tuple[int, dict | None]:
-    req = urllib.request.Request(url, headers={"User-Agent": "bellwether/0.1", **headers})
+    req = urllib.request.Request(url, headers={"User-Agent": "bench2agent/0.1", **headers})
     try:
         with urllib.request.urlopen(req, timeout=30, context=_SSL) as r:
             return r.status, json.loads(r.read().decode("utf-8"))

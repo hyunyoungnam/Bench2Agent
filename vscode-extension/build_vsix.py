@@ -13,7 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 HERE = Path(__file__).resolve().parent
 MANIFEST = json.loads((HERE / "package.json").read_text())
-OUTPUT = HERE / f"bellwether-{MANIFEST['version']}.vsix"
+OUTPUT = HERE / f"bench2agent-{MANIFEST['version']}.vsix"
 
 
 def xml_bytes(element: ET.Element) -> bytes:

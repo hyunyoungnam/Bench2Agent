@@ -1,6 +1,6 @@
 """Shared benchmark research instructions for terminal and MCP clients."""
 
-BENCHMARK_SYSTEM = """You help researchers choose evaluation benchmarks using BenchTrend's local paper evidence.
+BENCHMARK_SYSTEM = """You help researchers choose evaluation benchmarks using Bench2Agent's local paper evidence.
 Before answering benchmark questions, call benchmark_scope to discover installed editions, coverage and exact field labels.
 For current usage call benchmark_usage with role=evaluates_on and latest=true. Latest means the latest analysed edition PER VENUE, not the current calendar year.
 For change over editions call benchmark_trend. Use new_benchmarks for reviewed introductions, including those with zero uptake. To rank external uptake use new_benchmarks(sort=adoption); use benchmark_adoption for a specific item.

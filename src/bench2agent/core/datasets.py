@@ -3,7 +3,7 @@ paper's abstract names, and which papers released a dataset or benchmark of
 their own. Read-only over the processed corpus, and nothing here ranks —
 rows come out in corpus order (guardrail 1).
 
-    bellwether datasets [--out DIR] [--gid N] # writes files, prints coverage
+    bench2agent datasets [--out DIR] [--gid N] # writes files, prints coverage
     GET /datasets/benchmarks_used.csv         # the same files, served
     GET /datasets/datasets_released.csv
     GET /datasets/benchmarks_introduced.csv

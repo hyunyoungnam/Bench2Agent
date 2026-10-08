@@ -3,8 +3,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "benchtrend"
-version = "0.2.1"
+name = "bench2agent"
+version = "0.3.0.dev0"
 description = "Ask which benchmarks researchers use, how usage changes, and which new benchmarks are adopted"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,17 +15,14 @@ license-files = ["LICENSE"]
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/hyunyoungnam/BenchTrend"
-Documentation = "https://github.com/hyunyoungnam/BenchTrend/blob/main/docs/terminal.md"
-Issues = "https://github.com/hyunyoungnam/BenchTrend/issues"
-Changelog = "https://github.com/hyunyoungnam/BenchTrend/releases"
+Repository = "https://github.com/hyunyoungnam/Bench2Agent"
+Documentation = "https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md"
+Issues = "https://github.com/hyunyoungnam/Bench2Agent/issues"
+Changelog = "https://github.com/hyunyoungnam/Bench2Agent/releases"
 
 [project.scripts]
-benchtrend = "benchtrend.cli:main"
-# `wnai` stays as a transition alias
-bellwether = "bellwether.cli:main"
-wnai = "bellwether.cli:main"
+bench2agent = "bench2agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["bellwether*", "benchtrend*"]
+include = ["bench2agent*"]

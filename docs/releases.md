@@ -1,104 +1,57 @@
-# BenchTrend releases
+# Bench2Agent releases
 
-A public repository, a code release, a data release, and a package-index
-publication serve different purposes. Making the repository public lets
-people read and install the source; it does not publish all the other parts.
+Bench2Agent distributes application code and research data separately. The
+repository was renamed on 2026-10-08; the local checkout folder does not need
+to change. The current source package is `bench2agent` version `0.3.0.dev0`.
 
 ## Current distribution
 
-As of 2026-10-07:
-
-| Part | Status | What a user gets |
+| Part | Status | Installation or contents |
 |---|---|---|
-| Public GitHub repository | Available | Source code, documentation, and Apache-2.0 license |
-| Code release [`v0.2.1`](https://github.com/hyunyoungnam/BenchTrend/releases/tag/v0.2.1) | Available (2026-10-07) | A fixed code version, installation artifacts, and release notes |
-| Data release `data-20261007` | Available | `benchtrend-data.tar.gz` and its `.sha256` checksum |
-| [PyPI package](https://pypi.org/project/benchtrend/0.2.1/) | Available (0.2.1, 2026-10-07) | Package-name installation; the same verified files as GitHub |
+| [GitHub repository](https://github.com/hyunyoungnam/Bench2Agent) | Available | Source, documentation and Apache-2.0 license |
+| Current renamed application | Source installation | Follow the [terminal guide](terminal.md) |
+| PyPI under the new package name | Pending | Use source installation until publication is announced |
+| [Research data](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007) | Available | Benchmark snapshot, manifest and SHA-256 checksum |
+| Earlier code releases | Preserved | Tagged artifacts retain their original names and package metadata |
 
-The owner authorized publication of 0.2.1 on 2026-10-07 after the code review.
-GitHub and PyPI publication are complete, using the same verified wheel and
-source distribution. All 76 tests, Python 3.10/3.14 CI, package metadata checks,
-fresh installation and real-data MCP checks passed.
-
-The [README](../README.md#get-started) describes the package-name setup for 0.2.1.
-Its first launch installs the existing `data-20261007` snapshot automatically;
-this code release does not require a new data release.
-
-## Code releases
-
-A GitHub code release attaches a name such as `v0.2.0` to a Git tag pointing
-to a particular commit. It gives users a version they can reinstall and
-maintainers a version they can reproduce when investigating a problem.
-It also creates a release page in GitHub's Releases section. Merely adding
-a Releases link to the README does not create a release.
-
-For the first code release, provide:
-
-- `benchtrend-0.2.0-py3-none-any.whl`: the installable Python package.
-- `benchtrend-0.2.0.tar.gz`: the Python source distribution.
-- Checksums for both files.
-- Release notes describing terminal conversations and MCP, supported Python
-  versions, installation commands, and the tested data snapshot.
-
-The wheel contains the code, not the corpus. Users can download it from the
-release page and install it with `uv tool install ./benchtrend-0.2.0-py3-none-any.whl`.
-The first release should describe the project's research-prototype status.
-
-Before publishing, build and install the artifacts in a fresh environment,
-exercise the published data download, and verify an MCP query outside the
-source checkout. Tag the tested commit with the same version recorded in
-`pyproject.toml` and `src/benchtrend/__init__.py`.
+GitHub repository redirects preserve the previous repository address. Earlier
+tags and package-index uploads are immutable historical releases; renaming the
+repository does not rename those packages or change their installed commands.
+The renamed code is installed from the repository until a new release is made.
 
 ## Data releases
 
-Data releases are dated independently from the code. The
-[2026-10-07 release](https://github.com/hyunyoungnam/BenchTrend/releases/tag/data-20261007)
-contains the benchmark snapshot and bundle manifest, plus a checksum file.
-It includes counts, coverage, and paper evidence needed by both conversation
-routes. It does not contain the external benchmarks' underlying test records.
+The `data-20261007` snapshot covers 28 editions and contains benchmark usage,
+coverage and paper evidence. Its Bench2Agent download name is
+`bench2agent-data.tar.gz`. The original asset remains available for existing
+installations; the renamed asset has identical bytes and SHA-256. Renaming
+does not change the snapshot identity or its schema.
 
-Keep the date, snapshot identity, schema version, edition coverage, and
-checksum in the release notes. An installation validates the bundle before
-replacing its current data. A code fix need not require another data download;
-a new corpus snapshot need not require a new code version when its schema is
-compatible. Conversations retain their original snapshot identity.
+`bench2agent data install` uses the release URL and checksum pinned in the
+application. Code updates do not implicitly update installed data. Research
+corpus files and generated bundles remain Git-ignored.
 
-## PyPI publication
+Future database releases will carry a database schema version, dataset revision,
+manifest and checksum. They must reproduce the existing tool results before
+becoming the default download. See [the database and hosting design](database-and-hosting.md).
 
-Publishing the built Python distributions to PyPI makes the package available
-by name; a GitHub release does not do this by itself. `0.2.0` was uploaded with
-`uv publish dist/benchtrend-0.2.0*` — the same two files attached to the
-GitHub release — using a PyPI API token held only in that command's
-environment. The README installs with:
+## Code release checklist
 
-```bash
-uv tool install benchtrend
-```
+1. Choose a release version and set it in `pyproject.toml` and
+   `src/bench2agent/__init__.py`. A development version is not a public release.
+2. Run Python and extension checks, inspect the renamed command and MCP entry,
+   and verify representative queries on the released data.
+3. Build wheel and source artifacts from the tested commit. Record checksums.
+4. Install the wheel into a fresh environment and run `scripts/smoke_terminal.py`
+   outside the checkout. Exercise the public data download and verify its hash.
+5. Tag the tested commit and create a GitHub code release with artifacts,
+   checksums and release notes, linking its tested data revision.
+6. Publish the same artifacts to PyPI with a token authorized for the new
+   project. A token scoped to another package does not authorize this project.
+7. Verify package-index metadata and a fresh package-name installation before
+   switching the README to the short PyPI installation command.
 
-Starting with 0.2.1, the first interactive launch installs missing data
-automatically. `benchtrend data install` remains available for explicit
-installation and data updates. Use a project-scoped token and publish from
-the same verified files attached to the GitHub release.
-
-## Cutting a code release
-
-`v0.2.0` was cut this way, and the next one should be too:
-
-1. Bump the version in `pyproject.toml` and `src/benchtrend/__init__.py`;
-   run the tests.
-2. Commit, then tag that commit: `git tag -a vX.Y.Z -m "..."` and push the
-   tag.
-3. Build from the tagged commit: `uv build` writes the wheel and the source
-   distribution to `dist/`; write `SHA256SUMS` beside them.
-4. Install the wheel into a fresh environment and run
-   `scripts/smoke_terminal.py` with that environment's Python.
-5. `gh release create vX.Y.Z dist/benchtrend-X.Y.Z* dist/SHA256SUMS --title ...
-   --notes-file ...`, linking the data release the code was tested against.
-
-6. `uv publish dist/benchtrend-X.Y.Z*` with a project-scoped PyPI token.
-
-Keep code-version and data-date badges distinct so a data tag is not mistaken
-for a software version.
-
-See GitHub's official [release documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
-and [creating a release guide](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+A new code release is separate from the name change. Historical code assets are
+preserved. GitHub's [repository rename guide](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
+explains redirects; its [release guide](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+explains the relationship between tags and releases.

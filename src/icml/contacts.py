@@ -82,7 +82,7 @@ def main() -> int:
     # because event_id is not a global identity.
     # The richest full-text file each corpus has, and the bridge from arXiv id
     # to event_id where its rows do not carry one. Same table as
-    # bellwether.mcp._FT — a corpus added there needs adding here.
+    # bench2agent.mcp._FT — a corpus added there needs adding here.
     SOURCES = {
         # NOT the HTML pass for ICML 2026: "Correspondence to:" is printed by
         # the ICML LaTeX template, so it survives in the PDF text and not in

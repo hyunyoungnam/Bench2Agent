@@ -2123,7 +2123,7 @@ background:none;cursor:pointer;color:var(--ink2)}
 body.haspanel #cmp{margin-right:max(0px,calc(352px - (100vw - 1266px)/2))}
 @media(max-width:1500px){body.haspanel #cmp{margin-right:0}}
 </style></head><body>
-<a class="home" id="homelink" href="/" hidden><i></i><i></i><i></i>Bellwether</a>
+<a class="home" id="homelink" href="/" hidden><i></i><i></i><i></i>Bench2Agent</a>
 <div class="wrap">
 <header><h1 id="ttl"><span id="ttlx">What's new in AI research</span></h1></header>
 
@@ -3026,7 +3026,7 @@ function landingHTML(){
       ${now?`<div class="vn">${now.n.toLocaleString()} papers</div>`:`<div class="vsoon">not collected yet</div>`}
     </button>`;
   }).join('');
-  // 2026-09-03: /browse is the evidence surface behind the Bellwether chat.
+  // 2026-09-03: /browse is the evidence surface behind the Bench2Agent chat.
   // Briefs were absorbed into published conversations (chat side), so the
   // landing is venue cards + the quiet field index, nothing else.
   return `<div class="venues">${cards}</div>`+allFieldsHTML();
@@ -3554,7 +3554,7 @@ function wireRtr(rt){
         body:JSON.stringify({gids:LAST_SET.map(i=>P[i].i),fmt:el.dataset.ex})});
       if(!r.ok)throw 0;
       const b=await r.blob(), u=URL.createObjectURL(b), a=document.createElement('a');
-      a.href=u; a.download='bellwether-selection.'+el.dataset.ex;
+      a.href=u; a.download='bench2agent-selection.'+el.dataset.ex;
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
       el.textContent=was;
     }catch(e){ el.textContent='not here'; setTimeout(()=>{el.textContent=was;},1400); }

@@ -14,7 +14,7 @@ function expandHome(value) {
 
 function isReadyRoot(root) {
   const required = [
-    "src/bellwether/cli.py",
+    "src/bench2agent/core/cli.py",
     "reports/index.html",
     "reports/chat.html",
     "data/processed/union.json",
@@ -34,14 +34,14 @@ function resolveRoot(configured, workspacePaths = []) {
   if (configured && configured.trim()) {
     const root = path.resolve(expandHome(configured.trim()));
     if (!isReadyRoot(root)) {
-      throw new Error(`Bellwether data or site is missing in ${root}. Check installPath and the processed data bundle.`);
+      throw new Error(`Bench2Agent data or site is missing in ${root}. Check installPath and the processed data bundle.`);
     }
     return root;
   }
-  const candidates = [...workspacePaths, path.join(os.homedir(), ".bellwether")];
+  const candidates = [...workspacePaths, path.join(os.homedir(), ".bench2agent")];
   const root = candidates.find(isReadyRoot);
   if (!root) {
-    throw new Error("No complete Bellwether install found. Install the data bundle or set bellwether.installPath.");
+    throw new Error("No complete Bench2Agent install found. Install the data bundle or set bench2agent.installPath.");
   }
   return root;
 }
@@ -108,7 +108,7 @@ async function stopServer(child) {
 
 async function startServer({ root, python, extraPath = "", useMeilisearch = true, onOutput = () => {} }) {
   const port = await freePort();
-  const args = ["-m", "bellwether", "serve", "--port", String(port)];
+  const args = ["-m", "bench2agent", "serve", "--port", String(port)];
   if (!useMeilisearch) args.push("--no-meili");
   const env = {
     ...process.env,
@@ -137,7 +137,7 @@ async function startServer({ root, python, extraPath = "", useMeilisearch = true
   }
   await stopServer(child);
   const reason = spawnError?.message || failure.trim() || "The server did not become ready within 30 seconds.";
-  throw new Error(`Could not start Bellwether: ${reason}`);
+  throw new Error(`Could not start Bench2Agent: ${reason}`);
 }
 
 module.exports = { isReadyRoot, resolveRoot, resolvePython, startServer, stopServer };

@@ -24,10 +24,10 @@ function get(port, pathname) {
 }
 
 test("selects a complete install and rejects a missing bundle", () => {
-  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "bellwether-extension-"));
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "bench2agent-extension-"));
   try {
     for (const file of [
-      "src/bellwether/cli.py", "reports/index.html", "reports/chat.html",
+      "src/bench2agent/core/cli.py", "reports/index.html", "reports/chat.html",
       "data/processed/union.json", "data/processed/card_terms.json",
       "data/processed/resources.json", "data/processed/papers.jsonl"
     ]) {

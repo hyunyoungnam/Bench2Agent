@@ -37,7 +37,7 @@ completed in this investigation: the terminal API request was blocked by the
 network sandbox and its escalation was interrupted. Do not report it as a
 successful conversion test.
 
-## Gaps in Bellwether's current data
+## Gaps in Bench2Agent's current data
 
 - `card_terms.json` supplies abstract dataset names, not evaluation split,
   revision or sample IDs. Mention does not establish experimental use. For

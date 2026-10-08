@@ -1,32 +1,32 @@
 #!/usr/bin/env bash
 # One-line install for Linux / macOS / Windows-via-WSL:
 #
-#   curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/BenchTrend/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/hyunyoungnam/Bench2Agent/main/install.sh | bash
 #
 # While the repo is PRIVATE that URL is a 404 for everyone; a collaborator
 # with the gh CLI signed in (gh auth login) runs instead:
 #
-#   gh api repos/hyunyoungnam/BenchTrend/contents/install.sh --jq .content | base64 -d | bash
+#   gh api repos/hyunyoungnam/Bench2Agent/contents/install.sh --jq .content | base64 -d | bash
 #
-# and the clone below goes through gh's credentials. WNAI_RELEASE=<tag> then
-# fetches that release's bundle the same way (WNAI_BUNDLE is for a public
+# and the clone below goes through gh's credentials. BENCH2AGENT_RELEASE=<tag> then
+# fetches that release's bundle the same way (BENCH2AGENT_BUNDLE is for a public
 # URL or a local file).
 #
-# What it does: clone the repo to ~/.bellwether, create a private venv (PEP 668
-# machines refuse bare pip), install the `bellwether` command onto PATH, fetch the
-# search-engine binary and keys. If WNAI_BUNDLE (a file path or URL) is set,
-# the data bundle is fetched too — otherwise `bellwether fetch-data` is the one step
-# left before `bellwether serve`.
+# What it does: clone the repo to ~/.bench2agent, create a private venv (PEP 668
+# machines refuse bare pip), install the `bench2agent` command onto PATH, fetch the
+# search-engine binary and keys. If BENCH2AGENT_BUNDLE (a file path or URL) is set,
+# the data bundle is fetched too — otherwise `bench2agent fetch-data` is the one step
+# left before `bench2agent serve`.
 #
-# Overrides, mainly for testing: WNAI_HOME (install dir), WNAI_REPO (clone
-# source), WNAI_BIN (where the wnai symlink goes).
+# Overrides, mainly for testing: BENCH2AGENT_HOME (install dir), BENCH2AGENT_REPO (clone
+# source), BENCH2AGENT_BIN (where the bench2agent symlink goes).
 set -euo pipefail
 
-REPO="${WNAI_REPO:-https://github.com/hyunyoungnam/BenchTrend}"
+REPO="${BENCH2AGENT_REPO:-https://github.com/hyunyoungnam/Bench2Agent}"
 # an app dir, not a workspace: hidden by default, like other installed tools.
 # Everything inside stays inspectable — the data being auditable is a feature.
-DIR="${WNAI_HOME:-$HOME/.bellwether}"
-BIN="${WNAI_BIN:-$HOME/.local/bin}"
+DIR="${BENCH2AGENT_HOME:-$HOME/.bench2agent}"
+BIN="${BENCH2AGENT_BIN:-$HOME/.local/bin}"
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 
@@ -62,27 +62,27 @@ fi
 "$DIR/.venv-serve/bin/pip" install -q -e "$DIR"
 
 mkdir -p "$BIN"
-ln -sf "$DIR/.venv-serve/bin/bellwether" "$BIN/bellwether"
+ln -sf "$DIR/.venv-serve/bin/bench2agent" "$BIN/bench2agent"
 case ":$PATH:" in
     *":$BIN:"*) ;;
     *) echo "note: $BIN is not on PATH yet — open a new terminal (or:"
-       echo "      source ~/.profile) — until then, use $BIN/bellwether";;
+       echo "      source ~/.profile) — until then, use $BIN/bench2agent";;
 esac
 
 say "fetching the search engine + keys"
-"$BIN/bellwether" setup
+"$BIN/bench2agent" setup
 
-if [ -n "${WNAI_RELEASE:-}" ]; then
-    say "fetching the data bundle (release $WNAI_RELEASE, via gh)"
-    "$BIN/bellwether" fetch-data --release "$WNAI_RELEASE"
-    say "done — run: bellwether serve"
-elif [ -n "${WNAI_BUNDLE:-}" ]; then
+if [ -n "${BENCH2AGENT_RELEASE:-}" ]; then
+    say "fetching the data bundle (release $BENCH2AGENT_RELEASE, via gh)"
+    "$BIN/bench2agent" fetch-data --release "$BENCH2AGENT_RELEASE"
+    say "done — run: bench2agent serve"
+elif [ -n "${BENCH2AGENT_BUNDLE:-}" ]; then
     say "fetching the data bundle"
-    case "$WNAI_BUNDLE" in
-        http*) "$BIN/bellwether" fetch-data --url "$WNAI_BUNDLE";;
-        *)     "$BIN/bellwether" fetch-data --file "$WNAI_BUNDLE";;
+    case "$BENCH2AGENT_BUNDLE" in
+        http*) "$BIN/bench2agent" fetch-data --url "$BENCH2AGENT_BUNDLE";;
+        *)     "$BIN/bench2agent" fetch-data --file "$BENCH2AGENT_BUNDLE";;
     esac
-    say "done — run: bellwether serve"
+    say "done — run: bench2agent serve"
 else
-    say "done — next: bellwether fetch-data --file <bundle.tar.gz>   then: bellwether serve"
+    say "done — next: bench2agent fetch-data --file <bundle.tar.gz>   then: bench2agent serve"
 fi

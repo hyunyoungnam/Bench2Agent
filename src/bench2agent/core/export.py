@@ -192,7 +192,7 @@ def conversation(doc: dict, store: Store | None = None) -> dict:
         "identifier": doc.get("id"),
         "dateCreated": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                      time.gmtime(doc.get("ts") or 0)),
-        "generator": {"name": "Bellwether", "agent": doc.get("agent")},
+        "generator": {"name": "Bench2Agent", "agent": doc.get("agent")},
         "corpus": _corpus_stamp(store),
         "turns": turns,
         "citations": cites,
@@ -215,7 +215,7 @@ def conversation(doc: dict, store: Store | None = None) -> dict:
 def conversation_md(doc: dict, store: Store | None = None) -> str:
     b = conversation(doc, store)
     out = [f"# {b['name']}", "",
-           f"{b['dateCreated']} · Bellwether · agent: {b['generator']['agent']}",
+           f"{b['dateCreated']} · Bench2Agent · agent: {b['generator']['agent']}",
            ""]
     for t in b["turns"]:
         out += [f"## {t['question']}", "", t["answer"], ""]

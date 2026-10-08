@@ -2,7 +2,7 @@
 
 This is the OpenResearch-shaped frame with our difference inside it: the
 installed agent CLI runs headless using credentials managed by that CLI,
-with the bellwether MCP tools, and every
+with the bench2agent MCP tools, and every
 factual sentence it writes must carry an anchor `⟦gid|exact quote⟧`. The
 server verifies each anchor against the locally held corpus BEFORE the
 browser shows it, so the reader sees, per citation, whether the quote really
@@ -30,7 +30,7 @@ from .paths import ROOT, agent_environment
 CHAT_DIR = ROOT / "data" / "chats"
 
 SYSTEM = (
-    "You help researchers choose evaluation benchmarks using Bellwether's local paper evidence. "
+    "You help researchers choose evaluation benchmarks using Bench2Agent's local paper evidence. "
     "BENCHMARK QUESTIONS: first call benchmark_scope to discover installed editions, coverage and field labels. "
     "For what people evaluate on now, use benchmark_usage with evaluates_on, latest=true and an exact field label. "
     "For trends use benchmark_trend, for introductions use new_benchmarks, and for uptake use benchmark_adoption. "
@@ -53,7 +53,7 @@ SYSTEM = (
     "For numbers from benchmark tools, use ⟦benchmark_usage:{\"topic\":\"robotics\"}|figures⟧ with the complete "
     "JSON arguments of that call (including role, venue, years and latest when supplied). "
     "Only call evidence tools; do not modify files, execute shell commands or browse independently. "
-    "Evidence comes ONLY from the bellwether MCP tools; never answer "
+    "Evidence comes ONLY from the bench2agent MCP tools; never answer "
     "about papers from memory. METHOD for field-level questions (what is "
     "rising, what is new this year, where are the gaps): read the field in "
     "bulk with field_cards, get computed shares from field_trend, then derive "
@@ -108,8 +108,8 @@ _ANCHOR = re.compile(
 
 
 def _mcp_config() -> str:
-    return json.dumps({"mcpServers": {"bellwether": {
-        "command": sys.executable, "args": ["-m", "bellwether", "mcp"],
+    return json.dumps({"mcpServers": {"bench2agent": {
+        "command": sys.executable, "args": ["-m", "bench2agent.core", "mcp"],
         "env": agent_environment()}}})
 
 
@@ -117,7 +117,7 @@ def ask(message: str, sid: str | None = None, timeout: int = 300) -> dict:
     cmd = ["claude", "-p", message, "--output-format", "json",
            "--max-turns", "12",
            "--mcp-config", _mcp_config(), "--strict-mcp-config",
-           "--allowedTools", "mcp__bellwether",
+           "--allowedTools", "mcp__bench2agent",
            "--append-system-prompt", SYSTEM]
     if sid:
         cmd += ["--resume", sid]
@@ -293,10 +293,10 @@ def agents() -> dict:
 
 def _codex_config_args() -> list[str]:
     # Per-process overrides preserve the user's global MCP configuration.
-    values = {"mcp_servers.bellwether.command": sys.executable,
-              "mcp_servers.bellwether.args": ["-m", "bellwether", "mcp"],
-              "mcp_servers.bellwether.env": agent_environment(),
-              "mcp_servers.bellwether.default_tools_approval_mode": "writes",
+    values = {"mcp_servers.bench2agent.command": sys.executable,
+              "mcp_servers.bench2agent.args": ["-m", "bench2agent.core", "mcp"],
+              "mcp_servers.bench2agent.env": agent_environment(),
+              "mcp_servers.bench2agent.default_tools_approval_mode": "writes",
               "sandbox_mode": "read-only"}
     args = []
     for key, value in values.items():
@@ -394,7 +394,7 @@ def translate_chat(cid: str, lang: str = "ko") -> dict:
     if lang != "ko":
         return {"error": f"no renderer for {lang}"}
     if not translate.enabled():
-        return {"error": "korean rendering is off (WNAI_KO=1 turns it on)"}
+        return {"error": "korean rendering is off (BENCH2AGENT_KO=1 turns it on)"}
     if not translate.up():
         return {"error": "no translation engine", "engine": translate.ENDPOINT}
     p2 = _doc_path(cid)
@@ -500,7 +500,7 @@ def stream(body: dict, emit) -> None:
                "--include-partial-messages",
                "--max-turns", "12",
                "--mcp-config", _mcp_config(), "--strict-mcp-config",
-               "--allowedTools", "mcp__bellwether",
+               "--allowedTools", "mcp__bench2agent",
                "--append-system-prompt", system]
         if sid:
             cmd += ["--resume", sid]
@@ -582,7 +582,7 @@ def stream(body: dict, emit) -> None:
                             # only corpus tools make the visible trail —
                             # harness plumbing is noise to the reader
                             if c.get("type") == "tool_use" \
-                                    and c["name"].startswith("mcp__bellwether__"):
+                                    and c["name"].startswith("mcp__bench2agent__"):
                                 _tool_event(c["name"].split("__")[-1],
                                             c.get("input") or {})
                     elif ev.get("type") == "result":

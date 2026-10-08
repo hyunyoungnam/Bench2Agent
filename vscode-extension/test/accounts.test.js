@@ -33,11 +33,11 @@ test("account commands launch only the official CLI; iframe bridge rejects other
   vm.runInNewContext(source, { module, require: name => name === "vscode" ? vscode :
     name === "./runtime" ? runtime : require(name), process, URL });
   module.exports.activate({ subscriptions });
-  await commands.get("bellwether.connectOpenAI")();
-  await commands.get("bellwether.connectClaude")();
+  await commands.get("bench2agent.connectOpenAI")();
+  await commands.get("bench2agent.connectClaude")();
   assert.deepEqual(sent.map(x => x.value), ["codex login --device-auth", "claude auth login"]);
   assert.equal(sent[0].opts.cwd, "/install");
-  await commands.get("bellwether.openChat")();
+  await commands.get("bench2agent.openChat")();
   assert.match(panel.webview.html, /script-src 'nonce-/);
   const script = panel.webview.html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)[1];
   const frame = { contentWindow: {}, src: "http://127.0.0.1:9876/" }, messages = [];
@@ -48,7 +48,7 @@ test("account commands launch only the official CLI; iframe bridge rejects other
     window: { addEventListener: (_name, fn) => { listener = fn; } }, URL
   });
   const event = { source: frame.contentWindow, origin: "http://127.0.0.1:9876",
-    data: { type: "bellwether.connect", provider: "codex" } };
+    data: { type: "bench2agent.connect", provider: "codex" } };
   listener({ ...event, origin: "https://another.example" });
   listener({ ...event, source: {} });
   listener({ ...event, data: { ...event.data, provider: "arbitrary shell command" } });

@@ -36,7 +36,7 @@ from .common import INTERIM, PROCESSED, dump_json, load_json, read_jsonl
 from pathlib import Path
 
 CACHE = INTERIM / "ids_cache.jsonl"
-UA = {"User-Agent": "bellwether/1.0 (corpus id mapping; local research tool)"}
+UA = {"User-Agent": "bench2agent/1.0 (corpus id mapping; local research tool)"}
 
 _RESOLVED = {
     "icml-2026": "resolved.jsonl",

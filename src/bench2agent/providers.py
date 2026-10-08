@@ -25,13 +25,13 @@ class ProviderError(RuntimeError):
 def post(provider: str, path: str, payload: dict) -> dict:
     key = os.environ.get(KEY_NAMES[provider], "")
     if not key:
-        raise ProviderError(f"Set {KEY_NAMES[provider]} or run benchtrend init.")
-    base = os.environ.get("BENCHTREND_" + provider.upper() + "_BASE_URL", ENDPOINTS[provider]).rstrip("/")
+        raise ProviderError(f"Set {KEY_NAMES[provider]} or run bench2agent init.")
+    base = os.environ.get("BENCH2AGENT_" + provider.upper() + "_BASE_URL", ENDPOINTS[provider]).rstrip("/")
     parsed = urllib.parse.urlsplit(base)
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
         raise ProviderError("Model endpoint must use HTTPS (HTTP is allowed for localhost).")
     from . import __version__
-    headers = {"Content-Type": "application/json", "User-Agent": "BenchTrend/" + __version__}
+    headers = {"Content-Type": "application/json", "User-Agent": "Bench2Agent/" + __version__}
     if provider == "openai":
         headers["Authorization"] = "Bearer " + key
     else:
@@ -56,13 +56,13 @@ def post(provider: str, path: str, payload: dict) -> dict:
 
 
 def tool_specs() -> list[dict]:
-    from bellwether.mcp import _benchmark_tools
+    from bench2agent.core.mcp import _benchmark_tools
     # Resolve bound methods for each new turn (also used by MCP tools/list).
     return _benchmark_tools()
 
 
 def call_tool(name: str, arguments, trail: list, emit) -> dict:
-    from bellwether.mcp import execute_tool
+    from bench2agent.core.mcp import execute_tool
     emit({"t": "tool", "name": name, "arguments": arguments})
     trail.append({"name": name, "arg": json.dumps(arguments, sort_keys=True, ensure_ascii=False)})
     return execute_tool(name, arguments, tools=tool_specs())

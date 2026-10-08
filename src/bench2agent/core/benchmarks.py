@@ -282,7 +282,7 @@ class BenchmarkStore:
         if stamp != self._stamp:
             data = read_json(path)
             if data.get("schema_version") != 1 or data.get("source") != "arxiv_html_stated_roles":
-                raise ValueError("Unsupported benchmark snapshot; rebuild with bellwether benchmarks")
+                raise ValueError("Unsupported benchmark snapshot; rebuild with bench2agent benchmarks")
             self._data, self._stamp = {**data, "available": True}, stamp
         return self._data
 
@@ -355,7 +355,7 @@ class BenchmarkStore:
     def _require(self, data: dict) -> dict | None:
         if not data["available"]:
             return {**self._base(data), "error": "Full-text benchmark usage snapshot is not installed. "
-                    "After extraction and identity review, run bellwether benchmarks on the build machine "
+                    "After extraction and identity review, run bench2agent benchmarks on the build machine "
                     "and distribute the data bundle. Abstract mentions are not a fallback."}
         return None
 
