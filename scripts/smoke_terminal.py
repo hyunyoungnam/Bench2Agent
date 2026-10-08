@@ -59,7 +59,15 @@ def main():
         usage = json.loads(response[2]["result"]["content"][0]["text"])
         assert usage["results"][0]["papers"] == 1
         assert usage["coverage"]["parsed_papers"] == 1
-        print("Installed wheel: version, external data, MCP configuration and benchmark tools passed.")
+        previous = root / "previous/data/benchtrend/chats"
+        previous.mkdir(parents=True)
+        (previous / "012345abcdef.json").write_text(json.dumps({
+            "id": "012345abcdef", "title": "Preserved conversation", "provider": "openai",
+            "model": "saved-model", "ts": 1}), encoding="utf-8")
+        migrated = json.loads(run(["migrate", "--from", str(root / "previous")]))
+        assert migrated["chats_copied"] == 1
+        assert "Preserved conversation" in run(["chats"])
+        print("Installed wheel: version, external data, MCP tools and migration passed.")
 
 
 if __name__ == "__main__":

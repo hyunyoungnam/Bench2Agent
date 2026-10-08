@@ -2,22 +2,25 @@
 
 Bench2Agent distributes application code and research data separately. The
 repository was renamed on 2026-10-08; the local checkout folder does not need
-to change. The current source package is `bench2agent` version `0.3.0.dev0`.
+to change. The released package is `bench2agent` version `0.3.0`.
 
 ## Current distribution
 
 | Part | Status | Installation or contents |
 |---|---|---|
 | [GitHub repository](https://github.com/hyunyoungnam/Bench2Agent) | Available | Source, documentation and Apache-2.0 license |
-| Current renamed application | Source installation | Follow the [terminal guide](terminal.md) |
-| PyPI under the new package name | Pending | Use source installation until publication is announced |
+| [Code release v0.3.0](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.3.0) | Available | Wheel, source archive, checksums and release notes |
+| [PyPI package](https://pypi.org/project/bench2agent/0.3.0/) | Available | `pip install bench2agent` or `uv tool install bench2agent` |
 | [Research data](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007) | Available | Benchmark snapshot, manifest and SHA-256 checksum |
 | Earlier code releases | Preserved | Tagged artifacts retain their original names and package metadata |
 
 GitHub repository redirects preserve the previous repository address. Earlier
 tags and package-index uploads are immutable historical releases; renaming the
 repository does not rename those packages or change their installed commands.
-The renamed code is installed from the repository until a new release is made.
+Existing users install the new package and follow the
+[migration guide](terminal.md#switch-from-an-earlier-installation) to retain
+their research snapshot, settings and conversations. The old package remains
+available; upgrading it does not automatically migrate to the new project.
 
 ## Data releases
 

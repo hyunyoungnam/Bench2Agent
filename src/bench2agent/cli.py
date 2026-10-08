@@ -188,6 +188,12 @@ def cmd_data(args, root: Path) -> int:
     return 0
 
 
+def cmd_migrate(args, root: Path) -> int:
+    from .migration import migrate
+    print(json.dumps(migrate(root, Path(args.source)), ensure_ascii=False, indent=2))
+    return 0
+
+
 def print_chats(root: Path):
     rows = conversations(root)
     for row in rows:
@@ -439,6 +445,10 @@ def main(argv=None) -> int:
     chats = commands.add_parser("chats", help="list saved conversations")
     common_options(chats, child=True)
     chats.set_defaults(fn=lambda args, root: print_chats(root) or 0)
+    migration = commands.add_parser("migrate", help="copy data and saved chats from a previous installation")
+    common_options(migration, child=True)
+    migration.add_argument("--from", dest="source", required=True, metavar="DIR", help="previous runtime data directory")
+    migration.set_defaults(fn=cmd_migrate)
     data = commands.add_parser("data", help="install, inspect or bundle benchmark data")
     common_options(data, child=True)
     actions = data.add_subparsers(dest="action", required=True)

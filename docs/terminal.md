@@ -5,8 +5,7 @@ editions, and which newly introduced benchmarks other researchers adopt.
 Answers carry computed counts, dataset coverage and original paper evidence.
 Usage frequency describes adoption; it does not measure benchmark quality.
 
-Python 3.10+ is required. These commands describe the current Bench2Agent
-source version. Its first PyPI release is pending.
+Python 3.10+ is required. These commands describe Bench2Agent 0.3.0, available on PyPI.
 The runtime uses only Python's standard library;
 no GPU, search engine, VS Code extension or extraction pipeline is needed.
 
@@ -17,18 +16,18 @@ the terminal conversation, use the [README quick start](../README.md#get-started
 For an existing AI client login, use the
 [complete MCP setup](#install-for-claude-code-or-codex) below.
 
-Install from GitHub using **one** of the following methods. With Python 3.10+
+Install using **one** of the following methods. With Python 3.10+
 in your environment:
 
 ```bash
-python -m pip install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+python -m pip install bench2agent
 bench2agent
 ```
 
 Or, with [uv installed](#install-uv):
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+uv tool install bench2agent
 bench2agent
 ```
 
@@ -44,7 +43,7 @@ already exist". Add `--force`; the installed package provides the same
 An installable wheel can be shared without the source checkout:
 
 ```bash
-uv tool install ./bench2agent-0.3.0.dev0-py3-none-any.whl
+uv tool install ./bench2agent-0.3.0-py3-none-any.whl
 ```
 
 The wheel includes code, not the research corpus. It runs from any working
@@ -54,10 +53,8 @@ Set `BENCH2AGENT_HOME` or pass
 `--home DIR` to choose a different data directory. Code updates preserve data
 and conversations.
 
-To update a source installation, use the same URL with
-`python -m pip install --upgrade --force-reinstall URL`, or
-`uv tool install --force URL`, replacing `URL` with the GitHub source URL above.
-Package-name installation will be documented after a PyPI release.
+Update with `uv tool upgrade bench2agent` or
+`python -m pip install --upgrade bench2agent`, matching your installation method.
 
 ### Install uv
 
@@ -84,7 +81,7 @@ package and starts Bench2Agent. The first launch downloads and checks its data.
 Choose the provider and model at the prompt, then enter a hidden API key.
 
 ```powershell
-uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+uv tool install bench2agent
 if ($LASTEXITCODE -eq 0) { bench2agent }
 ```
 
@@ -98,19 +95,52 @@ Ask the client to use Bench2Agent for benchmark questions.
 For Codex:
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+uv tool install bench2agent
 bench2agent codex
 ```
 
 For Claude Code:
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+uv tool install bench2agent
 bench2agent claude
 ```
 
 On Windows, use `if ($LASTEXITCODE -eq 0) { bench2agent codex }` or
 `if ($LASTEXITCODE -eq 0) { bench2agent claude }` after the install command.
+
+## Switch from an earlier installation
+
+The former `benchtrend` PyPI package remains available, but its updates do not
+automatically install the renamed application. Install `bench2agent` using the
+pip or uv method above. Run `benchtrend status` to find the previous data home,
+then copy its snapshot, model settings and saved conversations:
+
+```bash
+bench2agent migrate --from /path/to/previous/data-home
+bench2agent data status
+bench2agent chats
+```
+
+Typical previous homes are `~/.benchtrend` or `~/.bellwether`. The migration
+leaves the original files intact and skips existing destination files. It
+preserves conversation IDs and their snapshot identities, and does not copy
+API keys, raw papers or the full browser corpus. A source checkout keeps its
+existing folder name; the same command can copy its earlier chat directory.
+
+Reconnect an existing MCP registration under the new server name:
+
+```bash
+bench2agent mcp --connect claude
+# Or, for Codex:
+bench2agent mcp --connect codex
+```
+
+Restart the client afterward. The old `benchtrend` MCP registration can be
+removed with the client's `mcp remove benchtrend` command once the new server
+works. If the older tool was installed with uv, `uv tool uninstall benchtrend`
+removes its old commands after migration; with pip, use
+`python -m pip uninstall benchtrend`. Neither command removes the saved data.
 
 ## Install benchmark data
 
@@ -283,7 +313,7 @@ independent terminal is separate from ChatGPT/Claude subscription login.
 ## Build a release
 
 For development, install from a local checkout with `uv tool install .` or
-`python -m pip install .`. To install the current source version without PyPI:
+`python -m pip install .`. To install development code directly from GitHub:
 
 ```bash
 python -m pip install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
@@ -295,7 +325,7 @@ Code versions, data snapshots, and PyPI publication are explained in the
 ```bash
 python -m pip install build
 python -m build
-python -m pip install dist/bench2agent-0.3.0.dev0-py3-none-any.whl
+python -m pip install dist/bench2agent-0.3.0-py3-none-any.whl
 ```
 
 The CI workflow tests Python 3.10 and 3.14, builds distribution artifacts,

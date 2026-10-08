@@ -51,3 +51,7 @@ data/interim/mentions/
 /docs/blue-ocean-eval-*.md
 /docs/harness-comparison-*.md
 /scripts/eval/
+
+# Downloaded research papers stay local.
+/source/paper/
+/source/papers/

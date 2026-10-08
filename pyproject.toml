@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bench2agent"
-version = "0.3.0.dev0"
+version = "0.3.0"
 description = "Ask which benchmarks researchers use, how usage changes, and which new benchmarks are adopted"
 readme = "README.md"
 requires-python = ">=3.10"

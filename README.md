@@ -1,6 +1,7 @@
 # Bench2Agent
 
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/Bench2Agent?filter=v*&label=release)](https://github.com/hyunyoungnam/Bench2Agent/releases)
+[![PyPI](https://img.shields.io/pypi/v/bench2agent)](https://pypi.org/project/bench2agent/)
 [![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md)
@@ -53,10 +54,10 @@ guarantee a direct data download. Missing links mean no confirmed location.
 ### Terminal conversation — macOS / Linux
 
 With Python 3.10+ in your environment, install and start Bench2Agent.
-The renamed package is installed from GitHub until its first PyPI release:
+Choose pip or the uv alternative below:
 
 ```bash
-python -m pip install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+python -m pip install bench2agent
 bench2agent
 ```
 
@@ -66,7 +67,7 @@ bench2agent
 Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md#install-uv):
 
 ```bash
-uv tool install https://github.com/hyunyoungnam/Bench2Agent/archive/refs/heads/main.tar.gz
+uv tool install bench2agent
 bench2agent
 ```
 
@@ -151,12 +152,15 @@ and conversations record the snapshot used for their answers.
 
 ## Releases and development
 
-Code and data are distributed separately. The current Bench2Agent code is
-available from this repository; its first package-index release is pending.
+Code and data are distributed separately. Bench2Agent 0.3.0 is available on
+[PyPI](https://pypi.org/project/bench2agent/0.3.0/) and as a
+[GitHub release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.3.0).
 Earlier code tags retain the installation artifacts published before the
 rename. The [data-20261007 release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
-is the current research snapshot. Update code using the GitHub installation
-command above; data updates use `bench2agent data install`. See
+is the current research snapshot. Update code with `uv tool upgrade bench2agent`
+or `python -m pip install --upgrade bench2agent`; data updates use
+`bench2agent data install`. Existing users can follow the
+[migration guide](docs/terminal.md#switch-from-an-earlier-installation). See
 [how releases work](docs/releases.md).
 
 The earlier paper-reading interface remains available as an evidence surface:
