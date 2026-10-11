@@ -199,9 +199,22 @@ Collection and model-call logs remain distinct from user-visible evidence.
 
 1. Import the present JSON snapshot into normalized SQLite tables without
    losing existing IDs, claims, evidence, unresolved mentions or coverage.
+   **Done (2026-10-12):** `bench2agent data sqlite`, `core/repository.py`.
+   The import reads back as the identical snapshot before it replaces the
+   previous file; `meta` keeps `snapshot_id` (the extraction), `db_schema_version`
+   (this layout) and `source_sha256` apart, and the file's own checksum is
+   written beside it. Evidence rows are kept one per occurrence for now; the
+   many-to-many `use_evidence` deduplication waits for revisions that carry
+   evidence identities.
 2. Add the repository interface and SQLite adapter; compare every existing
    tool result against the JSON implementation, including homonyms, unknown
    authors, zero adoption and duplicate paper membership.
+   **Done (2026-10-12):** `BenchmarkStore` computes every rule once over
+   `JsonRepository` or `SqliteRepository`; `BENCH2AGENT_STORE` selects the
+   backend and JSON remains the default. Parity is checked on fixtures
+   (`tests/test_repository.py`) and on the released snapshot
+   (`scripts/parity_check.py`: all tool calls identical; robotics 509 /
+   LIBERO 80, SIMPLER 41, Meta-World 29; ICLR CIFAR-10 178, 197, 165).
 3. Add incremental edition ingestion and immutable data revisions. Verify
    rollback, repeat imports and saved-answer reproducibility.
 4. Build the hosted conversation API and browser shell, with isolated user

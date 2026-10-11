@@ -182,6 +182,8 @@ def cmd_data(args, root: Path) -> int:
         result = data.status(root)
     elif args.action == "install":
         result = data.install(root, file=args.file, url=args.url, sha256=args.sha256)
+    elif args.action == "sqlite":
+        result = data.build_sqlite(root)
     else:
         result = data.bundle(root, Path(args.out))
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -463,6 +465,8 @@ def main(argv=None) -> int:
     bundle = actions.add_parser("bundle")
     common_options(bundle, child=True)
     bundle.add_argument("--out", required=True)
+    sqlite = actions.add_parser("sqlite", help="import the installed snapshot into a SQLite file beside it")
+    common_options(sqlite, child=True)
     data.set_defaults(fn=cmd_data)
     mcp = commands.add_parser("mcp", help="serve read-only tools or connect an existing AI client")
     common_options(mcp, child=True)

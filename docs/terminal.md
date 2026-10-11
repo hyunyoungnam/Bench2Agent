@@ -157,6 +157,16 @@ bench2agent data install --file ./bench2agent-data.tar.gz
 bench2agent data status
 ```
 
+`bench2agent data sqlite` imports the installed snapshot into
+`benchmark_snapshot.sqlite` beside it and writes a `.sha256` file. The import
+builds a temporary file and replaces the old database only after reading it
+back as the identical snapshot, so a failed import keeps what was there.
+`bench2agent data status` reports both files and whether their snapshot ids
+agree. Queries read the JSON snapshot unless `BENCH2AGENT_STORE=sqlite` (or
+`auto`, which prefers the SQLite file when it exists); both backends return
+the same results and are checked against each other in the test suite and
+by `scripts/parity_check.py`.
+
 `--file` also accepts the exported `benchmark_snapshot.json`. The bundle
 manifest verifies its snapshot checksum; `--sha256` additionally verifies the
 entire download. Installation validates schema and stages an atomic replacement.

@@ -17,7 +17,8 @@ import unicodedata
 from pathlib import Path
 
 from .paths import ROOT
-SNAPSHOT = "benchmark_snapshot.json"
+from .repository import (BACKENDS, DATABASE, DB_SCHEMA_VERSION, SNAPSHOT, SOURCE, JsonRepository,
+                         SqliteRepository, validate_snapshot)
 ROLES = ("evaluates_on", "trains_on")
 # Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
 # a Hub dataset id or a GitHub repo, shown only when it answered the API at
@@ -268,23 +269,49 @@ def build_snapshot(root: Path = ROOT, out: Path | None = None) -> dict:
 
 
 class BenchmarkStore:
-    def __init__(self, root: Path = ROOT):
+    """The six tools. Every rule lives here, once; storage is a repository
+    (`core.repository`) chosen by `backend`: "json" (the reference snapshot),
+    "sqlite" (the imported file), or "auto" (sqlite when it exists). The
+    default comes from BENCH2AGENT_STORE and is json until parity is shown."""
+
+    def __init__(self, root: Path = ROOT, backend: str | None = None):
         self.root = root
+        self.backend = backend or os.environ.get("BENCH2AGENT_STORE", "json")
+        if self.backend not in BACKENDS:
+            raise ValueError("BENCH2AGENT_STORE must be json, sqlite or auto")
         self._stamp = None
-        self._data = None
+        self._repo = None
+
+    def repo(self):
+        json_path = self.root / "data/processed" / SNAPSHOT
+        db_path = json_path.with_name(DATABASE)
+        use_db = self.backend == "sqlite" or (self.backend == "auto" and db_path.exists())
+        path = db_path if use_db else json_path
+        if not path.exists():
+            if self._stamp != ("missing", path):
+                reason = ("SQLite database is not built; run bench2agent data sqlite." if use_db else None)
+                self._repo = JsonRepository({"source": SOURCE, "benchmarks": catalogue(self.root), "papers": [],
+                                             "editions": {}, "reason": reason}, available=False)
+                self._stamp = ("missing", path)
+            return self._repo
+        stamp = (path, path.stat().st_mtime_ns, path.stat().st_size)
+        if stamp != self._stamp:
+            if use_db:
+                repo = SqliteRepository(path)
+                if repo.meta().get("db_schema_version") != DB_SCHEMA_VERSION or repo.meta().get("source") != SOURCE:
+                    raise ValueError("Unsupported benchmark database; rebuild with bench2agent data sqlite")
+            else:
+                data = read_json(path)
+                if data.get("schema_version") != 1 or data.get("source") != SOURCE:
+                    raise ValueError("Unsupported benchmark snapshot; rebuild with bench2agent benchmarks")
+                repo = JsonRepository(data)
+            self._repo, self._stamp = repo, stamp
+        return self._repo
 
     def data(self) -> dict:
-        path = self.root / "data/processed" / SNAPSHOT
-        if not path.exists():
-            return {"source": "arxiv_html_stated_roles", "available": False,
-                    "benchmarks": catalogue(self.root), "papers": [], "editions": {}}
-        stamp = (path.stat().st_mtime_ns, path.stat().st_size)
-        if stamp != self._stamp:
-            data = read_json(path)
-            if data.get("schema_version") != 1 or data.get("source") != "arxiv_html_stated_roles":
-                raise ValueError("Unsupported benchmark snapshot; rebuild with bench2agent benchmarks")
-            self._data, self._stamp = {**data, "available": True}, stamp
-        return self._data
+        """What the store is answering from: identity plus the catalogue."""
+        repo = self.repo()
+        return {**repo.meta(), "benchmarks": repo.benchmarks(), "editions": repo.editions()}
 
     def _base(self, data: dict) -> dict:
         return {k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")}
@@ -305,16 +332,17 @@ class BenchmarkStore:
 
     def scope(self, a: dict) -> dict:
         data = self.data()
-        fields = collections.Counter(f for p in data["papers"] for f in {s.casefold() for s in p.get("fields", [])})
+        fields = self.repo().field_counts()
         query = (a.get("query") or "").casefold()
         return {**self._base(data), "editions": data["editions"],
-                "fields": [{"name": f, "parsed_papers": n} for f, n in fields.most_common()
+                # ties ordered by name, so both backends list fields identically
+                "fields": [{"name": f, "parsed_papers": n} for f, n in sorted(fields.items(), key=lambda x: (-x[1], x[0]))
                            if query in f.casefold()][:100],
                 "catalogue_entries": len(data["benchmarks"]),
                 "note": "Fields are exact declared topic/area/subarea labels; their coverage is incomplete. "
                         "Usage needs benchmark_snapshot.json; missing data is not zero usage."}
 
-    def _select(self, data: dict, a: dict, *, latest: bool = False) -> tuple[list, dict]:
+    def _select(self, data: dict, a: dict, *, latest: bool = False, authors: bool = False) -> tuple[list, dict]:
         eds = list(data["editions"])
         venue = (a.get("venue") or "").lower()
         if venue:
@@ -331,16 +359,10 @@ class BenchmarkStore:
             eds = list(newest.values())
         if data["available"] and not eds:
             raise ValueError("No analysed editions match the requested scope")
-        papers = [p for p in data["papers"] if p["edition"] in eds]
         topic = a.get("topic")
-        if topic:
-            known = {f.casefold() for p in data["papers"] for f in p.get("fields", [])}
-            if topic.casefold() not in known:
-                raise ValueError("Unknown field label; call benchmark_scope(query=...) or supply paper_ids")
-            papers = [p for p in papers if topic.casefold() in {f.casefold() for f in p.get("fields", [])}]
-        if a.get("paper_ids") is not None:
-            selected = set(a["paper_ids"])
-            papers = [p for p in papers if p["paper_id"] in selected]
+        if topic and topic.casefold() not in self.repo().field_labels():
+            raise ValueError("Unknown field label; call benchmark_scope(query=...) or supply paper_ids")
+        papers = self.repo().observations(eds, topic, a.get("paper_ids"), authors=authors)
         denominators = collections.Counter(p["edition"] for p in papers)
         cov = {ed: {**data["editions"][ed], "in_scope_parsed": denominators[ed]} for ed in sorted(eds)}
         return papers, {"topic": topic, "editions": cov,
@@ -354,9 +376,10 @@ class BenchmarkStore:
 
     def _require(self, data: dict) -> dict | None:
         if not data["available"]:
-            return {**self._base(data), "error": "Full-text benchmark usage snapshot is not installed. "
+            return {**self._base(data), "error": data.get("reason") or (
+                    "Full-text benchmark usage snapshot is not installed. "
                     "After extraction and identity review, run bench2agent benchmarks on the build machine "
-                    "and distribute the data bundle. Abstract mentions are not a fallback."}
+                    "and distribute the data bundle. Abstract mentions are not a fallback.")}
         return None
 
     @staticmethod
@@ -366,12 +389,11 @@ class BenchmarkStore:
             raise ValueError("role must be evaluates_on or trains_on")
         return role
 
-    @staticmethod
-    def _paper(p: dict, bid: str, role: str) -> dict:
+    def _paper(self, p: dict, bid: str, role: str) -> dict:
         return {"paper_id": p["paper_id"], "title": p["title"], "edition": p["edition"],
                 "url": "https://arxiv.org/abs/" + p["paper_id"],
                 "surfaces": p["uses"][bid].get("surfaces", {}),
-                "evidence": p["uses"][bid]["roles"][role]}
+                "evidence": self.repo().evidence(p, bid, role)}
 
     def usage(self, a: dict) -> dict:
         data = self.data()
@@ -455,7 +477,7 @@ class BenchmarkStore:
         entry = self._entry(data, a["benchmark"])
         if not entry.get("claims"):
             return {"error": "No reviewed introducing paper in this corpus; developer attribution is unavailable."}
-        papers, coverage = self._select(data, a)
+        papers, coverage = self._select(data, a, authors=True)
         return {**self._base(data), **self._adoption(entry, papers), **self._links(data, entry),
                 "coverage": coverage}
 
@@ -521,7 +543,7 @@ class BenchmarkStore:
                 return error
             wanted = {e["id"] for e in entries}
             using = collections.defaultdict(list)
-            for p in data["papers"]:
+            for p in self.repo().using_papers(wanted):
                 relevant = set(p["uses"]) & wanted
                 relevant |= {bid for u in p.get("unattributed", []) for bid in u.get("candidates", []) if bid in wanted}
                 for bid in relevant:
@@ -546,17 +568,4 @@ class BenchmarkStore:
     def verify(self, paper_id: str, quote: str) -> dict | None:
         if len(quote.strip()) < 20:
             return None
-        q = " ".join(quote.split())
-        data = self.data()
-        for p in data["papers"]:
-            if p["paper_id"] == paper_id:
-                for use in p["uses"].values():
-                    for evidence in use["roles"].values():
-                        if any(not ev.get("where", "").endswith(":cell") and
-                               q in " ".join(ev["text"].split()) for ev in evidence):
-                            return {"title": p["title"], "edition": p["edition"]}
-        for e in data["benchmarks"]:
-            for c in e.get("claims", []):
-                if c["arxiv_base"] == paper_id and q in " ".join(c["evidence"].split()):
-                    return {"title": c["title"], "edition": c["edition"]}
-        return None
+        return self.repo().verify_quote(paper_id, " ".join(quote.split()))

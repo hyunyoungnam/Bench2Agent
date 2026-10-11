@@ -59,6 +59,14 @@ def main():
         usage = json.loads(response[2]["result"]["content"][0]["text"])
         assert usage["results"][0]["papers"] == 1
         assert usage["coverage"]["parsed_papers"] == 1
+        # the same data imported into SQLite answers the same, outside the checkout
+        imported = json.loads(run(["data", "sqlite"]))
+        assert imported["paper_observations"] == 1 and imported["db_schema_version"] == 1
+        assert json.loads(run(["data", "status"]))["sqlite"]["matches_json"] is True
+        env["BENCH2AGENT_STORE"] = "sqlite"
+        response = [json.loads(line) for line in run(["mcp"], request).splitlines()]
+        del env["BENCH2AGENT_STORE"]
+        assert json.loads(response[2]["result"]["content"][0]["text"]) == usage
         previous = root / "previous/data/benchtrend/chats"
         previous.mkdir(parents=True)
         (previous / "012345abcdef.json").write_text(json.dumps({

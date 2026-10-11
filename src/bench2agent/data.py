@@ -26,31 +26,34 @@ def digest(path: Path) -> str:
 
 
 def validate(path: Path) -> dict:
+    from bench2agent.core.repository import validate_snapshot
     with path.open(encoding="utf-8") as source:
-        data = json.load(source)
-    if not isinstance(data, dict) or data.get("schema_version") != 1 or data.get("source") != "arxiv_html_stated_roles":
-        raise ValueError("Unsupported benchmark snapshot schema or extraction source.")
-    if not isinstance(data.get("snapshot_id"), str) or not data["snapshot_id"]:
-        raise ValueError("Snapshot identity is missing.")
-    for field, kind in (("editions", dict), ("benchmarks", list), ("papers", list)):
-        if not isinstance(data.get(field), kind):
-            raise ValueError(f"Invalid snapshot field: {field}")
-    editions = data["editions"]
-    ids = {entry["id"] for entry in data["benchmarks"] if isinstance(entry, dict) and isinstance(entry.get("id"), str)}
-    if len(ids) != len(data["benchmarks"]):
-        raise ValueError("Invalid or duplicate benchmark identities.")
-    for paper in data["papers"]:
-        if not isinstance(paper, dict) or paper.get("edition") not in editions or not isinstance(paper.get("uses"), dict):
-            raise ValueError("Invalid paper or edition in snapshot.")
-    return {"snapshot_id": data["snapshot_id"], "generated_at": data.get("generated_at"),
-            "source": data["source"], "editions": len(editions), "benchmarks": len(ids), "paper_observations": len(data["papers"])}
+        return validate_snapshot(json.load(source))
 
 
 def status(root: Path) -> dict:
+    from bench2agent.core.repository import DATABASE, counts, file_sha256, SqliteRepository
     path = root / MEMBER
-    if not path.exists():
-        return {"available": False, "path": str(path)}
-    return {"available": True, "path": str(path), **validate(path)}
+    out = {"available": False, "path": str(path)} if not path.exists() else {"available": True, "path": str(path), **validate(path)}
+    db = path.with_name(DATABASE)
+    if db.exists():
+        meta = SqliteRepository(db).meta()
+        out["sqlite"] = {"path": str(db), "db_schema_version": meta.get("db_schema_version"),
+                         "snapshot_id": meta.get("snapshot_id"), "sha256": file_sha256(db), **counts(db),
+                         # the two files describe the same extraction only when their ids agree
+                         "matches_json": out.get("snapshot_id") == meta.get("snapshot_id") if out["available"] else None}
+    else:
+        out["sqlite"] = {"path": str(db), "available": False}
+    return out
+
+
+def build_sqlite(root: Path) -> dict:
+    """Import the installed JSON snapshot into the SQLite file beside it."""
+    from bench2agent.core.repository import DATABASE, import_snapshot
+    source = root / MEMBER
+    if not source.exists():
+        raise ValueError("No benchmark snapshot installed; run bench2agent data install first.")
+    return import_snapshot(source, source.with_name(DATABASE))
 
 
 def install(root: Path, *, file: str | None = None, url: str | None = None, sha256: str | None = None) -> dict:
