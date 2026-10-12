@@ -26,6 +26,7 @@ import json
 import os
 import sqlite3
 import tempfile
+import threading
 from pathlib import Path
 
 SNAPSHOT = "benchmark_snapshot.json"
@@ -390,7 +391,8 @@ class SqliteRepository:
 
     def __init__(self, path: Path, con: sqlite3.Connection | None = None):
         self.path = path
-        self._shared = con
+        self._local = threading.local()   # one connection per thread, per session
+        self._local.con = con
         self._identity = None
         self._meta = None
         self._benchmarks = None
@@ -400,13 +402,13 @@ class SqliteRepository:
     @contextlib.contextmanager
     def session(self):
         """Pin every read inside to one version of the file."""
-        if self._shared is not None:
+        if getattr(self._local, "con", None) is not None:
             yield self
             return
         try:
             con = _connect(self.path)
             con.execute("BEGIN")
-            self._shared = con
+            self._local.con = con
             try:
                 m = _meta(con)
                 identity = (m.get("snapshot_id"), m.get("source_sha256"), m.get("db_schema_version"))
@@ -414,15 +416,16 @@ class SqliteRepository:
                     self._identity, self._meta, self._benchmarks, self._editions, self._fields = identity, None, None, None, None
                 yield self
             finally:
-                self._shared = None
+                self._local.con = None
                 con.close()
         except sqlite3.DatabaseError as exc:
             raise ValueError(f"SQLite database is unreadable ({exc}); rebuild with bench2agent data sqlite") from None
 
     def _con(self):
-        if self._shared is None:
+        con = getattr(self._local, "con", None)
+        if con is None:
             raise RuntimeError("SqliteRepository is read inside a session: use BenchmarkStore or repo.session()")
-        return self._shared
+        return con
 
     def _done(self, con):
         pass

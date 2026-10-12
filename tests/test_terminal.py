@@ -159,12 +159,16 @@ class TerminalTests(unittest.TestCase):
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(["data", "install"]), 0)
         fetch.assert_called_once()
-        self.assertEqual(self.path.read_bytes(), original)
+        # installed as a revision, both files, and served instead of the legacy path
+        from bench2agent.core import revisions
+        served_json, served_db, rid = revisions.paths_for(self.root)
+        self.assertEqual((rid, served_json.read_bytes(), served_db.is_file()), ("fixture-1", original, True))
+        self.assertEqual(data.status(self.root)["snapshot_id"], "fixture-1")
         with patch("bench2agent.core.cli._download", side_effect=download), \
              patch.object(data, "DEFAULT_SHA256", "0" * 64):
             with self.assertRaisesRegex(ValueError, "SHA-256"):
                 data.install(self.root)
-        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(served_json.read_bytes(), original)   # the served revision is untouched
 
     def test_first_launch_downloads_once_and_never_replaces_installed_data(self):
         bundle = self.root / "release.tar.gz"

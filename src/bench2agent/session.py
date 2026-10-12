@@ -43,6 +43,19 @@ class Session:
     def path(self) -> Path:
         return self.directory / (self.doc["id"] + ".json")
 
+    def store(self):
+        """The data this conversation reads: the revision its first answer
+        was given on while that revision is still installed, else what is
+        served now (a new conversation, or the legacy layout)."""
+        from bench2agent.core import mcp, revisions
+        from bench2agent.core.benchmarks import BenchmarkStore
+        sid = self.doc.get("snapshot_id")
+        if sid and revisions.valid_id(sid) and revisions.revision_dir(self.root, sid).is_dir() \
+                and sid != revisions.active_revision(self.root):
+            return BenchmarkStore(self.root, revision=sid)
+        served = mcp.B if Path(mcp.B.root) == Path(self.root) else BenchmarkStore(self.root)
+        return served
+
     def load(self, cid: str) -> dict:
         if not re.fullmatch(r"[0-9a-f]{12}", cid):
             raise ValueError("Invalid conversation ID. Use bench2agent chats.")
@@ -53,9 +66,11 @@ class Session:
         from bench2agent.core import chat, mcp
         from bench2agent.core.policy import BENCHMARK_SYSTEM
         from bench2agent.core.verify import Verifier
-        snapshot = mcp.B.data()
+        store = self.store()
+        snapshot = store.data()
         if not snapshot["available"]:
-            raise ValueError("Benchmark data is missing. Run bench2agent data install --file FILE or --url URL.")
+            raise ValueError(snapshot.get("reason") or
+                             "Benchmark data is missing. Run bench2agent data install --file FILE or --url URL.")
         sid = snapshot.get("snapshot_id")
         if self.doc.get("snapshot_id") and self.doc["snapshot_id"] != sid:
             raise ValueError("The dataset changed since this conversation. Start /new, or reinstall its snapshot.")
@@ -65,12 +80,13 @@ class Session:
         language = self.doc.get("language", "auto")
         system = BENCHMARK_SYSTEM + ("\nAnswer in the user's language." if language == "auto" else
                                     "\nWrite prose in " + {"ko": "Korean", "en": "English"}.get(language, language) + ".")
-        answer = providers.generate(self.doc["provider"], self.doc["model"], system,
-                                    self.doc["messages"], question, emit)
-        if mcp.B.data().get("snapshot_id") != sid:
-            raise ValueError("The dataset changed during this answer. Start a new turn; this answer was not saved.")
-        store = mcp.Store()
-        segs, verified = chat.segment(answer["text"], store, Verifier(store), answer["trail"])
+        with mcp.using(store):   # tools and the answer check read this revision, whatever is active
+            answer = providers.generate(self.doc["provider"], self.doc["model"], system,
+                                        self.doc["messages"], question, emit)
+            if store.data().get("snapshot_id") != sid:
+                raise ValueError("The dataset changed during this answer. Start a new turn; this answer was not saved.")
+            corpus = mcp.Store()
+            segs, verified = chat.segment(answer["text"], corpus, Verifier(corpus), answer["trail"])
         turn = {"q": question, "segs": segs, "verified": verified, "trail": answer["trail"],
                 "usage": answer["usage"], "on": {"benchmarks": {key: snapshot.get(key)
                          for key in ("snapshot_id", "generated_at", "source")}}}

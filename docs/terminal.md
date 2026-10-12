@@ -172,7 +172,30 @@ and `data bundle` includes the database when it matches the snapshot. Both
 backends return the same results and are checked against each other in the
 test suite and by `scripts/parity_check.py`.
 
-`--file` also accepts the exported `benchmark_snapshot.json`. The bundle
+### Data revisions
+
+An install is a revision: the snapshot and its SQLite import are staged
+together under `data/revisions/`, checked against each other, moved into
+`data/revisions/<snapshot_id>/` with one rename, and only then named in
+`data/revisions/active`. A failed install, at any step, leaves the active
+revision serving with both of its files unchanged. Earlier revisions stay
+installed: a conversation started on one keeps reading it, with its tool
+calls and its quote and figure checks, until that directory is removed, and
+`bench2agent data activate <snapshot_id>` switches what new conversations
+get (a rollback is the same command). `data status` lists revisions. An
+install with no `data/revisions/active` falls back to the previous layout,
+`data/processed/benchmark_snapshot.json`, so existing installs and the
+source checkout keep working.
+
+On the collection machine, `bench2agent benchmarks --publish` builds the
+snapshot from the reviewed extraction and installs it as the new active
+revision in one step. Adding a conference edition is therefore: run the
+`icml` stages for that edition (collect, normalize, arXiv match, HTML
+parse, `bench_mentions --all`), then publish. The published revision is
+never edited; a correction is a new revision.
+
+`--file` also accepts the exported `benchmark_snapshot.json` or a
+`benchmark_snapshot.sqlite`. The bundle
 manifest verifies its snapshot checksum; `--sha256` additionally verifies the
 entire download. Installation validates schema and stages an atomic replacement.
 Failed downloads, invalid snapshots and checksum failures retain existing data.

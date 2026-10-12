@@ -13,10 +13,12 @@ only, read-only, no network beyond the local search engine.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -936,6 +938,25 @@ _GID = {"type": "integer", "description":
 from .benchmarks import BenchmarkStore
 
 B = BenchmarkStore(ROOT)
+_current = threading.local()
+
+
+def store() -> BenchmarkStore:
+    """The store this thread's conversation is pinned to, else the served one."""
+    return getattr(_current, "store", None) or B
+
+
+@contextlib.contextmanager
+def using(pinned: BenchmarkStore):
+    """Run tools and answer checks against one store (one data revision)."""
+    previous = getattr(_current, "store", None)
+    _current.store = pinned
+    try:
+        yield pinned
+    finally:
+        _current.store = previous
+
+
 _SCOPE = {
     "topic": {"type": "string", "description": "Exact field label from benchmark_scope"},
     "venue": {"type": "string"}, "edition": {"type": "string"},
@@ -946,13 +967,14 @@ _ROLE = {"type": "string", "enum": ["evaluates_on", "trains_on"], "default": "ev
 
 
 def _benchmark_tools():
+    S = store()
     specs = [
-        ("benchmark_scope", B.scope, "Discover installed full-text editions, coverage and exact field labels. Call before benchmark questions; missing snapshots are NOT zero usage.", {"query": {"type": "string"}}, []),
-        ("benchmark_usage", B.usage, "Rank explicitly stated evaluation use (or training separately). Latest analysed edition per venue by default. Counts, per-1000 parsed-paper rates, coverage and verbatim evidence; not quality. Each row carries locations (our checked mapping: Hub/GitHub/homepage) and introducing_paper (arXiv), separately.", {**_SCOPE, "role": _ROLE, "latest": {"type": "boolean", "default": True}, "limit": {"type": "integer"}}, []),
-        ("benchmark_trend", B.trend, "Full-text benchmark use over editions, including zeros with observed denominators; within-venue change tests. Pass an unambiguous benchmark ID.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}}, ["benchmark"]),
-        ("new_benchmarks", B.new, "Reviewed introductions, including zero-adoption entries. First claim inside this corpus, not first public release. Rows carry introducing_paper and locations. Separate benchmark/training-data introductions. sort=adoption ranks external evaluation use (training for datasets), across ALL installed using papers; filters select introductions only.", {**_SCOPE, "kind": {"type": "string", "enum": ["benchmark", "dataset"], "default": "benchmark"}, "sort": {"type": "string", "enum": ["introduced", "adoption"]}, "include_adoption": {"type": "boolean"}, "adoption_role": {"type": "string", "enum": ["evaluates_on", "trains_on"]}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, []),
-        ("benchmark_adoption", B.adoption, "Unique using papers for a reviewed introduction: evaluation/training and other/self/unknown authors separately. Introducing papers excluded; homonyms need local citation attribution.", {**_SCOPE, "benchmark": {"type": "string"}}, ["benchmark"]),
-        ("benchmark_evidence", B.evidence, "Paginated using papers and their verbatim role sentences for a benchmark. Cite these with arxiv anchors; inspect before advising what to evaluate on.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, ["benchmark"]),
+        ("benchmark_scope", S.scope, "Discover installed full-text editions, coverage and exact field labels. Call before benchmark questions; missing snapshots are NOT zero usage.", {"query": {"type": "string"}}, []),
+        ("benchmark_usage", S.usage, "Rank explicitly stated evaluation use (or training separately). Latest analysed edition per venue by default. Counts, per-1000 parsed-paper rates, coverage and verbatim evidence; not quality. Each row carries locations (our checked mapping: Hub/GitHub/homepage) and introducing_paper (arXiv), separately.", {**_SCOPE, "role": _ROLE, "latest": {"type": "boolean", "default": True}, "limit": {"type": "integer"}}, []),
+        ("benchmark_trend", S.trend, "Full-text benchmark use over editions, including zeros with observed denominators; within-venue change tests. Pass an unambiguous benchmark ID.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}}, ["benchmark"]),
+        ("new_benchmarks", S.new, "Reviewed introductions, including zero-adoption entries. First claim inside this corpus, not first public release. Rows carry introducing_paper and locations. Separate benchmark/training-data introductions. sort=adoption ranks external evaluation use (training for datasets), across ALL installed using papers; filters select introductions only.", {**_SCOPE, "kind": {"type": "string", "enum": ["benchmark", "dataset"], "default": "benchmark"}, "sort": {"type": "string", "enum": ["introduced", "adoption"]}, "include_adoption": {"type": "boolean"}, "adoption_role": {"type": "string", "enum": ["evaluates_on", "trains_on"]}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, []),
+        ("benchmark_adoption", S.adoption, "Unique using papers for a reviewed introduction: evaluation/training and other/self/unknown authors separately. Introducing papers excluded; homonyms need local citation attribution.", {**_SCOPE, "benchmark": {"type": "string"}}, ["benchmark"]),
+        ("benchmark_evidence", S.evidence, "Paginated using papers and their verbatim role sentences for a benchmark. Cite these with arxiv anchors; inspect before advising what to evaluate on.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, ["benchmark"]),
     ]
     return [{"name": name, "description": desc, "fn": fn,
              "inputSchema": {"type": "object", "properties": props, "required": required}}

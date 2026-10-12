@@ -20,6 +20,7 @@ import unicodedata
 from pathlib import Path
 
 from .paths import ROOT
+from . import revisions
 from .repository import (BACKENDS, DATABASE, DB_SCHEMA_VERSION, SNAPSHOT, SOURCE, JsonRepository,
                          SqliteRepository, file_sha256, validate_snapshot)
 ROLES = ("evaluates_on", "trains_on")
@@ -286,8 +287,9 @@ class BenchmarkStore:
     "sqlite" (the imported file), or "auto" (sqlite when it exists). The
     default comes from BENCH2AGENT_STORE and is json until parity is shown."""
 
-    def __init__(self, root: Path = ROOT, backend: str | None = None):
+    def __init__(self, root: Path = ROOT, backend: str | None = None, revision: str | None = None):
         self.root = root
+        self.revision = revision   # a saved conversation keeps reading the revision it started on
         self.backend = backend or os.environ.get("BENCH2AGENT_STORE", "json")
         if self.backend not in BACKENDS:
             raise ValueError("BENCH2AGENT_STORE must be json, sqlite or auto")
@@ -309,8 +311,7 @@ class BenchmarkStore:
         a stale or unreadable file falls back to JSON. An explicit `sqlite`
         with a stale file is an error, so nobody answers from old data by
         accident."""
-        json_path = self.root / "data/processed" / SNAPSHOT
-        db_path = json_path.with_name(DATABASE)
+        json_path, db_path, _ = revisions.paths_for(self.root, self.revision)
         if self.backend == "json":
             return (json_path if json_path.exists() else None), "json", None
         db_state = None  # None: no file; "ok"; or an error message
@@ -385,7 +386,8 @@ class BenchmarkStore:
             meta = repo.meta()
             if not meta["available"] and repo.d.get("backend"):
                 meta["backend"] = repo.d["backend"]
-            return {**meta, "benchmarks": repo.benchmarks(), "editions": repo.editions()}
+            return {**meta, "revision": revisions.paths_for(self.root, self.revision)[2],
+                    "benchmarks": repo.benchmarks(), "editions": repo.editions()}
 
     def _base(self, data: dict) -> dict:
         return {k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")}

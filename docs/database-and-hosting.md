@@ -218,6 +218,16 @@ Collection and model-call logs remain distinct from user-visible evidence.
    LIBERO 80, SIMPLER 41, Meta-World 29; ICLR CIFAR-10 178, 197, 165).
 3. Add incremental edition ingestion and immutable data revisions. Verify
    rollback, repeat imports and saved-answer reproducibility.
+   **Partly done (2026-10-12):** `core/revisions.py` — immutable revision
+   directories (`data/revisions/<snapshot_id>/` with JSON, SQLite, manifest)
+   and an atomic `active` pointer; `data install` stages and checks both
+   files before publishing, so a failed install cannot leave JSON and SQLite
+   on different versions; `data activate` rolls back; a saved conversation
+   is pinned to its revision for tools and answer checks (`mcp.using`,
+   `Session.store`); SQLite connections are per thread and per call, checked
+   under concurrent use; `bench2agent benchmarks --publish` turns a build
+   into a revision. Not yet: per-paper processing status, retryable stage
+   queues and partial reprocessing (the working database of this section).
 4. Build the hosted conversation API and browser shell, with isolated user
    sessions and provider clients. Run the same representative question suite
    through terminal, MCP and HTTP.

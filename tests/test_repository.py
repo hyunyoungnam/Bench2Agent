@@ -258,11 +258,12 @@ class ParityTests(Fixture):
         # a bundle carrying the database installs both files; a bare .sqlite installs alone
         other = self.root / "other"
         installed = data_module.install(other, file=str(bundle))
-        self.assertTrue(Path(installed["sqlite"]).exists())
-        self.assertTrue((other / repository.DATABASE_MEMBER).exists() if hasattr(repository, "DATABASE_MEMBER") else True)
+        self.assertEqual(sorted(p.name for p in Path(installed["path"]).iterdir()),
+                         ["benchmark_snapshot.json", "benchmark_snapshot.sqlite", "benchmark_snapshot.sqlite.sha256", "manifest.json"])
         alone = self.root / "alone"
         installed = data_module.install(alone, file=str(self.db_path))
-        self.assertEqual(installed["backend"], "sqlite")
+        self.assertEqual(sorted(p.name for p in Path(installed["path"]).iterdir()),
+                         ["benchmark_snapshot.sqlite", "benchmark_snapshot.sqlite.sha256", "manifest.json"])
         os.environ["BENCH2AGENT_STORE"] = "auto"
         try:
             self.assertEqual(BenchmarkStore(alone).usage({})["coverage"]["parsed_papers"], 9)

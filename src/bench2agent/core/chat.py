@@ -165,9 +165,9 @@ def segment(text: str, store: Store, ver: Verifier,
             continue
         tool, arg, claim = (m.group(3), m.group(4).strip(), m.group(5).strip())
         if tool == "arxiv":
-            from .mcp import B
+            from . import mcp
             valid_id = bool(re.fullmatch(r"\d{4}\.\d{4,5}", arg))
-            found = B.verify(arg, claim) if valid_id else None
+            found = mcp.store().verify(arg, claim) if valid_id else None
             v["checked"] += 1
             v["passed"] += bool(found)
             venue, year = found["edition"].rsplit("-", 1) if found else (None, None)
@@ -613,8 +613,8 @@ def stream(body: dict, emit) -> None:
             # the same shelf later — the corpus is fixed, that is the point
             "on": _corpus_id(store)}
     if any(step["name"] in figures.RECOMPUTABLE and figures.RECOMPUTABLE[step["name"]] == "json" for step in trail):
-        from .mcp import B
-        current = B.data()
+        from . import mcp
+        current = mcp.store().data()
         turn["on"]["benchmarks"] = {k: current.get(k) for k in ("snapshot_id", "generated_at", "source", "available")}
     if trail:
         turn["trail"] = trail

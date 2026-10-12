@@ -431,6 +431,8 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--gid", type=int, help="export one paper by gid")
     d.set_defaults(fn=cmd_datasets)
     k = sub.add_parser("benchmarks", help="export reviewed full-text benchmark usage into the portable data bundle")
+    k.add_argument("--publish", action="store_true",
+                   help="also install the export as a new active data revision (JSON + SQLite) under data/revisions/")
     k.add_argument("--out", help="snapshot file (default: data/processed/benchmark_snapshot.json)")
     k.set_defaults(fn=cmd_benchmarks)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
@@ -443,6 +445,9 @@ def cmd_benchmarks(args) -> int:
     from .benchmarks import build_snapshot
     try:
         result = build_snapshot(ROOT, Path(args.out) if args.out else None)
+        if getattr(args, "publish", False):
+            from bench2agent.data import install
+            result["published"] = install(ROOT, file=result["path"])
     except (ValueError, FileNotFoundError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
