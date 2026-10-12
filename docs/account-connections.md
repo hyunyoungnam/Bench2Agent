@@ -204,9 +204,17 @@ follow-up and a cancel-then-follow-up on both CLIs.
 **Hosted: a directory-isolation prototype, not yet exercised with a real
 sign-in.** The visitor runtime, the relayed official sign-in, the restricted
 CLI, the recorded tool log, verification on the conversation's revision,
-disconnect (refuse new work, cancel, wait for jobs to end, official logout,
-removal; pending cleanup when a job outlasts the wait) and per-job process
-limits exist and are tested against a stub CLI. Isolation is by directory
+disconnect and per-job process limits exist and are tested against a stub
+CLI. Disconnect is one ordered flow: under the lock only states change
+(closing visitors take no new sign-in or question, checked and reserved in
+the same critical section); outside it the questions and the sign-in
+process are cancelled and their actual end is confirmed (SIGTERM, then
+SIGKILL), then the official logout and the removal of the runtime. If a
+process outlives the wait or the removal fails, the visitor stays pending:
+nothing is deleted under a live process, the end of their last process or
+the server's periodic sweep (every 10 minutes by default, started and
+stopped with the server) retries, one executor at a time, and the pending
+state is cleared only when the removal has succeeded. Isolation is by directory
 and environment under one OS user, which keeps logins and conversations
 apart but is not a boundary between processes; the agreed per-visitor OS
 user or container is a deployment step on a host with the privilege. The

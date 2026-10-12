@@ -109,6 +109,7 @@ class Settings:
         self.max_runtimes = int(os.environ.get("BENCH2AGENT_WEB_MAX_RUNTIMES", "50"))
         self.max_processes = int(os.environ.get("BENCH2AGENT_WEB_MAX_PROCESSES", "4"))
         self.idle_days = int(os.environ.get("BENCH2AGENT_WEB_IDLE_DAYS", "30"))
+        self.sweep_seconds = float(os.environ.get("BENCH2AGENT_WEB_SWEEP_SECONDS", "600"))
         self.turns_per_day = turns_per_day if turns_per_day is not None else int(os.environ.get("BENCH2AGENT_WEB_TURNS_PER_DAY", "100"))
         self.concurrent_per_user = concurrent_per_user
 
@@ -197,7 +198,11 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app):
         async with http_mcp.manager.run():
-            yield
+            visitors.start_sweeper(settings.sweep_seconds)
+            try:
+                yield
+            finally:
+                visitors.stop_sweeper()
 
     app = FastAPI(title="Bench2Agent", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.settings, app.state.web, app.state.http_mcp, app.state.visitors = settings, web, http_mcp, visitors

@@ -41,6 +41,9 @@ STUB_CLAUDE = textwrap.dedent('''\
         ok = os.path.exists(marker)
         print(json.dumps({"loggedIn": ok, "authMethod": "stub" if ok else None, "email": "stub@example.org" if ok else None})); sys.exit(0)
     if args[:2] == ["auth", "login"]:
+        if os.environ.get("STUB_LOGIN_IGNORE_TERM"):
+            import signal
+            signal.signal(signal.SIGTERM, lambda *a: None)      # a sign-in that does not die on SIGTERM
         print("Opening browser to sign in…"); print("If the browser didn't open, visit: https://example.invalid/oauth?state=STUBSTATE"); sys.stdout.flush()
         print("Paste code here if prompted >", end="", flush=True)
         line = sys.stdin.readline()

@@ -55,6 +55,7 @@ class WebHostTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
         self.settings = web_app.Settings(self.root, port=self.port, credentials="user", turns_per_day=5)
+        self.settings.sweep_seconds = 0.3                                                  # a visible periodic sweep
         self.app = web_app.create_app(self.root, self.settings)
         config = uvicorn.Config(self.app, host="127.0.0.1", port=self.port, log_level="error")
         self.server = uvicorn.Server(config)
@@ -427,7 +428,7 @@ class WebHostTests(unittest.TestCase):
         stub = bindir / "claude"
         stub.write_text(STUB_CLAUDE)
         stub.chmod(0o755)
-        self.app.state.visitors.passthrough = ("STUB_SKIP_MCP", "STUB_SLEEP", "STUB_FAKE_REVISION", "STUB_RECORD")
+        self.app.state.visitors.passthrough = ("STUB_SKIP_MCP", "STUB_SLEEP", "STUB_FAKE_REVISION", "STUB_RECORD", "STUB_LOGIN_IGNORE_TERM")
         return patch.dict(os.environ, {"PATH": f"{bindir}:{os.environ['PATH']}"})
 
     def _sign_in(self, user, headers=None):
@@ -571,13 +572,127 @@ class WebHostTests(unittest.TestCase):
                 self.assertEqual(self.client.post("/api/connect/claude/start", headers=self.h(self.alice)).status_code, 400)
                 fa.result(timeout=60); fb.result(timeout=60)
             self.assertEqual(visitors.running_jobs(self.alice["user_id"]), [])
-            self.assertEqual(visitors.finish_pending(), [self.alice["user_id"]])          # the deferred cleanup completes
+            for _ in range(50):                                                            # the last job's end completes the deferred cleanup by itself
+                if not visitors.dir(self.alice["user_id"]).exists():
+                    break
+                time.sleep(0.1)
             self.assertFalse(visitors.dir(self.alice["user_id"]).exists())
+            self.assertEqual(visitors.finish_pending(), [])                               # nothing left for the sweep
+            self.assertFalse(visitors.status(self.alice["user_id"])["pending_cleanup"])
             self.assertFalse({c["name"]: c for c in self.client.get("/api/connectors", headers=self.h(self.alice)).json()["connectors"]}["claude"]["connected"])
             # a disconnect with time to spare completes in one call
             self._sign_in(self.alice)
             steps = self.client.post("/api/connect/claude/disconnect", headers=self.h(self.alice)).json()
             self.assertEqual((steps["pending_cleanup"], steps["removed"], steps["logged_out"]), (False, True, True))
+
+    def test_disconnect_flow_is_atomic_waits_for_sign_in_and_cleans_up_once(self):
+        visitors = self.app.state.visitors
+        with self._with_stub_claude():
+            # (1) no new work can slip in between the state check and the reservation:
+            # a reservation attempted from inside the closing sequence is refused
+            self._sign_in(self.alice)
+            attempts = []
+
+            def stop_running():
+                try:
+                    visitors.acquire(self.alice["user_id"], "late-job")
+                    attempts.append("accepted")
+                except Exception as exc:  # noqa: BLE001
+                    attempts.append(type(exc).__name__)
+                try:
+                    visitors.login_start(self.alice["user_id"])
+                    attempts.append("login-accepted")
+                except Exception as exc:  # noqa: BLE001
+                    attempts.append(type(exc).__name__)
+                return False
+            steps = visitors.disconnect(self.alice["user_id"], stop_running=stop_running)
+            self.assertEqual(attempts, ["VisitorError", "VisitorError"])
+            self.assertEqual((steps["removed"], steps["pending_cleanup"]), (True, False))
+            self.assertEqual(visitors.running_jobs(self.alice["user_id"]), [])
+            # (2) a sign-in that ignores SIGTERM: disconnect escalates, confirms the end, then removes
+            with patch.dict(os.environ, {"STUB_LOGIN_IGNORE_TERM": "1"}):
+                self.assertFalse(self.client.post("/api/connect/claude/start", headers=self.h(self.alice)).json()["already"])
+                for _ in range(100):
+                    if self.client.get("/api/connect/claude/read?since=0", headers=self.h(self.alice)).json()["state"] == "awaiting_code":
+                        break
+                    time.sleep(0.05)
+                t = time.perf_counter()
+                steps = visitors.disconnect(self.alice["user_id"], wait_seconds=1.0)
+            self.assertEqual((steps["removed"], steps["pending_cleanup"]), (True, False))
+            self.assertLess(time.perf_counter() - t, 10)
+            self.assertFalse(visitors.dir(self.alice["user_id"]).exists())
+            events = (self.root / "data/bench2agent/visitor-events.jsonl").read_text()
+            self.assertIn('"state": "cancelled"', events)
+            # (3) removal fails once: the visitor stays pending, nothing is half-deleted, the retry succeeds and clears it
+            self._sign_in(self.alice)
+            runtime = visitors.dir(self.alice["user_id"])
+            original_rmtree = visitors.__class__.__module__ and __import__("shutil").rmtree
+            calls = []
+
+            def failing_rmtree(path, *a, **k):
+                calls.append(path)
+                if len(calls) == 1:
+                    raise OSError("busy")
+                return original_rmtree(path, *a, **k)
+            with patch("bench2agent.web.visitors.shutil.rmtree", side_effect=failing_rmtree):
+                steps = visitors.disconnect(self.alice["user_id"])
+                self.assertEqual((steps["removed"], steps["pending_cleanup"]), (False, True))
+                self.assertTrue(runtime.exists())
+                self.assertTrue(visitors.status(self.alice["user_id"])["pending_cleanup"])
+                r = self.client.post("/api/connect/claude/start", headers=self.h(self.alice))
+                self.assertEqual(r.status_code, 400)                                  # still closing: no new work
+                self.assertEqual(visitors.finish_pending(), [self.alice["user_id"]])  # the retry
+            self.assertFalse(runtime.exists())
+            self.assertFalse(visitors.status(self.alice["user_id"])["pending_cleanup"])
+            self.assertEqual(len(calls), 2)
+            # (4) the last job's end and the periodic sweep overlap: removal runs exactly once
+            self._sign_in(self.alice)
+            conv = self.new(self.alice, connector="claude")
+            started = threading.Event()
+            original_acquire = visitors.acquire
+
+            def acquire(v, job_id):
+                original_acquire(v, job_id); started.set()
+            removals = []
+            original_remove = visitors._remove
+
+            def counting_remove(v):
+                removals.append(v); time.sleep(0.3)
+                return original_remove(v)
+            with patch.dict(os.environ, {"STUB_SLEEP": "3"}), patch.object(visitors, "acquire", acquire), \
+                 patch.object(visitors, "_remove", counting_remove), ThreadPoolExecutor(2) as pool:
+                future = pool.submit(self.ask, self.alice, conv["cid"], "slow")
+                self.assertTrue(started.wait(timeout=30))
+                steps = visitors.disconnect(self.alice["user_id"], stop_running=lambda: True, wait_seconds=0.2)
+                self.assertTrue(steps["pending_cleanup"])
+                sweeps = pool.submit(lambda: [visitors.sweep() for _ in range(20)])
+                future.result(timeout=60)                                              # the job ends: release() cleans up
+                sweeps.result(timeout=60)
+            for _ in range(50):
+                if not visitors.dir(self.alice["user_id"]).exists():
+                    break
+                time.sleep(0.1)
+            self.assertFalse(visitors.dir(self.alice["user_id"]).exists())
+            self.assertEqual(removals, [self.alice["user_id"]])                        # once, whichever thread won
+            self.assertFalse(visitors.status(self.alice["user_id"])["pending_cleanup"])
+
+    def test_periodic_sweep_runs_with_the_server(self):
+        visitors = self.app.state.visitors
+        with self._with_stub_claude():
+            self._sign_in(self.alice)
+            runtime = visitors.dir(self.alice["user_id"])
+            with patch("bench2agent.web.visitors.shutil.rmtree", side_effect=OSError("busy")):
+                self.assertTrue(visitors.disconnect(self.alice["user_id"])["pending_cleanup"])
+            self.assertTrue(runtime.exists())
+            # the server's sweeper (short interval in this test's settings) completes it without any call from here
+            for _ in range(100):
+                if not runtime.exists():
+                    break
+                time.sleep(0.1)
+            self.assertFalse(runtime.exists())
+            self.assertTrue(visitors._sweeper.is_alive())
+        self.stop()
+        self.assertFalse(visitors._sweeper.is_alive())                                    # stopped with the server
 
     def test_unverifiable_then_next_then_cancel_then_resume(self):
         visitors = self.app.state.visitors

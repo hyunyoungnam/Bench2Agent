@@ -129,12 +129,19 @@ class LoginSession:
             raise VisitorError("Input too long.")
         os.write(self.fd, text.encode())
 
-    def stop(self) -> None:
-        if not self._closed:
+    def stop(self, sig=signal.SIGTERM) -> None:
+        """Send a termination signal; `finished` says whether it worked."""
+        if not self.finished:
             try:
-                os.kill(self.pid, signal.SIGTERM)
+                os.kill(self.pid, sig)
             except ProcessLookupError:
                 pass
+
+    def wait(self, timeout: float) -> bool:
+        end = time.time() + timeout
+        while time.time() < end and not self.finished:
+            time.sleep(0.05)
+        return self.finished
 
     @property
     def finished(self) -> bool:
@@ -150,11 +157,15 @@ class VisitorRuntimes:
         self.max_runtimes, self.max_processes, self.idle_days = max_runtimes, max_processes, idle_days
         self.binary = binary
         self.log_path = log_path or (root / "data/bench2agent/visitor-events.jsonl")
-        self._logins: dict[str, LoginSession] = {}
+        self._logins: dict[str, LoginSession | None] = {}   # None: reserved, process starting
         self._active: dict[str, str] = {}      # job id -> visitor, one entry per running question
-        self._disconnecting: dict[str, str] = {}   # visitor -> state while a disconnect is in progress
-        self._pending_cleanup: set[str] = set()    # runtimes whose jobs did not end in time
+        self._disconnecting: set[str] = set()  # visitors whose disconnect is in progress
+        self._pending_cleanup: set[str] = set()    # closed visitors whose runtime could not be removed yet
+        self._cleaning: set[str] = set()       # visitors whose removal one thread is executing right now
         self._lock = threading.Lock()
+        # Under the lock: only state checks, reservations and transitions.
+        # Waiting for processes, the official logout and directory removal
+        # always happen outside it.
         # extra host variables allowed into visitor processes; empty in
         # production, set by tests to drive a stub CLI
         self.passthrough: tuple[str, ...] = ()
@@ -218,7 +229,8 @@ class VisitorRuntimes:
         if not which(self.binary):
             return {"available": False, "connected": False, "detail": "Claude Code is not installed on this host."}
         if not self.exists(visitor):
-            return {"available": True, "connected": False, "runtime": False, "detail": "not connected"}
+            return {"available": True, "connected": False, "runtime": False, "detail": "not connected",
+                    "busy": False, "disconnecting": visitor in self._disconnecting, "pending_cleanup": visitor in self._pending_cleanup}
         st = self.connector(visitor).status()
         login = self._logins.get(visitor)
         return {"available": True, "connected": st["connected"], "runtime": True, "account": st.get("account"),
@@ -227,27 +239,38 @@ class VisitorRuntimes:
                 "pending_cleanup": visitor in self._pending_cleanup}
 
     # -- sign-in --------------------------------------------------------------
-    def _refuse_if_disconnecting(self, visitor: str) -> None:
-        if visitor in self._disconnecting or visitor in self._pending_cleanup:
-            raise VisitorError("This connection is being closed; wait for it to finish, then connect again.")
+    def _closing(self, visitor: str) -> bool:
+        return visitor in self._disconnecting or visitor in self._pending_cleanup or visitor in self._cleaning
+
+    def _login_running(self, visitor: str) -> bool:
+        login = self._logins.get(visitor, "none")
+        return login is None or (login != "none" and not login.finished)
 
     def _processes(self) -> int:
-        return len([s for s in self._logins.values() if not s.finished]) + len(self._active)
+        return sum(1 for v in list(self._logins) if self._login_running(v)) + len(self._active)
 
     def login_start(self, visitor: str) -> dict:
-        self._refuse_if_disconnecting(visitor)
-        self.ensure(visitor)
+        path = which(self.binary)
+        if not path:
+            raise VisitorError("Claude Code is not installed on this host.")
         with self._lock:
-            running = self._logins.get(visitor)
-            if running and not running.finished:
-                return {"state": running.state, "already": True}
+            if self._closing(visitor):
+                raise VisitorError("This connection is being closed; wait for it to finish, then connect again.")
+            if self._login_running(visitor):
+                running = self._logins[visitor]
+                return {"state": running.state if running else "starting", "already": True}
             if self._processes() >= self.max_processes:
                 raise VisitorError("This host is at its process limit; try again in a moment.")
-            path = which(self.binary)
-            if not path:
-                raise VisitorError("Claude Code is not installed on this host.")
+            self._logins[visitor] = None            # reserved: counts as a process from here on
+        try:
+            self.ensure(visitor)
             session = LoginSession([path, "auth", "login"], self.environment(visitor), self.home(visitor),
                                    on_state=lambda ev: self._event(visitor, "login", state=ev["state"]))
+        except BaseException:
+            with self._lock:
+                self._logins.pop(visitor, None)
+            raise
+        with self._lock:
             self._logins[visitor] = session
         return {"state": session.state, "already": False}
 
@@ -255,6 +278,8 @@ class VisitorRuntimes:
         session = self._logins.get(visitor)
         if session is None:
             raise VisitorError("No sign-in in progress.")
+        if session.finished:
+            self._on_process_end(visitor)
         text, cursor = session.read(since)
         return {"state": session.state, "output": text, "cursor": cursor, "finished": session.finished}
 
@@ -267,17 +292,35 @@ class VisitorRuntimes:
         self.touch(visitor)
         return {"state": session.state}
 
-    def login_cancel(self, visitor: str) -> dict:
-        session = self._logins.pop(visitor, None)
-        if session:
-            session.stop()
+    def login_cancel(self, visitor: str, wait_seconds: float = 10.0) -> dict:
+        """Signal, then confirm: SIGTERM, a wait, SIGKILL, a wait. The session
+        leaves the registry only once it has actually ended."""
+        with self._lock:
+            session = self._logins.get(visitor)
+        if not session:
+            return {"cancelled": False}
+        ended = session.finished or self._terminate(session, wait_seconds)
+        if ended:
+            with self._lock:
+                if self._logins.get(visitor) is session:
+                    del self._logins[visitor]
             self._event(visitor, "login", state="cancelled")
-        return {"cancelled": bool(session)}
+            self._on_process_end(visitor)
+        return {"cancelled": True, "ended": ended}
+
+    @staticmethod
+    def _terminate(session: LoginSession, wait_seconds: float) -> bool:
+        session.stop(signal.SIGTERM)
+        if session.wait(wait_seconds):
+            return True
+        session.stop(signal.SIGKILL)
+        return session.wait(max(2.0, wait_seconds))
 
     # -- running questions: one slot per job, held until that job ends ---------
     def acquire(self, visitor: str, job_id: str) -> None:
-        self._refuse_if_disconnecting(visitor)
-        with self._lock:
+        with self._lock:                        # the check and the reservation cannot be split
+            if self._closing(visitor):
+                raise VisitorError("This connection is being closed; wait for it to finish, then connect again.")
             if self._processes() >= self.max_processes:
                 raise VisitorError("This host is at its process limit; try again in a moment.")
             self._active[job_id] = visitor
@@ -285,7 +328,26 @@ class VisitorRuntimes:
 
     def release(self, job_id: str) -> None:
         with self._lock:
-            self._active.pop(job_id, None)
+            visitor = self._active.pop(job_id, None)
+        if visitor:
+            self._on_process_end(visitor)
+
+    def _on_process_end(self, visitor: str) -> None:
+        """A question or a sign-in ended: if the visitor is waiting for
+        cleanup and nothing else runs, do it now, once."""
+        if self._claim_cleanup(visitor):
+            self._cleanup(visitor)
+
+    def _claim_cleanup(self, visitor: str) -> bool:
+        """The right to run removal for a pending visitor: granted to one
+        thread at a time, and only when no process of theirs is alive."""
+        with self._lock:
+            if visitor not in self._pending_cleanup or visitor in self._cleaning:
+                return False
+            if any(v == visitor for v in self._active.values()) or self._login_running(visitor):
+                return False
+            self._cleaning.add(visitor)
+            return True
 
     def running_jobs(self, visitor: str) -> list[str]:
         with self._lock:
@@ -294,45 +356,71 @@ class VisitorRuntimes:
     # -- disconnect: refuse new work, stop, wait for termination, official logout, remove
     def disconnect(self, visitor: str, *, stop_running=None, wait_seconds: float = 30.0) -> dict:
         """Closing a connection in order: no new logins or questions for this
-        visitor; cancel what runs; wait until every job of the visitor has
-        actually ended; then the official logout and the removal of the
-        credential store. If the jobs do not end in time the runtime stays
-        on disk as `pending_cleanup` (no deletion under a live process) and
-        `finish_pending()` / `sweep()` complete it later."""
+        visitor; cancel what runs (questions and a sign-in alike); wait until
+        every process of theirs has actually ended, escalating to SIGKILL;
+        then the official logout and the removal of the credential store.
+        If a process outlives the wait, or removal fails, the visitor stays
+        `pending_cleanup` and no deletion happens under a live process; the
+        next process end or the periodic sweep retries, and the pending
+        state is cleared only when removal has succeeded."""
         self._check(visitor)
         steps = {"stopped": False, "logged_out": None, "removed": False, "waited_for": 0, "pending_cleanup": False}
         with self._lock:
-            self._disconnecting[visitor] = "disconnecting"
+            self._disconnecting.add(visitor)
+            login = self._logins.get(visitor)
         try:
             if stop_running is not None:
                 steps["stopped"] = bool(stop_running())
-            self.login_cancel(visitor)
-            deadline = time.time() + wait_seconds
-            while self.running_jobs(visitor) and time.time() < deadline:
-                time.sleep(0.1)
-            steps["waited_for"] = len(self.running_jobs(visitor))
-            if self.running_jobs(visitor):
+            if login is not None:
+                self._terminate(login, wait_seconds)
                 with self._lock:
-                    self._pending_cleanup.add(visitor)
+                    if login.finished and self._logins.get(visitor) is login:
+                        del self._logins[visitor]
+                self._event(visitor, "login", state="cancelled" if login.finished else "still_running")
+            deadline = time.time() + wait_seconds
+            while time.time() < deadline and (self.running_jobs(visitor) or self._login_alive(visitor)):
+                time.sleep(0.1)
+            steps["waited_for"] = len(self.running_jobs(visitor)) + (1 if self._login_alive(visitor) else 0)
+            with self._lock:
+                self._pending_cleanup.add(visitor)   # pending until removal succeeds, whatever happens next
+            if steps["waited_for"]:
                 steps["pending_cleanup"] = True
                 self._event(visitor, "disconnect", **steps)
                 return steps
-            steps.update(self._remove(visitor))
         finally:
             with self._lock:
-                self._disconnecting.pop(visitor, None)
+                self._disconnecting.discard(visitor)
+        if self._claim_cleanup(visitor):
+            steps.update(self._cleanup(visitor))
+        steps["pending_cleanup"] = visitor in self._pending_cleanup
         self._event(visitor, "disconnect", **steps)
         return steps
 
+    def _login_alive(self, visitor: str) -> bool:
+        with self._lock:
+            return self._login_running(visitor)
+
+    def _cleanup(self, visitor: str) -> dict:
+        """Removal, by the thread holding the cleanup right: official logout,
+        then the directory. Success clears the pending state; failure keeps
+        it for a retry."""
+        steps = {"logged_out": None, "removed": False}
+        try:
+            steps.update(self._remove(visitor))
+        finally:
+            with self._lock:
+                self._cleaning.discard(visitor)
+                if steps["removed"]:
+                    self._pending_cleanup.discard(visitor)
+        self._event(visitor, "cleanup", **steps)
+        return steps
+
     def finish_pending(self) -> list[str]:
-        """Complete disconnects whose jobs have since ended."""
+        """Complete disconnects whose processes have since ended (one
+        executor per visitor; a failed removal is retried next time)."""
         done = []
         for visitor in list(self._pending_cleanup):
-            if not self.running_jobs(visitor):
-                self._remove(visitor)
-                with self._lock:
-                    self._pending_cleanup.discard(visitor)
-                self._event(visitor, "disconnect_completed")
+            if self._claim_cleanup(visitor) and self._cleanup(visitor)["removed"]:
                 done.append(visitor)
         return done
 
@@ -347,8 +435,13 @@ class VisitorRuntimes:
                     steps["logged_out"] = out.returncode == 0
                 except (OSError, subprocess.TimeoutExpired):
                     steps["logged_out"] = False
-            shutil.rmtree(self.dir(visitor), ignore_errors=True)
+            try:
+                shutil.rmtree(self.dir(visitor))
+            except OSError:
+                pass
             steps["removed"] = not self.dir(visitor).exists()
+        else:
+            steps["removed"] = True
         return steps
 
     # -- housekeeping ----------------------------------------------------------
@@ -359,12 +452,33 @@ class VisitorRuntimes:
         for d in list(self.base.iterdir()):
             if not d.is_dir() or not _ID.fullmatch(d.name):
                 continue
-            if self.running_jobs(d.name) or (d.name in self._logins and not self._logins[d.name].finished):
+            with self._lock:
+                busy = any(v == d.name for v in self._active.values()) or self._login_running(d.name) or self._closing(d.name)
+            if busy:
                 continue
             if now - d.stat().st_mtime > self.idle_days * 86400:
-                self.disconnect(d.name)
-                removed.append(d.name)
+                if self.disconnect(d.name)["removed"]:
+                    removed.append(d.name)
         return removed
+
+    # -- the periodic sweep, tied to the server's life ---------------------------
+    def start_sweeper(self, interval_seconds: float) -> None:
+        self._stop = threading.Event()
+
+        def loop():
+            while not self._stop.wait(interval_seconds):
+                try:
+                    self.sweep()
+                except Exception:  # noqa: BLE001 — a sweep must never take the server down
+                    pass
+        self._sweeper = threading.Thread(target=loop, daemon=True, name="visitor-sweeper")
+        self._sweeper.start()
+
+    def stop_sweeper(self) -> None:
+        stop = getattr(self, "_stop", None)
+        if stop is not None:
+            stop.set()
+            self._sweeper.join(timeout=5)
 
     def count(self) -> int:
         return sum(1 for p in self.base.iterdir() if p.is_dir())
