@@ -643,6 +643,8 @@ def main(argv=None) -> int:
     benchmarks = commands.add_parser("benchmarks", help="build the benchmark snapshot from reviewed extraction")
     common_options(benchmarks, child=True)
     benchmarks.add_argument("--out")
+    benchmarks.add_argument("--publish", action="store_true",
+                            help="also install the export as the new active data revision (JSON + SQLite)")
     benchmarks.set_defaults(fn=cmd_service)
     args = parser.parse_args(argv)
     if args.home:
