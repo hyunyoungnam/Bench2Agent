@@ -411,6 +411,12 @@ def cmd_mcp(args, root: Path) -> int:
         return result.returncode
     if args.dry_run:
         raise ValueError("--dry-run requires --connect codex or --connect claude.")
+    if getattr(args, "http", False):
+        try:
+            from bench2agent.core import mcp_http
+        except ImportError:
+            raise ValueError("The HTTP server needs the server extra: pip install 'bench2agent[server]'") from None
+        return mcp_http.serve(root, host=args.host, port=args.port, revision=getattr(args, "revision", None))
     from bench2agent.core import mcp as server
     from bench2agent.core.benchmarks import BenchmarkStore
     # the served revision is fixed for this process: the one named, else the
@@ -494,6 +500,9 @@ def main(argv=None) -> int:
     mode.add_argument("--connect", choices=["codex", "claude"], help="register via the client's own CLI")
     mcp.add_argument("--dry-run", action="store_true", help="show registration command without changing settings")
     mcp.add_argument("--revision", help="serve this installed data revision instead of the active one (reproduce earlier answers)")
+    mcp.add_argument("--http", action="store_true", help="serve over Streamable HTTP (needs the server extra) instead of stdio")
+    mcp.add_argument("--host", default="127.0.0.1")
+    mcp.add_argument("--port", type=int, default=8765)
     mcp.set_defaults(fn=cmd_mcp)
     for name in ("claude", "codex"):
         client = commands.add_parser(name, help=f"open {CLIENT_LABELS[name]} with Bench2Agent tools")

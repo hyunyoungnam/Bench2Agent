@@ -14,6 +14,12 @@ license-files = ["LICENSE"]
 # cannot run the build pipeline (Windows, no GPU). Pipeline deps live in .venv.
 dependencies = []
 
+[project.optional-dependencies]
+# The hosted side: the official MCP Python SDK for Streamable HTTP, and the
+# web host. Pinned to the versions the tests ran against; the terminal and
+# stdio MCP never import them.
+server = ["mcp>=2.3,<3", "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "httpx>=0.27,<1"]
+
 [project.urls]
 Repository = "https://github.com/hyunyoungnam/Bench2Agent"
 Documentation = "https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md"

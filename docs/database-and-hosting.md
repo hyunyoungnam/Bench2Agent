@@ -234,6 +234,12 @@ Collection and model-call logs remain distinct from user-visible evidence.
    `bench2agent benchmarks --publish` turns a build into a revision. Not yet:
    per-paper processing status, retryable stage queues and partial
    reprocessing (the working database of this section).
+   **HTTP MCP done (2026-10-12):** `core/mcp_http.py` with the official MCP
+   Python SDK (`server` extra, `mcp>=2.3,<3`), Streamable HTTP, stateless:
+   `/revisions/<id>/mcp` pins by path, `/mcp` pins to the process start,
+   `/revisions` lists; outputs equal the repository reference on the same
+   revision, overlapping conversations on two revisions stay apart, and a
+   damaged or removed revision answers with recovery. `bench2agent mcp --http`.
 4. Build the hosted conversation API and browser shell, with isolated user
    sessions and provider clients. Run the same representative question suite
    through terminal, MCP and HTTP.

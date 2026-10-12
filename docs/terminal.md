@@ -354,6 +354,19 @@ This prints a configuration using an absolute Python executable and data
 directory. The MCP host starts `bench2agent mcp` automatically as a local stdio
 process. Running it manually waits for JSON-RPC requests; it is not a chat prompt.
 
+### Streamable HTTP
+
+With the server extra (`pip install 'bench2agent[server]'`, the official MCP
+Python SDK), `bench2agent mcp --http [--host 127.0.0.1] [--port 8765]`
+serves the same six tools over Streamable HTTP. The data revision is fixed by
+the path and by nothing else: `/revisions/<snapshot_id>/mcp` serves that
+installed revision for every call, whatever is active, which is how a hosted
+conversation keeps its revision; `/mcp` serves the revision the process
+started on (`--revision` names one), like the stdio server; `/revisions`
+lists what is installed. Every response carries `revision`, requests are
+stateless, and a damaged or removed revision answers with its recovery
+message, never with other data.
+
 The six exposed tools are `benchmark_scope`, `benchmark_usage`,
 `benchmark_trend`, `new_benchmarks`, `benchmark_adoption`, and
 `benchmark_evidence`. All are read-only and use the same invocation/validation
