@@ -246,7 +246,8 @@ def cmd_chat(args, root: Path) -> int:
     interactive = sys.stdin.isatty() and not getattr(args, "question", None)
     require_data(root, interactive=interactive)
     session = load_session(args, root, interactive=interactive)
-    ensure_key(session.doc, interactive=interactive)
+    if session.doc.get("connector", "api") == "api":        # the CLI connectors bring their own login
+        ensure_key(session.doc, interactive=interactive)
     last = session.doc["turns"][-1] if session.doc["turns"] else None
 
     def emit(event):

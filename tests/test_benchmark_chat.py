@@ -215,6 +215,13 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(figures.claimed("LIBERO 80 papers, arXiv 2306.03310, NeurIPS 2023; 183 from ICLR 2026 and 4,237/5,468"),
                          [("80", 80.0), ("183", 183.0), ("4,237", 4237.0), ("5,468", 5468.0)])
         self.assertEqual(figures.claimed("2026 papers in total"), [("2026", 2026.0)])   # a bare count stays a figure
+        self.assertEqual(figures.claimed("2024→2025 z = −3.787, falling; 2025→2026 z = −5.011"),
+                         [("-3.787", -3.787), ("-5.011", -5.011)])
+        # numbers a tool returned inside text are in the pool too (the trend rule's threshold)
+        self.assertIn(2.576, figures.benchmark_pool({"rule": "Within venue: two-proportion z, abs(z) >= 2.576", "id": "x9"}))
+        self.assertNotIn(9.0, figures.benchmark_pool({"id": "x9"}))
+        self.assertIn(2026.0, figures.benchmark_pool({"results": [{"edition": "iclr-2026", "papers": 165}]}))
+        self.assertNotIn(2306.0331, figures.benchmark_pool({"url": "https://arxiv.org/abs/2306.03310", "generated_at": "2026-10-07"}))
 
     def test_assembled_table_cell_is_evidence_but_not_a_verbatim_quote(self):
         def change(data):

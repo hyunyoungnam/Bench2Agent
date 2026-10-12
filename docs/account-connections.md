@@ -59,6 +59,39 @@ genuine one to inspect in the live check. A green mark says a number exists
 in some tool output; the binding check in `docs/web-live-check.md` is still
 needed.
 
+## The three representative questions through the web (2026-10-12)
+
+Same host, same revision `0dd4b9bbee4b54d2`, a visitor session on loopback,
+both CLI connectors with the machine's own logins, questions run from the
+page's API. Elapsed time is wall clock from request to verified turn; the
+tools themselves took under 0.2 s per call (the CLI runs them, so their time
+is inside the model column).
+
+| Connector | Question | Elapsed | MCP calls | Quotes verified | Figures recomputed |
+|---|---|---|---|---|---|
+| claude | field | 72 s (model 70, checks 0.1) | 2 | 5/5 | 31/32 |
+| claude | trend | 59 s (model 58, checks 0.1) | 3 | 3/3 | 8/11 |
+| claude | new | 86 s (model 84, checks 1.3) | 6 | 2/2 | 27/27 |
+| codex | field | 64 s (model 63, checks 0.1) | 7 | 2/2 | 16/16 |
+| codex | trend | 41 s (model 40, checks 0.1) | 5 | 1/1 | 10/10 |
+| codex | new | 75 s (model 72, checks 1.4) | 13 | 2/2 | 22/23 |
+
+Binding check against the MCP logs: both connectors gave LIBERO 80, SIMPLER
+41, Meta-World 29 on 509 parsed papers for the field question, and
+178/1,888, 197/3,038, 165/4,237 for CIFAR-10 at ICLR 2024/2025/2026, each
+attached to the right benchmark and edition. Every answer showed the
+repository and introducing-paper links the tools had as separate URLs and
+wrote "no confirmed location" / "none reviewed" where they did not; no link
+was invented. The figures that did not recompute were, in every case, not
+tool numbers: a row count the model chose ("top 12"), edition years and the
+z threshold quoted from the rule text (the checker now reads numbers inside
+returned text), two fragments of a date the model split across an anchor,
+and totals the model summed over the 28 editions (58,616 parsed of 77,775
+listed), which the checker does not derive. Quotes: 15 of 15 verbatim.
+
+The terminal, through the same layer (`bench2agent ask --connector claude`),
+gave the CIFAR-10 series with the same figures.
+
 ## Local vs. public, stated plainly
 
 Today Bench2Agent can be used **locally, without any Bench2Agent account or

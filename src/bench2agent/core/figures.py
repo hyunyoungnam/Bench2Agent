@@ -37,19 +37,27 @@ RECOMPUTABLE.update({name: "json" for name in (
     "benchmark_adoption", "benchmark_evidence")})
 
 
-def benchmark_pool(obj) -> list[float]:
+# String fields whose digits are figures the tool stated: the trend rule's
+# threshold ("abs(z) >= 2.576") and edition names ("iclr-2026"). URLs, ids
+# and dates elsewhere stay out of the pool.
+_TEXT_FIGURE_KEYS = {"rule", "edition", "from", "to", "first_claim"}
+
+
+def benchmark_pool(obj, key=None) -> list[float]:
     """Only computed statistics, excluding IDs, quotes, dates and name digits."""
     out = []
     if isinstance(obj, dict):
-        for key, value in obj.items():
-            if key not in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "id",
-                           "snapshot_id", "generated_at", "schema_version", "authors", "developers"}:
-                out.extend(benchmark_pool(value))
+        for k, value in obj.items():
+            if k not in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "id",
+                         "snapshot_id", "generated_at", "schema_version", "authors", "developers"}:
+                out.extend(benchmark_pool(value, k))
     elif isinstance(obj, list):
         for value in obj:
-            out.extend(benchmark_pool(value))
+            out.extend(benchmark_pool(value, key))
     elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
         out.append(float(obj))
+    elif isinstance(obj, str) and key in _TEXT_FIGURE_KEYS and len(obj) <= 400:
+        out.extend(_val(m.group(0)) for m in _NUM.finditer(obj))
     return out
 
 # Ids are not figures. A gid is a five-digit number that would make almost any
@@ -124,8 +132,9 @@ def _identifier_number(text: str, match) -> bool:
         return True  # the fixed rate unit in "500 per 1,000 papers"
     if _ARXIV_ID.fullmatch(raw) and not re.search(r"\d$", before) and not re.match(r"\d", after):
         return True
-    if _YEAR.fullmatch(raw) and (re.search(r"[A-Za-z]{2,}\s+$", before) or re.match(r"\s*(?:edition|년|회차)", after)):
-        return True  # "ICLR 2026": the edition's year, not a count
+    if _YEAR.fullmatch(raw) and (re.search(r"[A-Za-z]{2,}\s+$", before) or re.search(r"[→>\-–]\s*$", before)
+                                 or re.match(r"\s*(?:→|->|–|edition|년|회차)", after)):
+        return True  # "ICLR 2026", "2024→2025": edition years, not counts
     return bool(re.search(r"[A-Za-z][-_/]?$", before) or re.match(r"[A-Za-z]", after))
 
 
