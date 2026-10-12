@@ -40,9 +40,10 @@ class TerminalTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.path = self.root / data.MEMBER
+        self.path = self.root / data.MEMBER          # where a build writes; served only once registered
         self.path.parent.mkdir(parents=True)
         self.path.write_text(json.dumps(snapshot()), encoding="utf-8")
+        data.install(self.root, file=str(self.path))   # the explicit one-time registration
         self.store = BenchmarkStore(self.root)
         self.patch = patch.object(mcp, "B", self.store)
         self.patch.start()
@@ -87,7 +88,7 @@ class TerminalTests(unittest.TestCase):
         self.assertIn("error", mcp.execute_tool("benchmark_trend", {}, tools))
         self.assertIn("error", mcp.execute_tool("benchmark_usage", {"invented": 1}, tools))
         self.assertIn("error", mcp.execute_tool("benchmark_usage", None, tools))
-        self.path.unlink()
+        shutil.rmtree(self.root / "data/revisions/fixture-1")   # the served revision vanishes
         self.assertFalse(mcp.execute_tool("benchmark_scope", {}, tools)["available"])
         self.assertIn("error", mcp.execute_tool("benchmark_usage", {}, tools))
 
@@ -173,7 +174,7 @@ class TerminalTests(unittest.TestCase):
     def test_first_launch_downloads_once_and_never_replaces_installed_data(self):
         bundle = self.root / "release.tar.gz"
         release = data.bundle(self.root, bundle)
-        self.path.unlink()
+        shutil.rmtree(self.root / "data/revisions")     # nothing installed, as on a first launch
         with patch("bench2agent.core.cli._download", side_effect=lambda url, dest: shutil.copyfile(bundle, dest)) as fetch, \
              patch.object(data, "DEFAULT_SHA256", release["sha256"]), \
              patch("builtins.input", side_effect=AssertionError("no URL prompt")), \
@@ -184,7 +185,7 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(data.status(self.root)["snapshot_id"], "fixture-1")
 
     def test_headless_query_does_not_download_data_implicitly(self):
-        self.path.unlink()
+        shutil.rmtree(self.root / "data/revisions")
         with patch.object(data, "install") as install:
             with self.assertRaisesRegex(ValueError, "bench2agent data install"):
                 cli.require_data(self.root, interactive=False)
@@ -223,7 +224,7 @@ class TerminalTests(unittest.TestCase):
 
     def test_shortcut_missing_client_or_bad_download_never_starts_a_session(self):
         args = type("Args", (), {"command": "claude", "dry_run": False})()
-        self.path.unlink()
+        shutil.rmtree(self.root / "data/revisions")      # nothing installed
         with patch("shutil.which", return_value=None), patch.object(data, "install") as install:
             with self.assertRaisesRegex(ValueError, "Install it first"):
                 cli.cmd_client(args, self.root)
@@ -236,7 +237,7 @@ class TerminalTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_shortcut_dry_run_has_no_download_or_client_side_effects(self):
-        self.path.unlink()
+        shutil.rmtree(self.root / "data/revisions")
         args = type("Args", (), {"command": "claude", "dry_run": True})()
         with patch("shutil.which", return_value="/client/claude"), patch.object(data, "install") as install, \
              patch("subprocess.run") as run, contextlib.redirect_stdout(io.StringIO()) as output:
@@ -383,9 +384,14 @@ class TerminalTests(unittest.TestCase):
             earlier.ask("Stale question", lambda _: None)
         changed = snapshot()
         changed["snapshot_id"] = "fixture-2"
-        self.path.write_text(json.dumps(changed))
+        (self.root / "changed.json").write_text(json.dumps(changed))
+        data.install(self.root, file=str(self.root / "changed.json"))   # a new revision goes live
+        with patch.object(providers, "post", side_effect=self.scripted("openai")):
+            follow = session.ask("A follow-up", lambda _: None)
+        self.assertEqual(follow["on"]["benchmarks"]["snapshot_id"], "fixture-1")   # the conversation stays on its revision
+        shutil.rmtree(self.root / "data/revisions/fixture-1")
         with self.assertRaisesRegex(ValueError, "dataset changed"):
-            session.ask("A follow-up", lambda _: None)
+            session.ask("Another follow-up", lambda _: None)
 
     def test_api_errors_do_not_echo_secrets(self):
         import urllib.error

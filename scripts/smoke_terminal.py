@@ -16,8 +16,7 @@ def main():
     env.pop("BENCH2AGENT_HOME", None)
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
-        snapshot = root / "data/processed/benchmark_snapshot.json"
-        snapshot.parent.mkdir(parents=True)
+        snapshot = root / "fixture.json"
         snapshot.write_text(json.dumps({
             "schema_version": 1, "snapshot_id": "installed-wheel-fixture", "source": "arxiv_html_stated_roles",
             "generated_at": "2026-01-01", "benchmarks": [{"id": "toy", "name": "Toy"}],
@@ -36,6 +35,8 @@ def main():
 
         from bench2agent import __version__
         assert "Bench2Agent " + __version__ in run(["--version"])
+        installed = json.loads(run(["data", "install", "--file", str(snapshot)]))
+        assert installed["revision"] == "installed-wheel-fixture" and installed["outcome"] == "installed"
         executable = Path(sys.executable).parent / ("bench2agent.exe" if os.name == "nt" else "bench2agent")
         assert executable.is_file(), "The installed bench2agent console command is missing"
         assert subprocess.run([str(executable), "--version"], cwd=root, env=env,
@@ -59,9 +60,9 @@ def main():
         usage = json.loads(response[2]["result"]["content"][0]["text"])
         assert usage["results"][0]["papers"] == 1
         assert usage["coverage"]["parsed_papers"] == 1
-        # the same data imported into SQLite answers the same, outside the checkout
-        imported = json.loads(run(["data", "sqlite"]))
-        assert imported["paper_observations"] == 1 and imported["db_schema_version"] == 1
+        # the revision carries its SQLite import; the build utility writes elsewhere
+        built = json.loads(run(["data", "sqlite", str(snapshot), "--out", str(root / "built.sqlite")]))
+        assert built["paper_observations"] == 1 and built["db_schema_version"] == 1
         assert json.loads(run(["data", "status"]))["sqlite"]["matches_json"] is True
         env["BENCH2AGENT_STORE"] = "sqlite"
         response = [json.loads(line) for line in run(["mcp"], request).splitlines()]

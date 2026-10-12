@@ -183,7 +183,7 @@ def cmd_data(args, root: Path) -> int:
     elif args.action == "install":
         result = data.install(root, file=args.file, url=args.url, sha256=args.sha256)
     elif args.action == "sqlite":
-        result = data.build_sqlite(root)
+        result = data.build_sqlite(root, args.source, args.out)
     elif args.action == "activate":
         result = data.activate(root, args.revision)
     else:
@@ -230,8 +230,10 @@ def require_data(root: Path, *, interactive: bool):
     current = status(root)
     if current["available"]:
         return
-    if current.get("reason") and (current["json"]["available"] or current["sqlite"]["available"]):
-        raise ValueError(current["reason"])   # data exists but the chosen backend cannot use it
+    if current.get("pointer") != "none" or current.get("revisions"):
+        # something is installed but cannot be served: a broken pointer, a
+        # damaged revision, or a backend without its file — never download over it
+        raise ValueError(current.get("reason") or "Installed data cannot be served; run bench2agent data status.")
     if interactive:
         from .data import install
         print("Downloading benchmark data (16 MB); checking its checksum…", file=sys.stderr, flush=True)
@@ -409,8 +411,14 @@ def cmd_mcp(args, root: Path) -> int:
         return result.returncode
     if args.dry_run:
         raise ValueError("--dry-run requires --connect codex or --connect claude.")
-    from bench2agent.core.mcp import _benchmark_tools, serve_stdio
-    return serve_stdio(tools=_benchmark_tools(), name="bench2agent")
+    from bench2agent.core import mcp as server
+    from bench2agent.core.benchmarks import BenchmarkStore
+    # the served revision is fixed for this process: the one named, else the
+    # one active now; new data needs a restart
+    server.B = BenchmarkStore(root, revision=getattr(args, "revision", None))
+    if server.B.unavailable or server.B.revision is None:
+        raise ValueError(server.B.unavailable or "No data revision is installed. Run bench2agent data install.")
+    return server.serve_stdio(tools=server._benchmark_tools(), name="bench2agent")
 
 
 def common_options(parser, *, child=False):
@@ -471,8 +479,10 @@ def main(argv=None) -> int:
     bundle = actions.add_parser("bundle")
     common_options(bundle, child=True)
     bundle.add_argument("--out", required=True)
-    sqlite = actions.add_parser("sqlite", help="import the installed snapshot into a SQLite file beside it")
+    sqlite = actions.add_parser("sqlite", help="build a SQLite file from a snapshot JSON (for bundling; never into a revision)")
     common_options(sqlite, child=True)
+    sqlite.add_argument("source", help="path of a benchmark_snapshot.json")
+    sqlite.add_argument("--out", required=True)
     activate = actions.add_parser("activate", help="serve an already installed data revision (rollback)")
     common_options(activate, child=True)
     activate.add_argument("revision")
@@ -483,6 +493,7 @@ def main(argv=None) -> int:
     mode.add_argument("--config", action="store_true", help="print MCP configuration for other clients")
     mode.add_argument("--connect", choices=["codex", "claude"], help="register via the client's own CLI")
     mcp.add_argument("--dry-run", action="store_true", help="show registration command without changing settings")
+    mcp.add_argument("--revision", help="serve this installed data revision instead of the active one (reproduce earlier answers)")
     mcp.set_defaults(fn=cmd_mcp)
     for name in ("claude", "codex"):
         client = commands.add_parser(name, help=f"open {CLIENT_LABELS[name]} with Bench2Agent tools")

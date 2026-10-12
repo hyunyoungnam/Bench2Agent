@@ -157,42 +157,67 @@ bench2agent data install --file ./bench2agent-data.tar.gz
 bench2agent data status
 ```
 
-`bench2agent data sqlite` imports the installed snapshot into
-`benchmark_snapshot.sqlite` beside it and writes a `.sha256` file. The import
-builds a temporary file and replaces the old database only after reading it
-back as the identical snapshot, so a failed import keeps what was there.
-`bench2agent data status` reports both files and whether their snapshot ids
-agree. Queries read the JSON snapshot unless `BENCH2AGENT_STORE=sqlite` (or
-`auto`, which uses the SQLite file only when it was built from the installed
-snapshot and falls back to JSON otherwise; an explicit `sqlite` with a stale
-or unreadable file reports why instead of answering). Each tool call reads
-one version of the file, so a database replaced during a call is seen only by
-the next one. A `.sqlite` file installs on its own with `data install --file`,
-and `data bundle` includes the database when it matches the snapshot. Both
+Every revision holds the snapshot JSON and its SQLite import. Queries read
+the JSON unless `BENCH2AGENT_STORE=sqlite` (or `auto`, which uses the SQLite
+file only when it was built from the installed JSON; an explicit `sqlite`
+with a stale or unreadable file reports why instead of answering). Each tool
+call reads one version of the file. A `.sqlite` file installs on its own
+with `data install --file`, and `data bundle` includes the database. Both
 backends return the same results and are checked against each other in the
 test suite and by `scripts/parity_check.py`.
 
 ### Data revisions
 
-An install is a revision: the snapshot and its SQLite import are staged
-together under `data/revisions/`, checked against each other, moved into
-`data/revisions/<snapshot_id>/` with one rename, and only then named in
-`data/revisions/active`. A failed install, at any step, leaves the active
-revision serving with both of its files unchanged. Earlier revisions stay
-installed: a conversation started on one keeps reading it, with its tool
-calls and its quote and figure checks, until that directory is removed, and
-`bench2agent data activate <snapshot_id>` switches what new conversations
-get (a rollback is the same command). `data status` lists revisions. An
-install with no `data/revisions/active` falls back to the previous layout,
-`data/processed/benchmark_snapshot.json`, so existing installs and the
-source checkout keep working.
+Every install is a revision. The snapshot and its SQLite import are staged
+together under `data/revisions/`, validated and checked against each other,
+moved into `data/revisions/<snapshot_id>/` with one rename, and only then
+named in `data/revisions/active`. A failed install, at any step, leaves the
+active revision serving with both of its files unchanged. Published
+revisions are never edited.
 
-On the collection machine, `bench2agent benchmarks --publish` builds the
-snapshot from the reviewed extraction and installs it as the new active
-revision in one step. Adding a conference edition is therefore: run the
-`icml` stages for that edition (collect, normalize, arXiv match, HTML
-parse, `bench_mentions --all`), then publish. The published revision is
-never edited; a correction is a new revision.
+- **Pinning.** Everything reads an explicit revision. A terminal question
+  fixes the revision when it starts (a saved conversation keeps the one its
+  first answer was given on) and uses it for every tool call, figure
+  recomputation and quote check in that turn. The local stdio MCP server
+  (`bench2agent mcp`) reads the revision that was active when it started,
+  for its whole life, and says so in its instructions and in every response
+  (`revision`). Restart the server to serve the currently active revision;
+  `bench2agent mcp --revision <snapshot_id>` serves an installed earlier
+  revision to reproduce earlier answers.
+- **Switching.** `bench2agent data activate <snapshot_id>` verifies that
+  revision (manifest, files, checksums, JSON and database from the same
+  snapshot) and makes it the one new conversations and new servers get.
+  A rollback is the same command. `data status` lists revisions, the pointer
+  state and the served revision's verification.
+- **No fallback.** With no `active` pointer nothing is served and the
+  commands say to install; a pointer whose target is missing or damaged is
+  an error naming the recovery (`data activate` an installed revision, or
+  reinstall a verified bundle). Data is never read from any other place.
+- **Same content, same revision.** `snapshot_id` identifies the extraction
+  inputs (it is derived from their file stamps). The manifest also records
+  `content_sha256`, the content without `generated_at`, so re-exporting the
+  same extraction and installing it again is recognised and the installed
+  copy is kept. Same id with different content is refused.
+- **Repair is a restore.** A damaged copy is repaired only from bytes that
+  match the manifest's recorded checksums (reinstall the original bundle);
+  the manifest is never rewritten, and a database is never rebuilt inside a
+  revision. Databases built locally from a JSON-only source are marked
+  `sqlite_built_locally` with the SQLite library version, since the bytes of
+  an import differ between SQLite builds even for identical content.
+  Official bundles therefore carry the database.
+- **Previous installs.** A `data/processed/benchmark_snapshot.json` from
+  before revisions is registered once, explicitly, with
+  `bench2agent data install --file data/processed/benchmark_snapshot.json`;
+  `bench2agent migrate --from DIR` does this for a previous installation.
+  The source checkout registers a build the same way, or with
+  `bench2agent benchmarks --publish`, which builds the snapshot from the
+  reviewed extraction and installs it as the new active revision in one
+  step. Adding a conference edition is therefore the per-edition `icml`
+  stages (collect, normalize, arXiv match, HTML parse, `bench_mentions
+  --all`) followed by publish.
+
+`bench2agent data sqlite SNAPSHOT.json --out FILE.sqlite` builds a database
+for bundling; it refuses to write inside `data/revisions/`.
 
 `--file` also accepts the exported `benchmark_snapshot.json` or a
 `benchmark_snapshot.sqlite`. The bundle

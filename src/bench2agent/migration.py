@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from .data import MEMBER, validate
+from .data import MEMBER, install, validate
 from .session import write_json
 
 
@@ -38,10 +38,26 @@ def migrate(root: Path, source: Path) -> dict:
         raise ValueError("Previous installation directory does not exist.")
     result = {"source": str(source), "home": str(root.resolve()),
               "snapshot_copied": False, "settings_copied": False, "chats_copied": 0}
+    from .core import revisions
+    # revisions of the previous install come across whole; a previous
+    # legacy snapshot (data/processed/) is registered as a revision once
+    previous_revisions = revisions.list_revisions(source)
+    for rev in previous_revisions:
+        src_dir = Path(rev["path"])
+        if (revisions.revision_dir(root, rev["id"]) / "manifest.json").is_file():
+            continue
+        file = src_dir / "benchmark_snapshot.json" if rev["json"] else src_dir / "benchmark_snapshot.sqlite"
+        install(root, file=str(file), activate=False)
+        result["snapshot_copied"] = True
+    active = next((r["id"] for r in previous_revisions if r["active"]), None)
+    if active and revisions.active_revision(root) is None:
+        revisions.set_active(root, active)
     snapshot = source / MEMBER
-    if snapshot.is_file() and not (root / MEMBER).exists():
+    if snapshot.is_file() and not previous_revisions:
         validate(snapshot)
-        result["snapshot_copied"] = _copy_missing(snapshot, root / MEMBER)
+        installed = install(root, file=str(snapshot), activate=revisions.active_revision(root) is None)
+        result["snapshot_copied"] = installed["outcome"] != "reused"
+        result["revision"] = installed["revision"]
     target = root / "data/bench2agent"
     for previous in (source / "data/bench2agent", source / "data/benchtrend"):
         settings = previous / "settings.json"

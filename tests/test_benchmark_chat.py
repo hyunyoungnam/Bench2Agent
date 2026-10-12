@@ -56,8 +56,25 @@ class BenchmarkQuestions(unittest.TestCase):
                 {"arxiv_base": pid, "event_id": i} for i, (pid, _, _) in enumerate(records)], lines=True)
             self.write(f"data/interim/mentions/mentions_{ed}.jsonl", [
                 {"arxiv_base": pid, "mentions": uses} for pid, _, uses in records], lines=True)
-        self.store = BenchmarkStore(self.root)
         build_snapshot(self.root)
+        self.publish()
+
+    def publish(self):
+        """Register the build (or an edited export) as the served revision and
+        read from it with a fresh store; stores are pinned to one revision."""
+        from bench2agent import data as data_module
+        data_module.install(self.root, file=str(self.root / "data/processed/benchmark_snapshot.json"))
+        self.store = BenchmarkStore(self.root)
+
+    def edit(self, change):
+        """Edit the exported JSON as a new snapshot and publish it."""
+        path = self.root / "data/processed/benchmark_snapshot.json"
+        data = json.loads(path.read_text())
+        change(data)
+        data["snapshot_id"] += "b"
+        path.write_text(json.dumps(data))
+        self.publish()
+        return data
 
     def write(self, name, obj, lines=False):
         p = self.root / name
@@ -98,10 +115,7 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertIn("locations", self.store.usage({})["note"])
         # a snapshot without the registry's check date says so rather than
         # borrowing its own export date
-        path = self.root / "data/processed/benchmark_snapshot.json"
-        data = json.loads(path.read_text())
-        del data["registry_checked"]
-        path.write_text(json.dumps(data))
+        self.edit(lambda d: d.pop("registry_checked"))
         rows = {r["id"]: r for r in self.store.usage({"latest": False, "limit": 50})["results"]}
         self.assertIsNone(rows["toy"]["locations"][0]["checked_at"])
         # links never enter the figure pool
@@ -122,20 +136,20 @@ class BenchmarkQuestions(unittest.TestCase):
         data["benchmarks"].append(duplicate)
         self.write("config/benchmarks_introduced.json", data)
         build_snapshot(self.root)
+        self.publish()
         matches = [e for e in self.store.data()["benchmarks"] if e["name"] == "Fresh"]
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["merged_ids"], ["fresh-2"])
         self.assertEqual(self.store.adoption({"benchmark": "fresh-2"})["evaluates_on"]["others"], 1)
 
     def test_duplicate_paper_observations_merge_roles_for_adoption(self):
-        path = self.root / "data/processed/benchmark_snapshot.json"
-        data = json.loads(path.read_text())
-        other = next(p for p in data["papers"] if p["paper_id"] == "2501.00002")
-        training = other["uses"]["fresh"]["roles"].pop("trains_on")
-        copy = {**other, "edition": "neurips-2025", "uses": {"fresh": {"roles": {"trains_on": training}}}}
-        data["papers"].append(copy)
-        data["editions"]["neurips-2025"] = {"total_papers": 1, "arxiv_matched": 1, "parsed_papers": 1}
-        path.write_text(json.dumps(data))
+        def change(data):
+            other = next(p for p in data["papers"] if p["paper_id"] == "2501.00002")
+            training = other["uses"]["fresh"]["roles"].pop("trains_on")
+            copy = {**other, "edition": "neurips-2025", "uses": {"fresh": {"roles": {"trains_on": training}}}}
+            data["papers"].append(copy)
+            data["editions"]["neurips-2025"] = {"total_papers": 1, "arxiv_matched": 1, "parsed_papers": 1}
+        self.edit(change)
         result = self.store.adoption({"benchmark": "fresh"})
         self.assertEqual(result["evaluates_on"]["others"], 1)
         self.assertEqual(result["trains_on"]["others"], 1)
@@ -173,7 +187,9 @@ class BenchmarkQuestions(unittest.TestCase):
             self.store.usage({"topic": "unlabelled specialism"})
 
     def test_missing_snapshot_is_unavailable_not_zero(self):
-        (self.root / "data/processed/benchmark_snapshot.json").unlink()
+        import shutil
+        from bench2agent.core import revisions
+        shutil.rmtree(revisions.revision_dir(self.root, revisions.active_revision(self.root)))
         self.assertFalse(self.store.scope({})["available"])
         self.assertIn("error", self.store.usage({}))
         self.assertIn("unused", [e["id"] for e in self.store.new({})["results"]])
@@ -197,12 +213,12 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(figures.claimed("z −3.374; 10 papers"), [("-3.374", -3.374), ("10", 10.0)])
 
     def test_assembled_table_cell_is_evidence_but_not_a_verbatim_quote(self):
-        path = self.root / "data/processed/benchmark_snapshot.json"
-        data = json.loads(path.read_text())
+        def change(data):
+            paper = next(p for p in data["papers"] if p["paper_id"] == "2501.00006")
+            paper["uses"]["toy"]["roles"]["evaluates_on"][0]["where"] = "table@appendix:cell"
+        data = self.edit(change)
         paper = next(p for p in data["papers"] if p["paper_id"] == "2501.00006")
         evidence = paper["uses"]["toy"]["roles"]["evaluates_on"][0]
-        evidence["where"] = "table@appendix:cell"
-        path.write_text(json.dumps(data))
         self.assertIsNone(self.store.verify(paper["paper_id"], evidence["text"]))
         self.assertEqual(self.store.evidence({"benchmark": "toy"})["total"], 2)
 

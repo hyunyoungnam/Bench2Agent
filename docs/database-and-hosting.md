@@ -218,16 +218,22 @@ Collection and model-call logs remain distinct from user-visible evidence.
    LIBERO 80, SIMPLER 41, Meta-World 29; ICLR CIFAR-10 178, 197, 165).
 3. Add incremental edition ingestion and immutable data revisions. Verify
    rollback, repeat imports and saved-answer reproducibility.
-   **Partly done (2026-10-12):** `core/revisions.py` — immutable revision
+   **Revisions done (2026-10-12):** `core/revisions.py` — immutable revision
    directories (`data/revisions/<snapshot_id>/` with JSON, SQLite, manifest)
-   and an atomic `active` pointer; `data install` stages and checks both
-   files before publishing, so a failed install cannot leave JSON and SQLite
-   on different versions; `data activate` rolls back; a saved conversation
-   is pinned to its revision for tools and answer checks (`mcp.using`,
-   `Session.store`); SQLite connections are per thread and per call, checked
-   under concurrent use; `bench2agent benchmarks --publish` turns a build
-   into a revision. Not yet: per-paper processing status, retryable stage
-   queues and partial reprocessing (the working database of this section).
+   and an atomic, verified `active` pointer; no fallback to other files, and
+   a broken pointer is a recovery error. `data install` stages and
+   cross-checks both files before publishing; same content (`content_sha256`,
+   without `generated_at`) under the same id reuses the installed copy;
+   a damaged copy is restored only from bytes matching the original manifest.
+   Every query runs on an explicit revision: a terminal question pins the one
+   active when it starts (a saved conversation keeps its own), the local
+   stdio MCP server pins the one active at process start (`--revision` to
+   reproduce), and the conversation binding is a `ContextVar` (`mcp.using`),
+   checked under threads and overlapping async tasks. The hosted HTTP MCP and
+   web service will pass the conversation's revision explicitly per request.
+   `bench2agent benchmarks --publish` turns a build into a revision. Not yet:
+   per-paper processing status, retryable stage queues and partial
+   reprocessing (the working database of this section).
 4. Build the hosted conversation API and browser shell, with isolated user
    sessions and provider clients. Run the same representative question suite
    through terminal, MCP and HTTP.

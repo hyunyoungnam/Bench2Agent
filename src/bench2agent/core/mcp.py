@@ -14,11 +14,11 @@ only, read-only, no network beyond the local search engine.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import json
 import os
 import re
 import sys
-import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -937,24 +937,29 @@ _GID = {"type": "integer", "description":
         "global paper id (gid) as returned by the other tools"}
 from .benchmarks import BenchmarkStore
 
+# The served store: pinned to the revision active when this process started
+# (or the one `bench2agent mcp --revision` names). A publish during the
+# process's life does not change it; restart to serve the new revision.
 B = BenchmarkStore(ROOT)
-_current = threading.local()
+_current: contextvars.ContextVar = contextvars.ContextVar("bench2agent_store", default=None)
 
 
 def store() -> BenchmarkStore:
-    """The store this thread's conversation is pinned to, else the served one."""
-    return getattr(_current, "store", None) or B
+    """The store of the current conversation (set with `using`), else the
+    served one. A ContextVar, so overlapping async requests on one thread
+    and threads alike each see their own."""
+    return _current.get() or B
 
 
 @contextlib.contextmanager
 def using(pinned: BenchmarkStore):
-    """Run tools and answer checks against one store (one data revision)."""
-    previous = getattr(_current, "store", None)
-    _current.store = pinned
+    """Run tools, figure recomputation and quote checks against one store
+    (one data revision) for the duration."""
+    token = _current.set(pinned)
     try:
         yield pinned
     finally:
-        _current.store = previous
+        _current.reset(token)
 
 
 _SCOPE = {
@@ -1157,6 +1162,14 @@ def execute_tool(name: str, arguments, tools=None) -> dict:
         return {"error": "Local tool failed; check the installed snapshot with bench2agent data status."}
 
 
+def _version() -> str:
+    try:
+        from bench2agent import __version__
+        return __version__
+    except ImportError:
+        return "unknown"
+
+
 def serve_stdio(tools=None, name: str = "bench2agent") -> int:
     from .policy import BENCHMARK_SYSTEM
     available = TOOLS if tools is None else tools
@@ -1187,8 +1200,9 @@ def serve_stdio(tools=None, name: str = "bench2agent") -> int:
             _reply(msg_id, {
                 "protocolVersion": requested if isinstance(requested, str) and requested in supported else "2025-11-25",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": name, "version": "0.2.0"},
-                "instructions": BENCHMARK_SYSTEM})
+                "serverInfo": {"name": name, "version": _version()},
+                "instructions": BENCHMARK_SYSTEM + "\nThis server reads data revision "
+                + str(store().revision) + " for its whole life; restart it to serve the currently active revision."})
         elif method == "tools/list":
             _reply(msg_id, {"tools": [
                 {**{k: t[k] for k in ("name", "description", "inputSchema")},

@@ -288,8 +288,19 @@ class BenchmarkStore:
     default comes from BENCH2AGENT_STORE and is json until parity is shown."""
 
     def __init__(self, root: Path = ROOT, backend: str | None = None, revision: str | None = None):
+        """Pinned to one data revision for its whole life: the one given, else
+        the one active when it was constructed. Nothing it reads changes when
+        a new revision is published; callers wanting new data construct a new
+        store (a terminal question, a restarted MCP server)."""
         self.root = root
-        self.revision = revision   # a saved conversation keeps reading the revision it started on
+        self.unavailable = None
+        try:
+            self.revision = revision or revisions.active_revision(root)
+            if self.revision and not (revisions.revision_dir(root, self.revision) / "manifest.json").is_file():
+                raise revisions.RevisionError(f"Data revision {self.revision} is not installed here. "
+                                              + revisions.recovery_hint(root, self.revision))
+        except ValueError as exc:   # a broken pointer or a missing explicit revision
+            self.revision, self.unavailable = revision, str(exc)
         self.backend = backend or os.environ.get("BENCH2AGENT_STORE", "json")
         if self.backend not in BACKENDS:
             raise ValueError("BENCH2AGENT_STORE must be json, sqlite or auto")
@@ -300,7 +311,8 @@ class BenchmarkStore:
 
     # -- storage selection and pinning ------------------------------------
     def _json_sha(self, path: Path) -> str:
-        stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+        # keyed by the path too: two revisions' files can share size and mtime
+        stamp = (str(path), path.stat().st_mtime_ns, path.stat().st_size)
         if self._json_sha_cache[0] != stamp:
             self._json_sha_cache = (stamp, file_sha256(path))
         return self._json_sha_cache[1]
@@ -311,9 +323,15 @@ class BenchmarkStore:
         a stale or unreadable file falls back to JSON. An explicit `sqlite`
         with a stale file is an error, so nobody answers from old data by
         accident."""
+        if self.unavailable:
+            return None, self.backend if self.backend != "auto" else "json", self.unavailable
+        if self.revision is None:
+            return None, self.backend if self.backend != "auto" else "json", (
+                "No data revision is installed. Run bench2agent data install (or data install --file FILE).")
         json_path, db_path, _ = revisions.paths_for(self.root, self.revision)
         if self.backend == "json":
-            return (json_path if json_path.exists() else None), "json", None
+            return (json_path if json_path.exists() else None), "json", (
+                None if json_path.exists() else f"Revision {self.revision} has no JSON snapshot; set BENCH2AGENT_STORE=sqlite.")
         db_state = None  # None: no file; "ok"; or an error message
         if db_path.exists():
             try:
@@ -331,7 +349,8 @@ class BenchmarkStore:
         if db_state == "ok":
             return db_path, "sqlite", None
         if self.backend == "sqlite":
-            return None, "sqlite", db_state or "SQLite database is not built; run bench2agent data sqlite."
+            return None, "sqlite", db_state or (f"Revision {self.revision} has no SQLite file; reinstall it from a verified "
+                                                "bundle (published revisions are not rebuilt in place).")
         # auto: fall back to the reference
         return (json_path if json_path.exists() else None), "json", db_state
 
@@ -339,7 +358,10 @@ class BenchmarkStore:
         active = getattr(self._local, "repo", None)
         if active is not None:
             return active
-        path, backend, reason = self._choose()
+        try:
+            path, backend, reason = self._choose()
+        except revisions.RevisionError as exc:     # the revision vanished or broke after pinning
+            path, backend, reason = None, ("json" if self.backend == "auto" else self.backend), str(exc)
         if path is None:
             self._repo = JsonRepository({"source": SOURCE, "benchmarks": catalogue(self.root), "papers": [],
                                          "editions": {}, "reason": reason, "backend": backend}, available=False)
@@ -386,11 +408,12 @@ class BenchmarkStore:
             meta = repo.meta()
             if not meta["available"] and repo.d.get("backend"):
                 meta["backend"] = repo.d["backend"]
-            return {**meta, "revision": revisions.paths_for(self.root, self.revision)[2],
+            return {**meta, "revision": self.revision,
                     "benchmarks": repo.benchmarks(), "editions": repo.editions()}
 
     def _base(self, data: dict) -> dict:
-        return {k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")}
+        return {**{k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")},
+                "revision": self.revision}
 
     def _links(self, data: dict, entry: dict) -> dict:
         """Keyed by the entry (benchmark id), never by name: a homonym gets its own."""

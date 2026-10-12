@@ -21,6 +21,7 @@ from pathlib import Path
 
 from bench2agent.core import revisions
 from bench2agent.core.repository import DATABASE, DB_SCHEMA_VERSION, SOURCE, SqliteRepository, counts, file_sha256, import_snapshot
+from bench2agent.core.revisions import RevisionError
 
 SNAPSHOT = "benchmark_snapshot.json"
 MEMBER = "data/processed/" + SNAPSHOT
@@ -75,12 +76,25 @@ def status(root: Path, revision: str | None = None) -> dict:
     revision; `json` and `sqlite` describe each of its files; `revisions`
     lists every installed revision and which is active."""
     from bench2agent.core.benchmarks import BenchmarkStore
-    json_path, db_path, rid = revisions.paths_for(root, revision)
-    out = {"requested_backend": os.environ.get("BENCH2AGENT_STORE", "json"), "revision": rid,
-           "layout": "revisions" if rid else "legacy", **_describe(json_path, db_path),
+    state, pointed = revisions.pointer_state(root)
+    out = {"requested_backend": os.environ.get("BENCH2AGENT_STORE", "json"), "pointer": state,
            "revisions": revisions.list_revisions(root)}
     try:
-        resolved = BenchmarkStore(root, revision=revision).data()
+        json_path, db_path, rid = revisions.paths_for(root, revision)
+    except RevisionError as exc:
+        return {**out, "available": False, "revision": revision or pointed, "reason": str(exc)}
+    out["revision"] = rid
+    if rid is None:
+        return {**out, "available": False,
+                "reason": "No data revision is installed. Run bench2agent data install (or data install --file FILE)."}
+    out.update(_describe(json_path, db_path))
+    try:
+        revisions.verify_revision(root, rid)
+        out["verification"] = "ok"
+    except RevisionError as exc:
+        out["verification"] = str(exc)
+    try:
+        resolved = BenchmarkStore(root, revision=rid).data()
     except ValueError as exc:
         return {**out, "available": False, "reason": str(exc)}
     backend = resolved["backend"]
@@ -93,17 +107,24 @@ def status(root: Path, revision: str | None = None) -> dict:
     return out
 
 
-def build_sqlite(root: Path) -> dict:
-    """Import the served JSON snapshot into the SQLite file beside it (legacy
-    layout, or the active revision's directory)."""
-    source, db, _ = revisions.paths_for(root)
-    if not source.exists():
-        raise ValueError("No benchmark snapshot installed; run bench2agent data install first.")
-    return import_snapshot(source, db)
+def build_sqlite(root: Path, source: str, out: str) -> dict:
+    """Build a SQLite file from a snapshot JSON, for bundling. Published
+    revisions are immutable, so the output may not land inside
+    data/revisions/; recovery of a damaged revision is a reinstall of the
+    verified original, never a rebuild in place."""
+    src = Path(source).expanduser().resolve()
+    target = Path(out).expanduser().resolve()
+    base = revisions.revisions_dir(root).resolve()
+    if target == base or base in target.parents:
+        raise ValueError("Published revisions are immutable; write the database elsewhere and reinstall a verified "
+                         "bundle to repair one.")
+    if not src.is_file():
+        raise ValueError(f"Snapshot JSON not found: {src}")
+    return import_snapshot(src, target)
 
 
 def activate(root: Path, rid: str) -> dict:
-    """Serve an already installed revision (rollback or roll-forward)."""
+    """Serve an already installed, verified revision (rollback or roll-forward)."""
     revisions.set_active(root, rid)
     return status(root)
 
@@ -169,39 +190,59 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
                 raise ValueError("Data file SHA-256 does not match; existing data was kept.")
             manifest = _unpack(source, stage)
         json_path, db_path = stage / SNAPSHOT, stage / DATABASE
+        built_locally = False
         if json_path.exists():
-            metadata = validate(json_path)
+            with json_path.open(encoding="utf-8") as fh:
+                loaded = json.load(fh)
+            from bench2agent.core.repository import validate_snapshot
+            metadata = validate_snapshot(loaded)
+            content_hash = revisions.content_sha256(loaded)
+            del loaded
             if not db_path.exists():
                 import_snapshot(json_path, db_path)      # every revision serves both backends
+                built_locally = True
             ident = _check_sqlite(db_path)
             if ident["source_sha256"] != digest(json_path) or ident["snapshot_id"] != metadata["snapshot_id"]:
                 raise ValueError("The database in this source was built from a different snapshot; nothing was installed.")
         else:
             ident = _check_sqlite(db_path)
             metadata = {"snapshot_id": ident["snapshot_id"], "source": ident["source"]}
+            content_hash = manifest.get("content_sha256")   # a bare database carries no JSON to hash
         rid = metadata["snapshot_id"]
         if not revisions.valid_id(rid):
             raise ValueError(f"Snapshot identity {rid!r} cannot name a revision directory.")
-        manifest = {**{k: v for k, v in manifest.items() if k in ("format", "generated_at")},
-                    "format": manifest.get("format", "bench2agent-data-v1"), **metadata,
+        import sqlite3
+        from bench2agent import __version__
+        manifest = {"format": manifest.get("format", "bench2agent-data-v1"), **metadata,
                     "sha256": digest(json_path) if json_path.exists() else None,
-                    "sqlite_sha256": digest(db_path), "db_schema_version": ident["db_schema_version"],
+                    "content_sha256": content_hash, "sqlite_sha256": digest(db_path),
+                    "db_schema_version": ident["db_schema_version"],
+                    # bytes of a locally built database differ between SQLite
+                    # builds even for identical content; say where they came from
+                    "sqlite_built_locally": built_locally,
+                    "sqlite_library": sqlite3.sqlite_version if built_locally else manifest.get("sqlite_library"),
+                    "importer": f"bench2agent {__version__}" if built_locally else manifest.get("importer"),
                     "installed_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
         db_path.with_name(DATABASE + ".sha256").write_text(f"{manifest['sqlite_sha256']}  {DATABASE}\n", encoding="utf-8")
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
-        target = revisions.publish(root, stage, rid, activate=activate)
+        target, outcome = revisions.publish(root, stage, rid, activate=activate)
     except BaseException:
         if stage.exists():
             revisions._rmtree(stage)
         raise
-    return {"available": True, "revision": rid, "path": str(target), "active": activate,
-            **{k: manifest.get(k) for k in ("snapshot_id", "generated_at", "source", "sha256", "sqlite_sha256",
-                                              "editions", "benchmarks", "paper_observations")}}
+    kept = revisions.manifest_of(root, rid)   # the installed manifest, which a reuse or restore keeps
+    return {"available": True, "revision": rid, "path": str(target), "active": activate, "outcome": outcome,
+            **{k: kept.get(k) for k in ("snapshot_id", "generated_at", "source", "sha256", "content_sha256", "sqlite_sha256",
+                                        "sqlite_built_locally", "editions", "benchmarks", "paper_observations")}}
 
 
-def bundle(root: Path, output: Path) -> dict:
-    """Pack the served revision (JSON plus its SQLite file when it matches)."""
-    source, db, _ = revisions.paths_for(root)
+def bundle(root: Path, output: Path, revision: str | None = None) -> dict:
+    """Pack a verified revision (the served one by default): JSON, its
+    SQLite file and the manifest fields that describe them."""
+    source, db, rid = revisions.paths_for(root, revision)
+    if rid is None:
+        raise ValueError("No data revision is installed to bundle.")
+    installed = revisions.verify_revision(root, rid)
     metadata = validate(source)
     output = output.expanduser().resolve()
     if output == source:
@@ -213,7 +254,8 @@ def bundle(root: Path, output: Path) -> dict:
         frozen = stage / SNAPSHOT
         shutil.copyfile(source, frozen)
         metadata = validate(frozen)
-        manifest_data = {"format": "bench2agent-data-v1", "sha256": digest(frozen), **metadata}
+        manifest_data = {"format": "bench2agent-data-v1", "sha256": digest(frozen), **metadata,
+                         **{k: installed.get(k) for k in ("content_sha256", "sqlite_built_locally", "sqlite_library", "importer")}}
         frozen_db = None
         if db.exists():
             frozen_db = stage / DATABASE

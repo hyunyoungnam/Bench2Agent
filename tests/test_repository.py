@@ -15,7 +15,7 @@ import unittest.mock
 from pathlib import Path
 
 from bench2agent import data as data_module
-from bench2agent.core import repository
+from bench2agent.core import repository, revisions
 from bench2agent.core.benchmarks import BenchmarkStore, build_snapshot
 
 
@@ -83,9 +83,10 @@ class Fixture(unittest.TestCase):
                     {"where": "experiments", "text": "We also test on Nobody."}]}}} if pid == "2501.00008" else uses}
                 for pid, _, _, uses in records], lines=True)
         build_snapshot(self.root)
-        self.json_path = self.root / "data/processed/benchmark_snapshot.json"
-        self.db_path = self.json_path.with_name(repository.DATABASE)
-        self.report = repository.import_snapshot(self.json_path, self.db_path)
+        self.built = self.root / "data/processed/benchmark_snapshot.json"
+        self.first = data_module.install(self.root, file=str(self.built))      # registers the build as the served revision
+        self.json_path, self.db_path, self.rid = revisions.paths_for(self.root)
+        self.report = {**repository.counts(self.db_path), "sha256": repository.file_sha256(self.db_path), "snapshot_id": self.rid}
         self.json = BenchmarkStore(self.root, backend="json")
         self.sqlite = BenchmarkStore(self.root, backend="sqlite")
 
@@ -167,22 +168,27 @@ class ParityTests(Fixture):
         self.assertNotIn("imported_at", meta)   # no invented dates
         self.assertEqual(self.sqlite.data()["registry_checked"], "2026-09-17")
 
-    def test_reimport_is_idempotent_and_failure_keeps_the_old_file(self):
-        before = self.db_path.read_bytes()
-        again = repository.import_snapshot(self.json_path, self.db_path)
+    def test_reimport_is_idempotent_here_and_failure_keeps_the_old_file(self):
+        # deterministic within one environment (the SQLite library version is
+        # written into the file, so other machines may produce other bytes)
+        out = self.root / "rebuild.sqlite"
+        again = repository.import_snapshot(self.json_path, out)
         self.assertEqual(again["sha256"], self.report["sha256"])
-        self.assertEqual(self.db_path.read_bytes(), before)
+        before = out.read_bytes()
         broken = self.root / "broken.json"
         broken.write_text(json.dumps({**json.loads(self.json_path.read_text()), "source": "abstracts"}))
         with self.assertRaises(ValueError):
-            repository.import_snapshot(broken, self.db_path)
+            repository.import_snapshot(broken, out)
         bad = json.loads(self.json_path.read_text())
         bad["papers"][0]["uses"]["ghost"] = {"surfaces": {}, "roles": {}}   # a use of an unknown benchmark id
         broken.write_text(json.dumps(bad))
         with self.assertRaises((ValueError, sqlite3.IntegrityError)):
-            repository.import_snapshot(broken, self.db_path)
-        self.assertEqual(self.db_path.read_bytes(), before)
-        self.assertEqual([p.name for p in self.db_path.parent.glob(".import-*")], [])
+            repository.import_snapshot(broken, out)
+        self.assertEqual(out.read_bytes(), before)
+        self.assertEqual([p.name for p in out.parent.glob(".import-*")], [])
+        # the build utility never writes into a published revision
+        with self.assertRaisesRegex(ValueError, "immutable"):
+            data_module.build_sqlite(self.root, str(self.json_path), str(self.db_path))
 
     def _second_version(self, name="v2.json"):
         """A snapshot that differs in one use and in identity."""
@@ -211,12 +217,12 @@ class ParityTests(Fixture):
             first = self.sqlite.usage({"latest": False, "limit": 50})
         toy = {r["id"]: r["papers"] for r in first["results"]}["toy"]
         # identity and counts both come from the version the call opened
-        self.assertEqual((first["snapshot_id"], toy), (json.loads(json.dumps(self.report))["snapshot_id"], 4))
+        self.assertEqual((first["snapshot_id"], toy), (self.report["snapshot_id"], 4))
         second = self.sqlite.usage({"latest": False, "limit": 50})
         self.assertEqual((second["snapshot_id"], {r["id"]: r["papers"] for r in second["results"]}["toy"]), ("second-version", 3))
 
     def test_auto_refuses_a_stale_or_corrupt_database(self):
-        os.replace(self._second_version(), self.json_path)       # JSON moves on, the database does not
+        os.replace(self._second_version(), self.json_path)       # the revision's JSON is replaced underneath, the database is not
         auto = BenchmarkStore(self.root, backend="auto")
         self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("json", "second-version"))
         self.assertEqual(auto.usage({"latest": False})["snapshot_id"], "second-version")
@@ -230,7 +236,8 @@ class ParityTests(Fixture):
             self.assertIn("different snapshot", status["reason"])
         finally:
             del os.environ["BENCH2AGENT_STORE"]
-        data_module.build_sqlite(self.root)                       # rebuilt: auto returns to SQLite
+        repository.import_snapshot(self.json_path, self.db_path)   # directory made consistent again: auto returns to SQLite
+        auto = BenchmarkStore(self.root, backend="auto")
         self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("sqlite", "second-version"))
         self.db_path.write_bytes(b"SQLite format 3\x00" + b"garbage" * 100)
         self.assertEqual(BenchmarkStore(self.root, backend="auto").data()["backend"], "json")
@@ -282,7 +289,7 @@ class ParityTests(Fixture):
         self.assertEqual(BenchmarkStore(self.root, backend="auto").data()["backend"], "json")
         missing = BenchmarkStore(self.root, backend="sqlite")
         self.assertFalse(missing.data()["available"])
-        self.assertIn("data sqlite", missing.usage({})["error"])
+        self.assertIn("reinstall", missing.usage({})["error"])
         self.assertFalse(data_module.status(self.root)["sqlite"]["available"])
         with self.assertRaises(ValueError):
             BenchmarkStore(self.root, backend="postgres")

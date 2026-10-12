@@ -44,17 +44,19 @@ class Session:
         return self.directory / (self.doc["id"] + ".json")
 
     def store(self):
-        """The data this conversation reads: the revision its first answer
-        was given on while that revision is still installed, else what is
-        served now (a new conversation, or the legacy layout)."""
-        from bench2agent.core import mcp, revisions
+        """The data this conversation reads, always as an explicit revision:
+        the one its first answer was given on, or for a new conversation the
+        one active at this first question. Pinned for the whole turn, so a
+        publish in the middle of the question changes nothing it reads."""
+        from bench2agent.core import revisions
         from bench2agent.core.benchmarks import BenchmarkStore
         sid = self.doc.get("snapshot_id")
-        if sid and revisions.valid_id(sid) and revisions.revision_dir(self.root, sid).is_dir() \
-                and sid != revisions.active_revision(self.root):
+        if sid:
+            if not (revisions.valid_id(sid) and (revisions.revision_dir(self.root, sid) / "manifest.json").is_file()):
+                raise ValueError(f"The dataset changed since this conversation: revision {sid} is no longer installed. "
+                                 "Start /new, or reinstall that revision.")
             return BenchmarkStore(self.root, revision=sid)
-        served = mcp.B if Path(mcp.B.root) == Path(self.root) else BenchmarkStore(self.root)
-        return served
+        return BenchmarkStore(self.root, revision=revisions.active_revision(self.root))
 
     def load(self, cid: str) -> dict:
         if not re.fullmatch(r"[0-9a-f]{12}", cid):
@@ -74,6 +76,8 @@ class Session:
         sid = snapshot.get("snapshot_id")
         if self.doc.get("snapshot_id") and self.doc["snapshot_id"] != sid:
             raise ValueError("The dataset changed since this conversation. Start /new, or reinstall its snapshot.")
+        if store.revision and store.revision != sid:
+            raise ValueError(f"Revision {store.revision} holds snapshot {sid}; its directory needs recovery.")
         original_revision = self.path.stat().st_mtime_ns if self.path.exists() else None
         if original_revision != self.expected_revision:
             raise ValueError("This conversation changed in another terminal. Resume it again before continuing.")
