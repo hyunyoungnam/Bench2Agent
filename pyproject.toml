@@ -32,3 +32,6 @@ bench2agent = "bench2agent.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["bench2agent*"]
+
+[tool.setuptools.package-data]
+"bench2agent.web" = ["static/*.html"]

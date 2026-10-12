@@ -243,6 +243,16 @@ Collection and model-call logs remain distinct from user-visible evidence.
 4. Build the hosted conversation API and browser shell, with isolated user
    sessions and provider clients. Run the same representative question suite
    through terminal, MCP and HTTP.
+   **First version done (2026-10-12):** `bench2agent web serve`
+   (`web/app.py`, FastAPI/Uvicorn, `server` extra): bearer-token users with
+   owned conversations, one revision per conversation routed to
+   `/mcp-server/revisions/<id>/mcp`, request-scoped model credentials
+   (`providers.using_credentials`, a ContextVar), cancellation, per-user
+   limits, NDJSON progress then the verified turn, a minimal page. Tested
+   over a real uvicorn server with a scripted provider: ownership on every
+   route, v1 conversations after v2, two overlapping users, cancel saves
+   nothing, failures echo no secret. Not yet: public deployment (HTTPS,
+   supervision, backups), token streaming, PostgreSQL.
 5. Prepare Mac/Linux deployment and restore tests. Add PostgreSQL when measured
    write concurrency or multiple service instances justify it.
 

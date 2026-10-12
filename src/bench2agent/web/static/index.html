@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bench2Agent</title>
+<style>
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#666; --line:#ddd; --ok:#1a7f37; --bad:#b42318; --accent:#2a5bd7; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141414; --fg:#eaeaea; --muted:#9a9a9a; --line:#333; --ok:#3fb950; --bad:#f08080; --accent:#79a6ff; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 16px; }
+  header { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .muted, .muted { color: var(--muted); font-size: 13px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  input, select, textarea, button { font: inherit; color: inherit; background: var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  textarea { width:100%; min-height:64px; box-sizing:border-box; }
+  button { cursor:pointer; } button.primary { border-color: var(--accent); color: var(--accent); }
+  .turn { border-top:1px solid var(--line); padding:12px 0; }
+  .q { font-weight:600; }
+  .quote { border-left:3px solid var(--line); padding:4px 8px; margin:6px 0; }
+  .quote.ok { border-color: var(--ok);} .quote.bad { border-color: var(--bad);}
+  .fig.ok { color: var(--ok);} .fig.bad { color: var(--bad);} .fig.na { color: var(--muted);}
+  details { margin:6px 0; } summary { cursor:pointer; color: var(--muted); }
+  .events { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+  .error { color: var(--bad); }
+  #convs { display:flex; gap:6px; flex-wrap:wrap; } #convs button { font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bench2Agent</h1>
+    <span class="muted">Which benchmarks the field evaluates on, from the papers. Counts are papers, never quality.</span>
+  </header>
+
+  <section id="auth" class="row">
+    <input id="token" type="password" placeholder="access token" size="34">
+    <input id="modelKey" type="password" placeholder="your model API key (used for this request only)" size="40">
+    <button id="connect">Connect</button>
+    <span id="who" class="muted"></span>
+  </section>
+
+  <section id="setup" class="row" hidden>
+    <select id="provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option></select>
+    <input id="model" placeholder="model id (optional)" size="26">
+    <select id="language"><option value="auto">language: auto</option><option value="en">English</option><option value="ko">한국어</option></select>
+    <button id="newConv" class="primary">New conversation</button>
+    <span id="convs"></span>
+  </section>
+
+  <section id="chat" hidden>
+    <div class="muted" id="convMeta"></div>
+    <div id="turns"></div>
+    <div class="row" style="flex-direction:column; align-items:stretch">
+      <textarea id="question" placeholder="What benchmarks are researchers using in robotics lately?"></textarea>
+      <div class="row"><button id="askBtn" class="primary">Ask</button><button id="cancelBtn" hidden>Cancel</button><span id="status" class="muted"></span></div>
+      <div id="events" class="events"></div>
+    </div>
+  </section>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let token = "", cid = null, me = null;
+  try { token = localStorage.getItem("b2a_token") || ""; $("token").value = token; } catch (e) {}
+  const headers = extra => Object.assign({"Authorization": "Bearer " + token, "Content-Type": "application/json"}, extra || {});
+  const api = async (path, opts) => {
+    const r = await fetch(path, Object.assign({headers: headers((opts||{}).headers)}, opts || {}));
+    if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch (e) {} throw new Error(m); }
+    return r.status === 204 ? null : r.json();
+  };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+
+  function renderTurn(t) {
+    const parts = t.segs.map(s => {
+      if (s.t === "p") return esc(s.s);
+      if (s.t === "c") {
+        const where = [s.venue, s.year].filter(Boolean).join(" ");
+        const title = s.url ? link(s.url, s.title || s.paper_id) : esc(s.title || "");
+        return `<div class="quote ${s.v ? "ok" : "bad"}">“${esc(s.q)}” <span class="muted">— ${title}${where ? ", " + esc(where) : ""} · ${s.v ? "verified in the paper" : "NOT found in the paper"}</span></div>`;
+      }
+      if (s.t === "n") return `<span class="fig ${s.v}" title="${esc(s.tool)} ${esc(s.arg)}">${esc(s.s)}</span>`;
+      return esc(s.s || "");
+    }).join("");
+    const v = t.verified || {};
+    const on = (t.on && t.on.benchmarks) || {};
+    return `<div class="turn"><div class="q">${esc(t.q)}</div><div>${parts}</div>
+      <details><summary>Sources and checks: ${v.passed||0}/${v.checked||0} quotes verified, ${v.fpassed||0}/${v.fchecked||0} figures recomputed · data revision ${esc(on.revision||on.snapshot_id||"?")}</summary>
+      <div class="muted">Tools used: ${(t.trail||[]).map(x => esc(x.name + " " + x.arg)).join("<br>") || "none"}<br>Source: ${esc(on.source||"")}, generated ${esc(on.generated_at||"")}</div></details></div>`;
+  }
+
+  async function loadConversations() {
+    const d = await api("/api/conversations");
+    $("convs").innerHTML = d.conversations.map(c => `<button data-cid="${c.cid}" title="revision ${esc(c.revision)}">${esc(c.title)}</button>`).join("");
+    $("convs").querySelectorAll("button").forEach(b => b.onclick = () => open(b.dataset.cid));
+  }
+  async function open(id) {
+    const c = await api("/api/conversations/" + id);
+    cid = id; $("chat").hidden = false;
+    $("convMeta").textContent = `${c.provider} · ${c.model} · data revision ${c.revision}`;
+    $("turns").innerHTML = c.turns.map(renderTurn).join("");
+  }
+  $("connect").onclick = async () => {
+    token = $("token").value.trim();
+    try { localStorage.setItem("b2a_token", token); } catch (e) {}
+    try {
+      me = await api("/api/me");
+      $("who").textContent = `${me.name} · ${me.turns_today}/${me.turns_per_day} questions today · credentials: ${me.credentials}`;
+      $("modelKey").hidden = me.credentials !== "user";
+      $("setup").hidden = false; await loadConversations();
+    } catch (e) { $("who").textContent = e.message; }
+  };
+  $("newConv").onclick = async () => {
+    const c = await api("/api/conversations", {method: "POST", body: JSON.stringify({provider: $("provider").value, model: $("model").value || null, language: $("language").value})});
+    await loadConversations(); await open(c.cid);
+  };
+  let controller = null;
+  $("cancelBtn").onclick = () => api(`/api/conversations/${cid}/cancel`, {method: "POST"}).catch(() => {});
+  $("askBtn").onclick = async () => {
+    const q = $("question").value.trim(); if (!q || !cid) return;
+    $("askBtn").disabled = true; $("cancelBtn").hidden = false; $("events").textContent = ""; $("status").textContent = "asking…";
+    controller = new AbortController();
+    try {
+      const r = await fetch(`/api/conversations/${cid}/ask`, {method: "POST", signal: controller.signal,
+        headers: headers(me && me.credentials === "user" ? {"X-Model-Key": $("modelKey").value} : {}), body: JSON.stringify({question: q})});
+      if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch (e) {} throw new Error(m); }
+      const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
+      while (true) {
+        const {value, done} = await reader.read(); if (done) break;
+        buf += dec.decode(value, {stream: true});
+        let i; while ((i = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, i); buf = buf.slice(i + 1); if (!line.trim()) continue;
+          const ev = JSON.parse(line);
+          if (ev.t === "tool") $("events").textContent += `tool ${ev.name} ${JSON.stringify(ev.arguments)}\n`;
+          else if (ev.t === "turn") { $("turns").insertAdjacentHTML("beforeend", renderTurn(ev.turn)); $("question").value = ""; $("status").textContent = "answer verified and saved"; await loadConversations(); }
+          else if (ev.t === "error") { $("status").innerHTML = `<span class="error">${esc(ev.message)}</span>`; }
+        }
+      }
+    } catch (e) { $("status").innerHTML = `<span class="error">${esc(e.message)}</span>`; }
+    finally { $("askBtn").disabled = false; $("cancelBtn").hidden = true; }
+  };
+})();
+</script>
+</body>
+</html>

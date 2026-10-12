@@ -129,7 +129,13 @@ class HttpMcp:
             return await self._lifespan(scope, receive, send)
         if scope["type"] != "http":
             return
-        path = scope.get("path", "").rstrip("/") or "/"
+        # mounted under another app, Starlette keeps the full path in `path`
+        # and the mount prefix in `root_path`; routing here is on the remainder
+        path = scope.get("path", "")
+        root = scope.get("root_path", "")
+        if root and path.startswith(root):
+            path = path[len(root):]
+        path = path.rstrip("/") or "/"
         if path == "/health":
             return await _json(200, {"ok": True, "pinned": self.pinned})(scope, receive, send)
         if path == "/revisions":
@@ -157,6 +163,7 @@ class HttpMcp:
         scope["state"] = {**(scope.get("state") or {}), "revision": rid}
         scope["path"] = "/mcp"   # what the transport expects, whichever revision path was used
         scope["raw_path"] = b"/mcp"
+        scope["root_path"] = ""
         await self.manager.handle_request(scope, receive, send)
 
     async def _lifespan(self, scope, receive, send):

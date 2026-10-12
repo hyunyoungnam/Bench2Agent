@@ -386,6 +386,44 @@ Local data stays on your machine. Questions and returned tool evidence are sent
 to your chosen model provider during inference. API authentication for the
 independent terminal is separate from ChatGPT/Claude subscription login.
 
+## Hosted conversation (web)
+
+With the server extra, `bench2agent web serve [--host 127.0.0.1] [--port 8780]`
+runs a small web host: a page with a question box, conversation history and
+expandable verified evidence, over a JSON API. It is the same model loop and
+the same verifier as the terminal; its tool calls travel over HTTP MCP to the
+server it mounts at `/mcp-server`, on the endpoint of the conversation's
+revision.
+
+- **Users and ownership.** `bench2agent web user add NAME` creates a user and
+  prints a bearer token once (`user token NAME` issues another, `user revoke
+  NAME` disables, `user list`). Every API route needs the token, and a
+  conversation exists only for its owner: read, ask, cancel and delete on
+  someone else's return 404.
+- **Revision per conversation.** A new conversation is pinned to the revision
+  active at that moment and keeps it for its life: tool calls, figure
+  recomputation and quote checks all read that revision after a new one is
+  published; a removed revision gives recovery guidance, never another
+  revision's answer. `GET /api/revisions` shows what is installed.
+- **Model credentials are deployment configuration.**
+  `BENCH2AGENT_WEB_CREDENTIALS=user` (default) means each question carries the
+  user's own provider key in `X-Model-Key`; it is bound to that request only
+  and never stored or logged. `service` means the host process's environment
+  pays for everyone; use it with the limits below. The operator's Claude
+  Code or Codex login is never used for web users.
+- **Limits and cancellation.** One question at a time per conversation, at
+  most two per user, a daily cap (`BENCH2AGENT_WEB_TURNS_PER_DAY`, default
+  100), questions up to 4,000 characters. `POST /api/conversations/{id}/cancel`
+  withdraws a running question; nothing of it is saved. A failed or
+  cancelled question saves nothing and echoes no credential.
+- **Streaming.** `POST /api/conversations/{id}/ask` answers as NDJSON: tool
+  events as they happen, then the verified turn (or an error).
+
+The host's own state (users, tokens as hashes, conversations) lives in
+`data/bench2agent/web.sqlite`, apart from the research revisions. It binds
+to loopback by default; a public deployment needs HTTPS termination in front
+and is not part of this release.
+
 ## Build a release
 
 For development, install from a local checkout with `uv tool install .` or

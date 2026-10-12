@@ -437,6 +437,33 @@ def common_options(parser, *, child=False):
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS if child else False)
 
 
+def cmd_web(args, root: Path) -> int:
+    """The hosted conversation (needs the server extra) and its user tokens."""
+    if args.web_action == "serve":
+        try:
+            from bench2agent.web import app as web_app
+        except ImportError:
+            raise ValueError("The web host needs the server extra: pip install 'bench2agent[server]'") from None
+        return web_app.serve(root, host=args.host, port=args.port)
+    from bench2agent.web.store import WebStore
+    store = WebStore(root / "data/bench2agent/web.sqlite")
+    if args.web_action == "user":
+        if args.user_action == "add":
+            result = store.add_user(args.name)
+            print(json.dumps({k: result[k] for k in ("user_id", "name")}, ensure_ascii=False))
+            print(f"Token (shown once; give it to {args.name}): {result['token']}", file=sys.stderr)
+            return 0
+        if args.user_action == "token":
+            result = store.add_token(args.name)
+            print(f"Token (shown once): {result['token']}", file=sys.stderr)
+            return 0
+        if args.user_action == "revoke":
+            print(json.dumps(store.revoke_user(args.name)))
+            return 0
+        print(json.dumps(store.users(), ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_service(args, root: Path) -> int:
     """Use the same service implementation from the public terminal command."""
     from .core import cli as service
@@ -531,6 +558,22 @@ def main(argv=None) -> int:
     datasets.add_argument("--out", default=".")
     datasets.add_argument("--gid", type=int)
     datasets.set_defaults(fn=cmd_service)
+    web = commands.add_parser("web", help="hosted conversation over HTTP MCP (server extra) and its users")
+    common_options(web, child=True)
+    web_actions = web.add_subparsers(dest="web_action", required=True)
+    web_serve = web_actions.add_parser("serve")
+    common_options(web_serve, child=True)
+    web_serve.add_argument("--host", default="127.0.0.1")
+    web_serve.add_argument("--port", type=int, default=8780)
+    web_user = web_actions.add_parser("user", help="add, list, token, revoke")
+    common_options(web_user, child=True)
+    user_actions = web_user.add_subparsers(dest="user_action", required=True)
+    for name in ("add", "token", "revoke"):
+        sub = user_actions.add_parser(name)
+        common_options(sub, child=True)
+        sub.add_argument("name")
+    common_options(user_actions.add_parser("list"), child=True)
+    web.set_defaults(fn=cmd_web)
     benchmarks = commands.add_parser("benchmarks", help="build the benchmark snapshot from reviewed extraction")
     common_options(benchmarks, child=True)
     benchmarks.add_argument("--out")

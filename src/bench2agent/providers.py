@@ -5,6 +5,8 @@ read from the environment and never written to settings or conversations.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import copy
 import json
 import os
@@ -22,8 +24,46 @@ class ProviderError(RuntimeError):
     pass
 
 
+class Cancelled(ProviderError):
+    """The caller withdrew the question; nothing is saved."""
+
+
+# Request-scoped credentials: a hosted request binds the key it was given for
+# its own duration, and overlapping requests never see each other's. The
+# environment remains the terminal's way. Nothing here is logged or stored.
+_credentials: contextvars.ContextVar = contextvars.ContextVar("bench2agent_credentials", default=None)
+
+
+@contextlib.contextmanager
+def using_credentials(keys: dict):
+    token = _credentials.set(dict(keys))
+    try:
+        yield
+    finally:
+        _credentials.reset(token)
+
+
+def credential(provider: str) -> str:
+    bound = _credentials.get()
+    if bound is not None:
+        return bound.get(provider, "")
+    return os.environ.get(KEY_NAMES[provider], "")
+
+
+class LocalTools:
+    """The tool transport of the terminal: the pinned store, in process."""
+
+    def specs(self) -> list[dict]:
+        from bench2agent.core.mcp import _benchmark_tools
+        return _benchmark_tools()
+
+    def call(self, name: str, arguments) -> dict:
+        from bench2agent.core.mcp import execute_tool
+        return execute_tool(name, arguments, tools=self.specs())
+
+
 def post(provider: str, path: str, payload: dict) -> dict:
-    key = os.environ.get(KEY_NAMES[provider], "")
+    key = credential(provider)
     if not key:
         raise ProviderError(f"Set {KEY_NAMES[provider]} or run bench2agent init.")
     base = os.environ.get("BENCH2AGENT_" + provider.upper() + "_BASE_URL", ENDPOINTS[provider]).rstrip("/")
@@ -56,31 +96,37 @@ def post(provider: str, path: str, payload: dict) -> dict:
 
 
 def tool_specs() -> list[dict]:
-    from bench2agent.core.mcp import _benchmark_tools
-    # Resolve bound methods for each new turn (also used by MCP tools/list).
-    return _benchmark_tools()
+    return LocalTools().specs()
 
 
-def call_tool(name: str, arguments, trail: list, emit) -> dict:
-    from bench2agent.core.mcp import execute_tool
+def call_tool(name: str, arguments, trail: list, emit, transport=None) -> dict:
     emit({"t": "tool", "name": name, "arguments": arguments})
     trail.append({"name": name, "arg": json.dumps(arguments, sort_keys=True, ensure_ascii=False)})
-    return execute_tool(name, arguments, tools=tool_specs())
+    return (transport or LocalTools()).call(name, arguments)
 
 
-def generate(provider: str, model: str, system: str, history: list, question: str, emit) -> dict:
+def generate(provider: str, model: str, system: str, history: list, question: str, emit,
+             *, tools=None, cancelled=None) -> dict:
     """Return an answer plus complete protocol history; commit only on success.
+
+    `tools` is the transport the model's calls go through (the local pinned
+    store by default; the web host passes its HTTP MCP client). `cancelled`
+    is polled between rounds; a withdrawn question raises Cancelled and
+    nothing of it is kept.
 
     Replaying OpenAI output preserves reasoning/encrypted reasoning items.
     Claude tool_result blocks immediately follow their assistant tool_use.
     No partial answer containing unverified quotes is displayed.
     """
+    transport = tools or LocalTools()
     messages = copy.deepcopy(history)
     messages.append({"role": "user", "content": question})
     trail: list = []
-    tools = tool_specs()
+    tools = transport.specs()
     usage: dict = {}
     for round_index in range(MAX_ROUNDS):
+        if cancelled is not None and cancelled():
+            raise Cancelled("The question was cancelled; nothing was saved.")
         if provider == "openai":
             definitions = [{"type": "function", "name": t["name"], "description": t["description"],
                             "parameters": t["inputSchema"], "strict": False} for t in tools]
@@ -103,7 +149,7 @@ def generate(provider: str, model: str, system: str, history: list, question: st
                     args = json.loads(call.get("arguments") or "{}")
                 except (ValueError, TypeError):
                     args = None
-                value = call_tool(call.get("name", ""), args, trail, emit)
+                value = call_tool(call.get("name", ""), args, trail, emit, transport)
                 messages.append({"type": "function_call_output", "call_id": call["call_id"],
                                  "output": json.dumps(value, ensure_ascii=False)})
         elif provider == "anthropic":
@@ -125,7 +171,7 @@ def generate(provider: str, model: str, system: str, history: list, question: st
             text = "\n".join(item.get("text", "") for item in output if item.get("type") == "text")
             results = []
             for call in calls:
-                value = call_tool(call.get("name", ""), call.get("input"), trail, emit)
+                value = call_tool(call.get("name", ""), call.get("input"), trail, emit, transport)
                 results.append({"type": "tool_result", "tool_use_id": call["id"],
                                 "content": json.dumps(value, ensure_ascii=False), "is_error": "error" in value})
             if results:
