@@ -1162,6 +1162,21 @@ def execute_tool(name: str, arguments, tools=None) -> dict:
         return {"error": "Local tool failed; check the installed snapshot with bench2agent data status."}
 
 
+def _log_call(name: str, arguments, result) -> None:
+    """Append one call to BENCH2AGENT_TOOL_LOG when set: the record a
+    CLI-owned loop leaves for Bench2Agent to verify the answer against
+    (name, arguments, the result it saw, the revision it came from)."""
+    path = os.environ.get("BENCH2AGENT_TOOL_LOG")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"name": name, "arguments": arguments, "result": result,
+                                 "revision": store().revision}, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
 def _version() -> str:
     try:
         from bench2agent import __version__
@@ -1219,6 +1234,7 @@ def serve_stdio(tools=None, name: str = "bench2agent") -> int:
                                       "message": f"unknown tool {p.get('name')}"})
                 continue
             res = execute_tool(t["name"], p.get("arguments", {}), tools=available)
+            _log_call(t["name"], p.get("arguments", {}), res)
             _reply(msg_id, {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False)}],
                             "isError": "error" in res})
         elif method == "ping":

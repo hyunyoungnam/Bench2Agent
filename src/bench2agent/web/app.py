@@ -100,6 +100,14 @@ class Settings:
         self.cookie_secure = os.environ.get("BENCH2AGENT_WEB_SECURE_COOKIES", "").lower() in ("1", "true", "yes")
         self.turns_per_day = turns_per_day if turns_per_day is not None else int(os.environ.get("BENCH2AGENT_WEB_TURNS_PER_DAY", "100"))
         self.concurrent_per_user = concurrent_per_user
+        # loopback = this machine's owner is the only visitor: the host's own
+        # Claude Code / Codex logins may answer. Anything else is hosted: those
+        # connectors need one isolated login per visitor, which is not built.
+        self.local_mode = host in ("127.0.0.1", "localhost", "::1")
+        access = os.environ.get("BENCH2AGENT_WEB_ACCESS") or ("open" if self.local_mode else "invite")
+        if access not in ("open", "invite"):
+            raise ValueError("BENCH2AGENT_WEB_ACCESS must be open or invite")
+        self.access = access
 
 
 class Ask(BaseModel):
@@ -112,7 +120,8 @@ class Login(BaseModel):
 
 
 class NewConversation(BaseModel):
-    provider: str = Field(pattern="^(openai|anthropic)$")
+    connector: str = Field(default="api", pattern="^(api|claude|codex)$")
+    provider: str = Field(default="anthropic", pattern="^(openai|anthropic)$")
     model: str | None = Field(default=None, max_length=120)
     language: str = Field(default="auto", pattern="^(auto|ko|en)$")
 
@@ -242,6 +251,44 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     def app_js():
         return Response((STATIC / "app.js").read_text(encoding="utf-8"), media_type="application/javascript")
 
+    def connectors() -> list[dict]:
+        from bench2agent.runtime import available_connectors
+        out = []
+        for c in available_connectors():
+            if c["name"] == "api":
+                # service mode: any provider key on the host; user mode: a key per request
+                has_key = any(providers.credential(p) for p in providers.KEY_NAMES)
+                enabled = settings.credentials == "user" or has_key
+                c = {**c, "connected": enabled}
+                reason = None if enabled else "no provider key configured on this host"
+            else:
+                enabled = settings.local_mode and c.get("installed", False)
+                reason = (None if enabled else ("not installed on this host" if not c.get("installed")
+                          else "a hosted service would need one isolated login per visitor; not available yet"))
+            out.append({**c, "enabled": enabled, "disabled_reason": reason,
+                        "login": __import__("bench2agent.runtime", fromlist=["connector"]).connector(c["name"]).login() if c["name"] != "api" else None})
+        return out
+
+    @app.get("/api/connectors")
+    def list_connectors(user: dict = Depends(current_user)):
+        return {"connectors": connectors(), "local_mode": settings.local_mode}
+
+    @app.post("/api/session")
+    def open_session(response: Response, x_requested_with: str | None = Header(default=None),
+                     b2a_session: str | None = Cookie(default=None)):
+        """Open access: a visitor gets a session without signing up. The AI
+        account they connect is the identity that matters."""
+        if x_requested_with != "Bench2Agent":
+            raise HTTPException(403, "Needs X-Requested-With: Bench2Agent.")
+        existing = web.authenticate_session(b2a_session)
+        if existing:
+            return {"name": existing["name"], "new": False}
+        if settings.access != "open":
+            raise HTTPException(403, "This host needs an invite code to start.")
+        opened = web.anonymous_session()
+        set_session(response, opened["session"])
+        return {"name": opened["name"], "new": True}
+
     @app.post("/api/login")
     def login(body: Login, response: Response, x_requested_with: str | None = Header(default=None)):
         if x_requested_with != "Bench2Agent":
@@ -262,7 +309,8 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     @app.get("/api/me")
     def me(user: dict = Depends(current_user)):
         usage = web.usage_today(user["user_id"])
-        return {"name": user["name"], "auth": user["auth"], "credentials": settings.credentials,
+        return {"name": user["name"], "auth": user["auth"], "credentials": settings.credentials, "access": settings.access,
+                "local_mode": settings.local_mode,
                 "turns_per_day": settings.turns_per_day, "attempts_today": usage["attempts"], "answers_today": usage["answers"],
                 "turns_today": usage["attempts"]}
 
@@ -288,8 +336,15 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
             raise HTTPException(503, str(exc))
         if rid is None:
             raise HTTPException(503, "No data revision is installed on this host.")
-        model = body.model or providers.DEFAULT_MODELS[body.provider]
-        return public(web.create_conversation(user["user_id"], revision=rid, provider=body.provider, model=model, language=body.language))
+        enabled = {c["name"]: c for c in connectors() if c["enabled"]}
+        if body.connector not in enabled:
+            reason = next((c["disabled_reason"] for c in connectors() if c["name"] == body.connector), "unknown connector")
+            raise HTTPException(400, f"Connector {body.connector} is not available here: {reason}")
+        if body.connector != "api" and not enabled[body.connector]["connected"]:
+            raise HTTPException(400, f"{enabled[body.connector]['label']} is not signed in: {enabled[body.connector]['login']['command']}")
+        model = body.model or (providers.DEFAULT_MODELS[body.provider] if body.connector == "api" else "")
+        return public(web.create_conversation(user["user_id"], revision=rid, provider=body.provider, model=model,
+                                              language=body.language, connector=body.connector))
 
     @app.get("/api/conversations/{cid}")
     def get_conversation(cid: str, user: dict = Depends(current_user)):
@@ -323,7 +378,7 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     @app.post("/api/conversations/{cid}/ask")
     def ask(cid: str, body: Ask, user: dict = Depends(current_user), x_model_key: str | None = Header(default=None)):
         conv = owned(user, cid)
-        if settings.credentials == "user" and not x_model_key:
+        if conv.get("connector", "api") == "api" and settings.credentials == "user" and not x_model_key:
             raise HTTPException(400, "This host uses your own model credential: send it as X-Model-Key for each question. "
                                      "It is bound to this request only and never stored.")
         with running_lock:
@@ -331,11 +386,11 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(409, "A question is already running in this conversation.")
             if sum(1 for j in running.values() if j.user_id == user["user_id"]) >= settings.concurrent_per_user:
                 raise HTTPException(429, f"At most {settings.concurrent_per_user} questions at once.")
-            attempt = web.reserve_attempt(user["user_id"], cid, body.question, settings.turns_per_day)
+            attempt = web.reserve_attempt(user["user_id"], cid, body.question, settings.turns_per_day, connector=conv.get("connector") or "api")
             if attempt is None:
                 raise HTTPException(429, f"Daily limit of {settings.turns_per_day} attempts reached.")
             job = running[cid] = Job(user["user_id"], attempt)
-        keys = {conv["provider"]: x_model_key} if settings.credentials == "user" else None
+        keys = {conv["provider"]: x_model_key} if settings.credentials == "user" and conv.get("connector", "api") == "api" else None
 
         def release():
             with running_lock:
@@ -386,31 +441,51 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
         language = conv.get("language", "auto")
         system = BENCHMARK_SYSTEM + ("\nAnswer in the user's language." if language == "auto" else
                                     "\nWrite prose in " + {"ko": "Korean", "en": "English"}.get(language, language) + ".")
-        tools = HttpMcpTools(f"{settings.mcp_url}/revisions/{rid}/mcp", headers=headers)
+        name = conv.get("connector") or "api"
         # service mode leaves the process environment visible to the provider;
         # user mode binds the request's own key and nothing else
         bound = providers.using_credentials(keys) if keys is not None else contextlib.nullcontext()
+        tool_log = root / "data/bench2agent/toollogs" / f"{conv['cid']}-{job.attempt_id}.jsonl"
+        tool_log.parent.mkdir(parents=True, exist_ok=True)
         with mcp.using(store), bound:
             loop_started = time.perf_counter()
-            answer = providers.generate(conv["provider"], conv["model"], system, conv["messages"], question, emit,
-                                        tools=tools, cancelled=job.cancelled)
+            if name == "api":
+                # Bench2Agent's own loop, tools over HTTP MCP on the conversation's revision
+                tools = HttpMcpTools(f"{settings.mcp_url}/revisions/{rid}/mcp", headers=headers)
+                answer = providers.generate(conv["provider"], conv["model"], system, conv["messages"], question, emit,
+                                            tools=tools, cancelled=job.cancelled)
+                text, trail, messages, usage, provider_session = answer["text"], answer["trail"], answer["messages"], answer["usage"], None
+            else:
+                # the official CLI owns the loop; the pinned stdio MCP server records it
+                from bench2agent.runtime import ConnectorError, connector
+                try:
+                    run = connector(name).ask(root=root, revision=rid, question=question, system=system, history=None,
+                                              provider_session=conv.get("provider_session"), emit=emit,
+                                              cancelled=job.cancelled, tool_log=tool_log)
+                except ConnectorError as exc:
+                    if str(exc) == "cancelled":
+                        raise providers.Cancelled("The question was cancelled; nothing was saved.") from None
+                    raise providers.ProviderError(str(exc)) from None
+                tools = type("T", (), {"calls": len(run.trail), "seconds": 0.0})()
+                text, trail, messages, usage, provider_session = run.text, run.trail_for_turn(), conv["messages"], run.usage, run.provider_session
             marks["loop"] = time.perf_counter() - loop_started
             if job.cancelled():
                 raise providers.Cancelled("The question was cancelled; nothing was saved.")
             verify_started = time.perf_counter()
             corpus = mcp.Store()
-            segs, verified = chat.segment(answer["text"], corpus, Verifier(corpus), answer["trail"])
+            segs, verified = chat.segment(text, corpus, Verifier(corpus), trail)
             marks["verify"] = time.perf_counter() - verify_started
         if not job.commit():                                     # a cancel accepted during verification wins
             raise providers.Cancelled("The question was cancelled; nothing was saved.")
         snapshot = store.data()
-        turn = {"q": question, "segs": segs, "verified": verified, "trail": answer["trail"], "usage": answer["usage"],
+        turn = {"q": question, "segs": segs, "verified": verified, "trail": trail, "usage": usage, "connector": name,
+                "tool_log": tool_log.name if tool_log.exists() else None,
                 "timing": {"attempt": job.attempt_id, **breakdown()},
                 "on": {"benchmarks": {k: snapshot.get(k) for k in ("snapshot_id", "revision", "generated_at", "source")}}}
-        saved = web.append_turn(user["user_id"], conv["cid"], messages=answer["messages"], turn=turn,
-                                expected_version=conv["version"])
+        saved = web.append_turn(user["user_id"], conv["cid"], messages=messages, turn=turn,
+                                expected_version=conv["version"], provider_session=provider_session)
         job.finish("saved")
-        finish("saved", answer["usage"])
+        finish("saved", usage)
         emit({"t": "turn", "turn": turn, "conversation": {k: saved[k] for k in ("cid", "title", "revision", "updated_at", "version")}})
     except providers.Cancelled as exc:
         job.finish("cancelled")

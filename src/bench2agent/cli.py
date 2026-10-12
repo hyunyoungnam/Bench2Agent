@@ -218,7 +218,7 @@ def load_session(args, root: Path, *, interactive: bool) -> Session:
         if not args.model:
             config["model"] = input(f"Model [{config['model']}]: ").strip() or config["model"]
         write_json(settings_path(root), config)
-    session = Session(root, **config, cid=cid)
+    session = Session(root, **config, cid=cid, connector=getattr(args, "connector", None) or "api")
     if cid and ((args.provider and args.provider != session.doc["provider"]) or
                 (args.model and args.model != session.doc["model"])):
         raise ValueError("A resumed conversation keeps its provider and model. Start a new conversation to change them.")
@@ -434,6 +434,8 @@ def common_options(parser, *, child=False):
     parser.add_argument("--model", default=default, help="model ID supported by your account")
     parser.add_argument("--language", choices=["auto", "ko", "en"], default=default)
     parser.add_argument("--resume", nargs="?", const="latest", default=default, metavar="ID")
+    parser.add_argument("--connector", choices=["api", "claude", "codex"], default=default,
+                        help="how the question runs: a provider API key (default), or the official Claude Code / Codex CLI with its own login")
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS if child else False)
 
 

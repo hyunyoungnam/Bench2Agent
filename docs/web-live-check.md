@@ -7,6 +7,15 @@ three representative questions against a real model from the page, and what
 to look at afterwards. It produces the measurements the beta criteria will be
 set from; it does not assume them.
 
+## Routes
+
+The check can run on any connector the host offers: the Claude Code or
+Codex login on the machine (loopback host, no key at all), or a provider
+API key in service or user mode. `docs/account-connections.md` says which of
+these a public host may offer. The first full run (robotics question,
+Claude Code and Codex connectors, revision `0dd4b9bbee4b54d2`) is recorded
+there.
+
 ## Operator: prepare the private test address
 
 ```bash

@@ -248,6 +248,14 @@ The corpus and generated bundles remain Git-ignored.
 
 ## Start a conversation
 
+The terminal uses the same execution layer as the web. `--connector claude`
+or `--connector codex` runs the question through the official CLI with its
+own login (Bench2Agent gives it the pinned MCP server and records the calls);
+the default `--connector api` uses a provider API key as below.
+`bench2agent claude` / `bench2agent codex` are different: they open the
+official CLI itself with Bench2Agent's tools registered, and Bench2Agent does
+not verify those answers.
+
 Choose OpenAI or Anthropic and supply an API key using the environment:
 
 ```bash
@@ -388,8 +396,12 @@ independent terminal is separate from ChatGPT/Claude subscription login.
 
 ## Hosted conversation (web)
 
-This is the way a user is meant to reach Bench2Agent: open an address, sign
-in, ask. Nothing to install on the user's side. The sections below are for
+This is the way a user is meant to reach Bench2Agent: open an address,
+connect an AI account they already have, ask, read the sources and the
+verification marks. No Bench2Agent account, no API key by default. On this
+machine (loopback) the page uses the Claude Code or Codex login already here;
+[account-connections.md](account-connections.md) records what each route
+permits and what a public host can offer today. The sections below are for
 the operator who runs the host.
 
 With the server extra, `bench2agent web serve [--host 127.0.0.1] [--port 8780]`
@@ -400,18 +412,25 @@ server it mounts at `/mcp-server`, on the endpoint of the conversation's
 revision. The `Dockerfile` builds the same host as one container with a
 `/data` volume.
 
-- **Sign-in and ownership.** The operator makes invite codes
-  (`bench2agent web invite add LABEL [--uses N] [--days D]`, `invite list`,
-  `invite revoke LABEL`) and hands one out. The user enters it on the page
-  with a name once and gets a browser session (an HttpOnly, SameSite=Lax
-  cookie); from then on the page just works, and **Sign out** closes the
-  session. State-changing requests from a browser session must carry
-  `X-Requested-With: Bench2Agent`, which the page adds and a cross-site form
-  cannot. A conversation exists only for its owner: read, ask, cancel and
-  delete on someone else's return 404. API clients and scripts may instead
+- **Connections, not sign-up.** The page lists the connectors the host can
+  offer (`GET /api/connectors`): the official Claude Code and Codex CLIs with
+  their own logins (on a loopback host, the machine's logins; on a hosted
+  deployment they show as unavailable, since each visitor would need an
+  isolated login, which is not built), and a provider API key. A
+  conversation is created on one connector and keeps it. CLI connectors
+  receive Bench2Agent's stdio MCP server pinned to the conversation's
+  revision; the server records every call to a per-attempt log that becomes
+  the turn's trail.
+- **Visitors and ownership.** On a loopback host access is open: the first
+  visit opens a session (an HttpOnly, SameSite=Lax cookie) with no name or
+  code. On any other host access defaults to invite codes
+  (`BENCH2AGENT_WEB_ACCESS=open|invite`; `bench2agent web invite add LABEL`,
+  `invite list`, `invite revoke`). State-changing requests from a browser
+  session must carry `X-Requested-With: Bench2Agent`, which the page adds and
+  a cross-site form cannot. A conversation exists only for its owner: read,
+  ask, cancel and delete on someone else's return 404. Scripts may
   authenticate with a bearer token from `bench2agent web user add NAME`
-  (`user token`, `user revoke`, `user list`); that is an operator path, not
-  the user's.
+  (`user token`, `user revoke`, `user list`); that is an operator path.
 - **Revision per conversation.** A new conversation is pinned to the revision
   active at that moment and keeps it for its life: tool calls, figure
   recomputation and quote checks all read that revision after a new one is

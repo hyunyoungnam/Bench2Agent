@@ -211,6 +211,10 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(figures.claimed("CIFAR-10: 182 papers, 87.248 per-1000; cvpr-2025 2BY2, 360SPR, 3D-POPE"),
                          [("182", 182.0), ("87.248", 87.248)])
         self.assertEqual(figures.claimed("z −3.374; 10 papers"), [("-3.374", -3.374), ("10", 10.0)])
+        # arXiv ids and edition years are names the tools return as strings, not figures
+        self.assertEqual(figures.claimed("LIBERO 80 papers, arXiv 2306.03310, NeurIPS 2023; 183 from ICLR 2026 and 4,237/5,468"),
+                         [("80", 80.0), ("183", 183.0), ("4,237", 4237.0), ("5,468", 5468.0)])
+        self.assertEqual(figures.claimed("2026 papers in total"), [("2026", 2026.0)])   # a bare count stays a figure
 
     def test_assembled_table_cell_is_evidence_but_not_a_verbatim_quote(self):
         def change(data):

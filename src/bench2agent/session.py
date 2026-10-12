@@ -30,11 +30,12 @@ def write_json(path: Path, value: dict) -> None:
 
 
 class Session:
-    def __init__(self, root: Path, provider: str, model: str, *, cid: str | None = None, language: str = "auto"):
+    def __init__(self, root: Path, provider: str, model: str, *, cid: str | None = None, language: str = "auto",
+                 connector: str = "api"):
         self.root = root
         self.directory = root / "data/bench2agent/chats"
         self.doc = {"id": secrets.token_hex(6), "provider": provider, "model": model, "language": language,
-                    "title": "New conversation", "ts": int(time.time()), "messages": [], "turns": []}
+                    "connector": connector, "title": "New conversation", "ts": int(time.time()), "messages": [], "turns": []}
         if cid:
             self.doc = self.load(cid)
         self.expected_revision = None if not cid else self.path.stat().st_mtime_ns
@@ -84,21 +85,35 @@ class Session:
         language = self.doc.get("language", "auto")
         system = BENCHMARK_SYSTEM + ("\nAnswer in the user's language." if language == "auto" else
                                     "\nWrite prose in " + {"ko": "Korean", "en": "English"}.get(language, language) + ".")
-        with mcp.using(store):   # tools and the answer check read this revision, whatever is active
-            answer = providers.generate(self.doc["provider"], self.doc["model"], system,
-                                        self.doc["messages"], question, emit)
+        from bench2agent.runtime import ConnectorError, connector
+        name = self.doc.get("connector", "api")
+        conn = connector(name, provider=self.doc["provider"]) if name == "api" else connector(name)
+        tool_log = self.directory / "toollogs" / f"{self.doc['id']}-{int(time.time() * 1000)}.jsonl"
+        tool_log.parent.mkdir(parents=True, exist_ok=True)
+        with mcp.using(store):   # the answer check reads this revision, whatever is active
+            try:
+                run = conn.ask(root=self.root, revision=store.revision, question=question, system=system,
+                               history=self.doc["messages"], provider_session=self.doc.get("provider_session") or
+                               (self.doc["model"] if name == "api" else None), emit=emit, cancelled=lambda: False, tool_log=tool_log)
+            except ConnectorError as exc:
+                raise providers.ProviderError(str(exc)) from None
             if store.data().get("snapshot_id") != sid:
                 raise ValueError("The dataset changed during this answer. Start a new turn; this answer was not saved.")
             corpus = mcp.Store()
-            segs, verified = chat.segment(answer["text"], corpus, Verifier(corpus), answer["trail"])
-        turn = {"q": question, "segs": segs, "verified": verified, "trail": answer["trail"],
-                "usage": answer["usage"], "on": {"benchmarks": {key: snapshot.get(key)
-                         for key in ("snapshot_id", "generated_at", "source")}}}
+            trail = run.trail_for_turn()
+            segs, verified = chat.segment(run.text, corpus, Verifier(corpus), trail)
+        turn = {"q": question, "segs": segs, "verified": verified, "trail": trail, "connector": name,
+                "tool_log": tool_log.name if tool_log.exists() else None,
+                "usage": run.usage, "on": {"benchmarks": {key: snapshot.get(key)
+                         for key in ("snapshot_id", "revision", "generated_at", "source")}}}
         if (self.path.stat().st_mtime_ns if self.path.exists() else None) != original_revision:
             raise ValueError("This conversation changed in another terminal; answer was not saved.")
-        updated = {**self.doc, "messages": answer["messages"], "snapshot_id": sid, "ts": int(time.time()),
+        updated = {**self.doc, "messages": run.messages if run.messages is not None else self.doc["messages"],
+                   "snapshot_id": sid, "ts": int(time.time()),
                    "title": self.doc["title"] if self.doc["turns"] else question[:80],
                    "turns": [*self.doc["turns"], turn]}
+        if name != "api" and run.provider_session:
+            updated["provider_session"] = run.provider_session
         write_json(self.path, updated)
         self.doc = updated
         self.expected_revision = self.path.stat().st_mtime_ns

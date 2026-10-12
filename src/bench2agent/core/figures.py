@@ -110,12 +110,22 @@ def claimed(claim: str) -> list[tuple[str, float]]:
             if not _identifier_number(claim, m)]
 
 
+_ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}(?:v\d+)?")
+
+
 def _identifier_number(text: str, match) -> bool:
-    """Digits in CIFAR-10, MATH500 and 3D-POPE are names, not statistics."""
+    """Digits in CIFAR-10, MATH500 and 3D-POPE are names, not statistics;
+    so are arXiv ids (2306.03310) and the year in an edition name
+    ("ICLR 2026", "NeurIPS 2025"), which tool results carry as strings."""
     before, after = text[:match.start()], text[match.end():]
-    if _val(match.group(0)) == 1000 and (re.search(r"\bper\s*$", before, re.I)
-                                      or re.match(r"\s*(?:편|개|논문)\s*당", after)):
+    raw = match.group(0)
+    if _val(raw) == 1000 and (re.search(r"\bper\s*$", before, re.I)
+                              or re.match(r"\s*(?:편|개|논문)\s*당", after)):
         return True  # the fixed rate unit in "500 per 1,000 papers"
+    if _ARXIV_ID.fullmatch(raw) and not re.search(r"\d$", before) and not re.match(r"\d", after):
+        return True
+    if _YEAR.fullmatch(raw) and (re.search(r"[A-Za-z]{2,}\s+$", before) or re.match(r"\s*(?:edition|년|회차)", after)):
+        return True  # "ICLR 2026": the edition's year, not a count
     return bool(re.search(r"[A-Za-z][-_/]?$", before) or re.match(r"[A-Za-z]", after))
 
 

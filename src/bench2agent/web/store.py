@@ -48,6 +48,9 @@ MIGRATIONS = [
     ("attempts", "model_ms", "ALTER TABLE attempts ADD COLUMN model_ms INTEGER"),
     ("attempts", "tool_ms", "ALTER TABLE attempts ADD COLUMN tool_ms INTEGER"),
     ("attempts", "verify_ms", "ALTER TABLE attempts ADD COLUMN verify_ms INTEGER"),
+    ("conversations", "connector", "ALTER TABLE conversations ADD COLUMN connector TEXT NOT NULL DEFAULT 'api'"),
+    ("conversations", "provider_session", "ALTER TABLE conversations ADD COLUMN provider_session TEXT"),
+    ("attempts", "connector", "ALTER TABLE attempts ADD COLUMN connector TEXT"),
 ]
 
 
@@ -178,6 +181,16 @@ class WebStore:
                 raise
         return {"user_id": uid, "name": name, "session": session}
 
+    def anonymous_session(self) -> dict:
+        """A visitor with no sign-up: an account named by a random id and a
+        session cookie. The AI account the visitor connects is the identity
+        that matters; this one only keeps their conversations apart."""
+        uid = secrets.token_hex(8)
+        name = "visitor-" + uid[:6]
+        with self._lock, self._con() as con:
+            con.execute("INSERT INTO users VALUES (?,?,?,0)", (uid, name, _now()))
+        return {"user_id": uid, "name": name, "session": self.open_session(uid)}
+
     def open_session(self, user_id: str) -> str:
         session = "sess_" + secrets.token_urlsafe(32)
         expires = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)).isoformat(timespec="seconds")
@@ -210,14 +223,15 @@ class WebStore:
         return dict(row) if row else None
 
     # -- conversations -------------------------------------------------------
-    def create_conversation(self, user_id: str, *, revision: str, provider: str, model: str, language: str) -> dict:
+    def create_conversation(self, user_id: str, *, revision: str, provider: str, model: str, language: str,
+                            connector: str = "api") -> dict:
         cid = secrets.token_hex(6)
         now = _now()
         doc = {"messages": [], "turns": []}
         with self._lock, self._con() as con:
             con.execute("INSERT INTO conversations (cid, user_id, revision, provider, model, language, title, created_at, "
-                        "updated_at, doc) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                        (cid, user_id, revision, provider, model, language, "New conversation", now, now, json.dumps(doc)))
+                        "updated_at, doc, connector) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        (cid, user_id, revision, provider, model, language, "New conversation", now, now, json.dumps(doc), connector))
         return self.conversation(user_id, cid)
 
     def conversation(self, user_id: str, cid: str, *, with_doc: bool = True) -> dict | None:
@@ -226,7 +240,8 @@ class WebStore:
             row = con.execute("SELECT * FROM conversations WHERE cid = ? AND user_id = ?", (cid, user_id)).fetchone()
         if not row:
             return None
-        out = {k: row[k] for k in ("cid", "revision", "provider", "model", "language", "title", "created_at", "updated_at", "version")}
+        out = {k: row[k] for k in ("cid", "revision", "provider", "model", "language", "title", "created_at", "updated_at", "version",
+                                   "connector", "provider_session")}
         if with_doc:
             doc = json.loads(row["doc"])
             out["turns"] = doc["turns"]
@@ -235,10 +250,11 @@ class WebStore:
 
     def conversations(self, user_id: str) -> list[dict]:
         with self._con() as con:
-            return [{k: r[k] for k in ("cid", "revision", "provider", "model", "title", "created_at", "updated_at")}
+            return [{k: r[k] for k in ("cid", "revision", "provider", "model", "title", "created_at", "updated_at", "connector")}
                     for r in con.execute("SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))]
 
-    def append_turn(self, user_id: str, cid: str, *, messages: list, turn: dict, expected_version: int) -> dict:
+    def append_turn(self, user_id: str, cid: str, *, messages: list, turn: dict, expected_version: int,
+                    provider_session: str | None = None) -> dict:
         """Save a finished, verified turn as a conditional update on the
         conversation's version number: the row must still be at the version
         the question started from, or the save is refused, so two overlapping
@@ -257,8 +273,9 @@ class WebStore:
                 doc["turns"].append(turn)
                 title = row["title"] if doc["turns"][:-1] else (turn["q"][:80] or row["title"])
                 changed = con.execute(
-                    "UPDATE conversations SET doc = ?, title = ?, updated_at = ?, version = version + 1 WHERE cid = ? AND version = ?",
-                    (json.dumps(doc, ensure_ascii=False), title, _now(), cid, expected_version)).rowcount
+                    "UPDATE conversations SET doc = ?, title = ?, updated_at = ?, version = version + 1, "
+                    "provider_session = COALESCE(?, provider_session) WHERE cid = ? AND version = ?",
+                    (json.dumps(doc, ensure_ascii=False), title, _now(), provider_session, cid, expected_version)).rowcount
                 if changed != 1:
                     raise ValueError("The conversation changed while this answer was being produced; it was not saved.")
                 con.execute("COMMIT")
@@ -276,7 +293,7 @@ class WebStore:
     def _since() -> str:
         return (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).isoformat(timespec="seconds")
 
-    def reserve_attempt(self, user_id: str, cid: str, question: str, limit: int) -> int | None:
+    def reserve_attempt(self, user_id: str, cid: str, question: str, limit: int, connector: str = "api") -> int | None:
         """Count the day's attempts and record this one in a single write
         transaction, so two requests arriving with one attempt left cannot
         both pass. Returns the attempt id, or None when the limit is reached.
@@ -289,8 +306,8 @@ class WebStore:
                 if used >= limit:
                     con.execute("ROLLBACK")
                     return None
-                cur = con.execute("INSERT INTO attempts (user_id, cid, started_at, outcome, question) VALUES (?,?,?,?,?)",
-                                  (user_id, cid, _now(), "running", question[:200]))
+                cur = con.execute("INSERT INTO attempts (user_id, cid, started_at, outcome, question, connector) VALUES (?,?,?,?,?,?)",
+                                  (user_id, cid, _now(), "running", question[:200], connector))
                 con.execute("COMMIT")
                 return cur.lastrowid
             except BaseException:
@@ -321,7 +338,7 @@ class WebStore:
         """Recent attempts with outcome and timing, for review beside the
         saved conversation (cid + attempt id link them)."""
         with self._con() as con:
-            sql = ("SELECT a.attempt_id, u.name, a.cid, a.started_at, a.finished_at, a.outcome, a.duration_ms, a.model_ms, "
+            sql = ("SELECT a.attempt_id, u.name, a.cid, a.connector, a.started_at, a.finished_at, a.outcome, a.duration_ms, a.model_ms, "
                    "a.tool_ms, a.verify_ms, a.tool_calls, a.input_tokens, a.output_tokens, a.question "
                    "FROM attempts a JOIN users u USING (user_id)")
             args: tuple = ()

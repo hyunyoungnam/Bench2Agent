@@ -170,6 +170,18 @@ conversations. A database-backed job queue is enough initially; a separate
 queue service is added only if load requires it. Tool responses are paginated,
 and aggregate caches include the dataset revision and scope arguments.
 
+## Account connections and the shared execution layer
+
+`bench2agent.runtime` is the layer the web and the terminal share: a
+connector reports its connection, points at the provider's own sign-in,
+runs one question on one revision with progress and cancellation, and
+returns the answer with the tool trail. Three connectors exist: the official
+Claude Code binary and the official Codex CLI, each with the user's own
+login and each owning its model/tool loop while Bench2Agent's pinned stdio
+MCP server records every call, and a provider API key with Bench2Agent's own
+loop. What each route permits, what was executed and what a public host can
+offer is in [account-connections.md](account-connections.md).
+
 ## Where to run the private test host
 
 The host is one FastAPI process plus a `/data` directory (installed data

@@ -27,6 +27,7 @@ function fakeServer() {
     }
   }
   const fetch = async (url, opts) => {
+    if (url === "/api/connectors") return json(200, {connectors: [{name: "api", label: "API", enabled: true, connected: true}], local_mode: true});
     const m = url.match(/^\/api\/(me|conversations)(?:\/([A-Z]))?(?:\/(ask|cancel))?$/);
     if (!m) return json(404, {detail: "no"});
     if (m[1] === "me") return json(200, {name: "u", credentials: "service", attempts_today: 0, answers_today: 0, turns_per_day: 5});
@@ -43,7 +44,7 @@ function recordingView() {
   const log = [];
   const rec = name => (...args) => log.push([name, ...args.map(a => (a && a.cid) || (typeof a === "object" && a !== null ? JSON.stringify(a).slice(0, 40) : a))]);
   return {log, showUser: rec("showUser"), showSignedOut: rec("showSignedOut"), showList: rec("showList"),
-          showConversation: rec("showConversation"), setBusy: rec("setBusy"), showEvent: rec("showEvent"),
+          showConversation: rec("showConversation"), setBusy: rec("setBusy"), showEvent: rec("showEvent"), showConnectors: rec("showConnectors"),
           appendTurn: rec("appendTurn"), showError: rec("showError"), showStatus: rec("showStatus"), notifyFinished: rec("notifyFinished")};
 }
 

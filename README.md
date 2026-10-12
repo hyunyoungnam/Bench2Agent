@@ -51,12 +51,15 @@ guarantee a direct data download. Missing links mean no confirmed location.
 
 ## On the web (private test)
 
-The intended way to use Bench2Agent is a web address: open it, sign in with
-an invite code, ask. Nothing to install. The test host is private for now;
-operators find the host, its sign-in and limits in
-[docs/terminal.md](docs/terminal.md#hosted-conversation-web) and the
-real-model check procedure in [docs/web-live-check.md](docs/web-live-check.md).
-The terminal and MCP routes below remain for developers and for agents.
+The intended way to use Bench2Agent is a web address: open it, connect an AI
+account you already have (Claude Code or Codex on your machine, or a provider
+key), ask, and read the sources and verification marks. No Bench2Agent
+account. The test host is private for now; what each account route permits
+and what a public host can offer is in
+[docs/account-connections.md](docs/account-connections.md), the host itself in
+[docs/terminal.md](docs/terminal.md#hosted-conversation-web), and the
+real-model check in [docs/web-live-check.md](docs/web-live-check.md). The
+terminal and MCP routes below remain for developers and for agents.
 
 ## Get started
 

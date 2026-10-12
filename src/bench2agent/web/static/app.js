@@ -23,8 +23,25 @@
     async function connect() {
       state.me = await api("/api/me");
       view.showUser(state.me);
+      await refreshConnectors();
       await refreshList();
       return state.me;
+    }
+
+    // Open access: a first visit gets a session without any sign-up.
+    async function start() {
+      try { return await connect(); }
+      catch (e) {
+        try { await api("/api/session", {method: "POST"}); return await connect(); }
+        catch (e2) { view.showSignedOut(e2.message); return null; }
+      }
+    }
+
+    async function refreshConnectors() {
+      const d = await api("/api/connectors");
+      state.connectors = d.connectors;
+      view.showConnectors(state.connectors, d.local_mode);
+      return state.connectors;
     }
 
     async function login(invite, name) {
@@ -44,8 +61,8 @@
       view.showList(state.conversations, state.cid, Object.keys(state.jobs));
     }
 
-    async function newConversation(provider, model, language) {
-      const c = await api("/api/conversations", {method: "POST", body: JSON.stringify({provider, model: model || null, language})});
+    async function newConversation(provider, model, language, connectorName) {
+      const c = await api("/api/conversations", {method: "POST", body: JSON.stringify({provider, model: model || null, language, connector: connectorName || "api"})});
       await refreshList();
       await open(c.cid);
       return c;
@@ -70,7 +87,9 @@
       state.jobs[cid] = job;
       view.setBusy(cid, true);
       const headers = {};
-      if (state.me && state.me.credentials === "user") headers["X-Model-Key"] = modelKey || "";
+      const conv = state.conversations.find(c => c.cid === cid);
+      const usesApi = !conv || !conv.connector || conv.connector === "api";
+      if (usesApi && state.me && state.me.credentials === "user") headers["X-Model-Key"] = modelKey || "";
       let outcome = null;
       try {
         const r = await env.fetch("/api/conversations/" + cid + "/ask", {
@@ -104,7 +123,7 @@
       return r;
     }
 
-    return {state, connect, login, logout, refreshList, newConversation, open, ask, cancel, isOpen};
+    return {state, connect, start, login, logout, refreshList, refreshConnectors, newConversation, open, ask, cancel, isOpen};
   }
 
   // NDJSON lines from a fetch Response, as parsed objects.

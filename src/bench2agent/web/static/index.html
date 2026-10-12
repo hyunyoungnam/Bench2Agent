@@ -37,19 +37,24 @@
   </header>
 
   <section id="login" class="row" hidden>
+    <span class="muted">This host needs an invite code.</span>
     <input id="invite" type="password" placeholder="invite code" size="28">
     <input id="name" placeholder="your name" size="18">
-    <button id="signin" class="primary">Sign in</button>
+    <button id="signin" class="primary">Continue</button>
     <span id="loginStatus" class="muted"></span>
   </section>
 
   <section id="setup" hidden>
-    <div class="row"><span id="who" class="muted"></span><button id="signout">Sign out</button></div>
+    <div class="row"><span id="who" class="muted"></span></div>
+    <div id="connectors" class="row"></div>
     <div class="row">
-      <select id="provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option></select>
-      <input id="model" placeholder="model id (optional)" size="26">
+      <select id="connector"></select>
+      <span id="apiOptions">
+        <select id="provider"><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option></select>
+        <input id="model" placeholder="model id (optional)" size="26">
+        <input id="modelKey" type="password" placeholder="your model API key (sent with each question through this backend to the provider, never stored)" size="44" hidden>
+      </span>
       <select id="language"><option value="auto">language: auto</option><option value="en">English</option><option value="ko">한국어</option></select>
-      <input id="modelKey" type="password" placeholder="your model API key (sent with each question, never stored)" size="44" hidden>
       <button id="newConv" class="primary">New conversation</button>
     </div>
     <div id="convs"></div>
@@ -96,17 +101,31 @@
   const view = {
     showUser(me) {
       $("login").hidden = true; $("setup").hidden = false;
-      $("who").textContent = `${me.name} · ${me.attempts_today}/${me.turns_per_day} attempts today (${me.answers_today} answers) · model credentials: ${me.credentials === "service" ? "provided by this service" : "your own key, per question"}`;
+      $("who").textContent = `${me.attempts_today}/${me.turns_per_day} questions today`;
       $("modelKey").hidden = me.credentials !== "user";
     },
-    showSignedOut() { $("setup").hidden = true; $("chat").hidden = true; $("login").hidden = false; $("loginStatus").textContent = "Signed out."; },
+    showConnectors(list, localMode) {
+      $("connectors").innerHTML = list.map(c => {
+        const state = !c.enabled ? `<span class="muted">unavailable here: ${esc(c.disabled_reason || "")}</span>`
+          : c.connected ? `<span class="fig ok">connected${c.account ? " · " + esc(c.account) : ""}</span>`
+          : `<span class="fig bad">not connected</span>${c.login && c.login.command ? ` <span class="muted">· run <code>${esc(c.login.command)}</code> on this machine, then reload</span>` : ""}`;
+        return `<div><strong>${esc(c.label)}</strong> ${state}</div>`;
+      }).join("");
+      const usable = list.filter(c => c.enabled && (c.connected || c.name === "api"));
+      $("connector").innerHTML = usable.map(c => `<option value="${esc(c.name)}">${esc(c.label)}</option>`).join("")
+        || `<option value="">no connection available</option>`;
+      const sync = () => { $("apiOptions").hidden = $("connector").value !== "api"; };
+      $("connector").onchange = sync; sync();
+      $("newConv").disabled = usable.length === 0;
+    },
+    showSignedOut(message) { $("setup").hidden = true; $("chat").hidden = true; $("login").hidden = false; $("loginStatus").textContent = message || ""; },
     showList(convs, current, running) {
       $("convs").innerHTML = convs.map(c => `<button data-cid="${esc(c.cid)}" class="${c.cid === current ? "current" : ""}" title="revision ${esc(c.revision)}">${esc(c.title)}${running.includes(c.cid) ? " …" : ""}</button>`).join("");
       $("convs").querySelectorAll("button").forEach(b => b.onclick = () => app.open(b.dataset.cid).catch(e => { $("status").textContent = e.message; }));
     },
     showConversation(c, busy) {
       $("chat").hidden = false;
-      $("convMeta").textContent = `${c.provider} · ${c.model} · data revision ${c.revision}`;
+      $("convMeta").textContent = `${c.connector === "api" || !c.connector ? c.provider + " · " + c.model : c.connector} · data revision ${c.revision}`;
       $("turns").innerHTML = c.turns.map(renderTurn).join("");
       $("events").textContent = ""; $("status").textContent = busy ? "a question is running in this conversation…" : "";
       view.setBusy(c.cid, busy);
@@ -123,10 +142,9 @@
   };
 
   const app = B2AApp.create({fetch: (p, o) => fetch(p, o), ndjson: B2AApp.ndjson, abort: () => new AbortController(), view});
-  app.connect().catch(() => { $("login").hidden = false; });
+  app.start();
   $("signin").onclick = () => app.login($("invite").value.trim(), $("name").value.trim()).catch(e => { $("loginStatus").textContent = e.message; });
-  $("signout").onclick = () => app.logout().catch(e => { $("status").textContent = e.message; });
-  $("newConv").onclick = () => app.newConversation($("provider").value, $("model").value, $("language").value).catch(e => { $("status").textContent = e.message; });
+  $("newConv").onclick = () => app.newConversation($("provider").value, $("model").value, $("language").value, $("connector").value).catch(e => { $("status").textContent = e.message; });
   $("cancelBtn").onclick = () => app.cancel(app.state.cid).catch(e => { $("status").textContent = e.message; });
   $("askBtn").onclick = () => { const q = $("question").value.trim(); if (!q) return; $("events").textContent = ""; $("status").textContent = "asking…";
     app.ask(q, $("modelKey").value).catch(e => { $("status").textContent = e.message; }); };

@@ -6,6 +6,7 @@ exactly as in deployment, and the scripted provider sits where the model API
 would be."""
 import copy
 import json
+import os
 import socket
 import tempfile
 import threading
@@ -28,8 +29,10 @@ from bench2agent.web.store import WebStore
 
 try:
     from test_revisions import QUOTE_V1, QUOTE_V2, snapshot
+    from test_runtime import STUB_CLAUDE
 except ImportError:
     from tests.test_revisions import QUOTE_V1, QUOTE_V2, snapshot
+    from tests.test_runtime import STUB_CLAUDE
 
 
 def free_port():
@@ -88,7 +91,7 @@ class WebHostTests(unittest.TestCase):
             return r.status_code, [json.loads(line) for line in r.text.splitlines() if line.strip()]
 
     def new(self, user, **body):
-        r = self.client.post("/api/conversations", json={"provider": "openai", **body}, headers=self.h(user))
+        r = self.client.post("/api/conversations", json={"provider": "openai", "connector": "api", **body}, headers=self.h(user))
         self.assertEqual(r.status_code, 201, r.text)
         return r.json()
 
@@ -249,7 +252,6 @@ class WebHostTests(unittest.TestCase):
             if self.server.started:
                 break
             time.sleep(0.05)
-        conv = self.new(self.alice)
         seen = []
         script = self.scripted("Count ⟦benchmark_usage:{}|1 paper⟧")
 
@@ -257,6 +259,7 @@ class WebHostTests(unittest.TestCase):
             seen.append(providers.credential(provider))
             return script[len(seen) - 1]
         with patch.dict("os.environ", {"OPENAI_API_KEY": "service-key"}), patch.object(providers, "post", side_effect=post):
+            conv = self.new(self.alice)                                   # the api connector is enabled once the host holds a key
             with self.client.stream("POST", f"/api/conversations/{conv['cid']}/ask", json={"question": "q"},
                                     headers={"Authorization": "Bearer " + self.alice["token"]}) as r:   # no X-Model-Key needed
                 r.read()
@@ -422,6 +425,64 @@ class WebHostTests(unittest.TestCase):
         self.assertIsNotNone(row["tool_ms"])
         self.assertIsNotNone(row["verify_ms"])
         self.assertNotIn("key", json.dumps(row))
+
+    def test_open_access_session_needs_no_sign_up_and_hosted_mode_needs_an_invite(self):
+        self.assertTrue(self.settings.local_mode)
+        browser = httpx.Client(base_url=self.base, timeout=60)
+        self.addCleanup(browser.close)
+        self.assertEqual(browser.get("/api/me").status_code, 401)
+        self.assertEqual(browser.post("/api/session").status_code, 403)                     # header required
+        opened = browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"})
+        self.assertEqual((opened.status_code, opened.json()["new"]), (200, True))
+        me = browser.get("/api/me").json()
+        self.assertTrue(me["name"].startswith("visitor-"))
+        self.assertEqual((me["access"], me["local_mode"]), ("open", True))
+        again = browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"}).json()
+        self.assertFalse(again["new"])                                                     # the same visitor keeps the session
+        r = browser.post("/api/conversations", json={"connector": "api", "provider": "openai"}, headers={"X-Requested-With": "Bench2Agent"})
+        self.assertEqual(r.status_code, 201)
+        # a hosted (non-loopback) configuration asks for an invite and offers no CLI connectors
+        hosted = web_app.Settings(self.root, host="0.0.0.0", port=self.port + 1, credentials="user")
+        self.assertEqual((hosted.access, hosted.local_mode), ("invite", False))
+
+    def test_connectors_are_listed_with_enablement_and_a_cli_connector_answers_through_the_pinned_mcp(self):
+        bindir = self.root / "bin"
+        bindir.mkdir()
+        stub = bindir / "claude"
+        stub.write_text(STUB_CLAUDE)
+        stub.chmod(0o755)
+        import shutil
+        real_which = shutil.which
+        with patch.dict(os.environ, {"PATH": f"{bindir}:{os.environ['PATH']}"}), \
+             patch("bench2agent.runtime.base.shutil.which", side_effect=lambda b, *a, **k: None if b == "codex" else real_which(b, *a, **k)):
+            listed = {c["name"]: c for c in self.client.get("/api/connectors", headers=self.h(self.alice)).json()["connectors"]}
+            self.assertFalse(listed["codex"]["enabled"])                                        # codex absent on this (patched) host
+            self.assertTrue(listed["claude"]["connected"] and listed["claude"]["enabled"])       # loopback: the host's login may answer
+            self.assertEqual(listed["claude"]["account"], "stub@example.org")
+            self.assertIn("public_hosting", listed["claude"])
+            self.assertEqual(listed["claude"]["login"]["kind"], "command")
+            self.assertTrue(listed["api"]["enabled"])                                           # user mode: a key per request
+            conv = self.new(self.alice, connector="claude")
+            self.assertEqual(conv["connector"], "claude")
+            # no model key needed: the official CLI's own login answers; Bench2Agent records the loop
+            with self.client.stream("POST", f"/api/conversations/{conv['cid']}/ask", json={"question": "robotics?"},
+                                    headers={"Authorization": "Bearer " + self.alice["token"]}) as r:
+                r.read()
+                events = [json.loads(line) for line in r.text.splitlines() if line.strip()]
+            self.assertEqual([e["t"] for e in events], ["tool", "turn"])
+            turn = events[-1]["turn"]
+            self.assertEqual((turn["connector"], turn["trail"], turn["on"]["benchmarks"]["revision"]),
+                             ("claude", [{"name": "benchmark_usage", "arg": '{"topic": "robotics"}'}], "v1"))
+            self.assertEqual((turn["verified"]["fpassed"], turn["verified"]["passed"]), (1, 1))    # the stub's figure and quote verify on v1
+            log = self.root / "data/bench2agent/toollogs" / turn["tool_log"]
+            record = json.loads(log.read_text().splitlines()[0])
+            self.assertEqual((record["name"], record["revision"], record["result"]["results"][0]["papers"]), ("benchmark_usage", "v1", 1))
+            saved = self.client.get(f"/api/conversations/{conv['cid']}", headers=self.h(self.alice)).json()
+            self.assertEqual(saved["provider_session"], "sess-stub-1")                          # the CLI's own conversation id, for the next turn
+            # a connector that is not installed cannot be chosen
+            r = self.client.post("/api/conversations", json={"connector": "codex"}, headers=self.h(self.alice))
+            self.assertEqual(r.status_code, 400)
+            self.assertIn("not available here", r.json()["detail"])
 
     def test_provider_failure_saves_nothing_and_echoes_no_secret(self):
         conv = self.new(self.alice)
