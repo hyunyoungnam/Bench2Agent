@@ -371,6 +371,58 @@ class WebHostTests(unittest.TestCase):
         saved = self.web.conversation(self.alice["user_id"], conv["cid"])
         self.assertEqual(([t["q"] for t in saved["turns"]], saved["messages"], saved["version"]), (["first"], [{"a": 1}], 1))
 
+    def test_invite_sign_in_opens_a_session_cookie_with_csrf_protection(self):
+        code = self.web.add_invite("tester", uses=1)["code"]
+        browser = httpx.Client(base_url=self.base, timeout=60)
+        self.addCleanup(browser.close)
+        # sign-in needs the custom header a cross-site form cannot send
+        self.assertEqual(browser.post("/api/login", json={"invite": code, "name": "carol"}).status_code, 403)
+        r = browser.post("/api/login", json={"invite": code, "name": "carol"}, headers={"X-Requested-With": "Bench2Agent"})
+        self.assertEqual((r.status_code, r.json()["name"]), (200, "carol"))
+        cookie = r.headers["set-cookie"].lower()
+        self.assertIn("httponly", cookie)
+        self.assertIn("samesite=lax", cookie)
+        self.assertNotIn("sess_", r.text)                                  # the session id lives in the cookie only
+        me = browser.get("/api/me").json()                                 # the cookie now authenticates
+        self.assertEqual((me["name"], me["auth"]), ("carol", "session"))
+        # the invite is used up and the name is taken
+        self.assertEqual(browser.post("/api/login", json={"invite": code, "name": "dave"}, headers={"X-Requested-With": "Bench2Agent"}).status_code, 400)
+        # state changes from the browser session need the header; reads do not
+        self.assertEqual(browser.post("/api/conversations", json={"provider": "openai"}).status_code, 403)
+        r = browser.post("/api/conversations", json={"provider": "openai"}, headers={"X-Requested-With": "Bench2Agent"})
+        self.assertEqual(r.status_code, 201)
+        cid = r.json()["cid"]
+        self.assertEqual(browser.get(f"/api/conversations/{cid}").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/conversations/{cid}", headers=self.h(self.alice)).status_code, 404)   # not alice's
+        # sign out closes the session
+        self.assertEqual(browser.post("/api/logout", headers={"X-Requested-With": "Bench2Agent"}).status_code, 200)
+        self.assertEqual(browser.get("/api/me").status_code, 401)
+        self.assertEqual(self.client.get("/api/me", headers={"Cookie": "b2a_session=sess_forged"}).status_code, 401)
+        self.assertEqual([i["uses_left"] for i in self.web.invites()], [0])
+
+    def test_credential_mode_defaults_to_service_when_the_host_has_a_key(self):
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "svc"}, clear=False):
+            self.assertEqual(web_app.Settings(self.root).credentials, "service")
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(web_app.Settings(self.root).credentials, "user")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "svc", "BENCH2AGENT_WEB_CREDENTIALS": "user"}, clear=False):
+            self.assertEqual(web_app.Settings(self.root).credentials, "user")
+
+    def test_timing_breakdown_is_recorded_per_attempt(self):
+        conv = self.new(self.alice)
+        script = self.scripted("Count ⟦benchmark_usage:{}|1 paper⟧")
+        with patch.object(providers, "post", side_effect=lambda *a: script.pop(0)):
+            status, events = self.ask(self.alice, conv["cid"], "timed")
+        timing = events[-1]["turn"]["timing"]
+        self.assertEqual(sorted(timing), ["attempt", "duration_ms", "model_ms", "tool_calls", "tool_ms", "verify_ms"])
+        self.assertGreaterEqual(timing["duration_ms"], timing["model_ms"] + timing["tool_ms"])
+        self.assertEqual(timing["tool_calls"], 1)
+        row = self.web.attempts("alice")[0]
+        self.assertEqual((row["outcome"], row["cid"], row["tool_calls"]), ("saved", conv["cid"], 1))
+        self.assertIsNotNone(row["tool_ms"])
+        self.assertIsNotNone(row["verify_ms"])
+        self.assertNotIn("key", json.dumps(row))
+
     def test_provider_failure_saves_nothing_and_echoes_no_secret(self):
         conv = self.new(self.alice)
         with patch.object(providers, "post", side_effect=providers.ProviderError("openai: API key rejected (HTTP 401).")):

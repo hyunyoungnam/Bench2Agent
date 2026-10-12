@@ -388,29 +388,45 @@ independent terminal is separate from ChatGPT/Claude subscription login.
 
 ## Hosted conversation (web)
 
+This is the way a user is meant to reach Bench2Agent: open an address, sign
+in, ask. Nothing to install on the user's side. The sections below are for
+the operator who runs the host.
+
 With the server extra, `bench2agent web serve [--host 127.0.0.1] [--port 8780]`
-runs a small web host: a page with a question box, conversation history and
+runs the host: a page with a question box, conversation history and
 expandable verified evidence, over a JSON API. It is the same model loop and
 the same verifier as the terminal; its tool calls travel over HTTP MCP to the
 server it mounts at `/mcp-server`, on the endpoint of the conversation's
-revision.
+revision. The `Dockerfile` builds the same host as one container with a
+`/data` volume.
 
-- **Users and ownership.** `bench2agent web user add NAME` creates a user and
-  prints a bearer token once (`user token NAME` issues another, `user revoke
-  NAME` disables, `user list`). Every API route needs the token, and a
-  conversation exists only for its owner: read, ask, cancel and delete on
-  someone else's return 404.
+- **Sign-in and ownership.** The operator makes invite codes
+  (`bench2agent web invite add LABEL [--uses N] [--days D]`, `invite list`,
+  `invite revoke LABEL`) and hands one out. The user enters it on the page
+  with a name once and gets a browser session (an HttpOnly, SameSite=Lax
+  cookie); from then on the page just works, and **Sign out** closes the
+  session. State-changing requests from a browser session must carry
+  `X-Requested-With: Bench2Agent`, which the page adds and a cross-site form
+  cannot. A conversation exists only for its owner: read, ask, cancel and
+  delete on someone else's return 404. API clients and scripts may instead
+  authenticate with a bearer token from `bench2agent web user add NAME`
+  (`user token`, `user revoke`, `user list`); that is an operator path, not
+  the user's.
 - **Revision per conversation.** A new conversation is pinned to the revision
   active at that moment and keeps it for its life: tool calls, figure
   recomputation and quote checks all read that revision after a new one is
   published; a removed revision gives recovery guidance, never another
   revision's answer. `GET /api/revisions` shows what is installed.
-- **Model credentials are deployment configuration.**
-  `BENCH2AGENT_WEB_CREDENTIALS=user` (default) means each question carries the
-  user's own provider key in `X-Model-Key`; it is bound to that request only
-  and never stored or logged. `service` means the host process's environment
-  pays for everyone; use it with the limits below. The operator's Claude
-  Code or Codex login is never used for web users.
+- **Model credentials are deployment configuration**
+  (`BENCH2AGENT_WEB_CREDENTIALS`). *Service mode*: the operator configures a
+  provider key on the server, the host uses it for every user's questions
+  under the per-user limits below, and no user ever receives that key. *User
+  mode*: each question carries the user's own provider key in `X-Model-Key`;
+  the key travels from the browser through the Bench2Agent backend to the
+  model provider for that request and is neither stored nor logged. Unset,
+  the mode is service when the host environment holds a provider key, else
+  user; the page shows which. The operator's Claude Code or Codex login is
+  never used for web users.
 - **Limits and cancellation.** One question at a time per conversation, at
   most two per user, questions up to 4,000 characters. The daily cap
   (`BENCH2AGENT_WEB_TURNS_PER_DAY`, default 100) counts *attempts*, reserved
@@ -425,9 +441,13 @@ revision.
   nothing and echoes no credential.
 - **Streaming.** `POST /api/conversations/{id}/ask` answers as NDJSON: tool
   events as they happen, then the verified turn (or an error). Each saved
-  turn carries `timing` (attempt id, elapsed milliseconds, tool calls), and
-  `bench2agent web attempts [--user NAME]` lists attempts with outcome and
-  duration for review beside the saved conversation.
+  turn carries `timing` (attempt id; total, model, tool and verification
+  milliseconds; tool calls), and `bench2agent web attempts [--user NAME]`
+  lists attempts with the same split for review beside the saved
+  conversation. In the page a question belongs to the conversation it was
+  asked in: switching to another conversation while it runs shows nothing of
+  it there, cancel targets the asking conversation, and the finished answer
+  is in its own conversation when reopened.
 - **Internal MCP.** The host mounts its HTTP MCP server at `/mcp-server` and
   reaches it over HTTP with an internal bearer token generated at startup and
   sent on every internal request; the mount accepts nothing else, and the

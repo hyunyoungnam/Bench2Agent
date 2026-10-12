@@ -170,6 +170,25 @@ conversations. A database-backed job queue is enough initially; a separate
 queue service is added only if load requires it. Tool responses are paginated,
 and aggregate caches include the dataset revision and scope arguments.
 
+## Where to run the private test host
+
+The host is one FastAPI process plus a `/data` directory (installed data
+revisions, and the web store with users, invites, sessions, conversations
+and attempts). The `Dockerfile` packages exactly that, so any place that
+runs a container with a persistent volume will do, and the same image moves
+to the Mac later under Docker Desktop. What to check before choosing:
+
+| Option | Persistence | Notes |
+|---|---|---|
+| This PC or a small Linux VPS, Caddy in front | local disk; back up `/data` | simplest; the `bench2agent web serve` process under a supervisor, or the container |
+| Hugging Face Docker Space | the container disk is ephemeral; conversations and users vanish on restart unless the paid persistent storage is attached | fine for a short test if losing state is acceptable; sleeps when idle; the model key goes in as a Space secret (service mode) |
+| Mac server (later) | local volume | the same image; see below |
+
+Whichever runs it: HTTPS termination in front (`BENCH2AGENT_WEB_SECURE_COOKIES=1`
+then marks the session cookie Secure), the provider key as an environment
+secret for service mode, and `BENCH2AGENT_WEB_TURNS_PER_DAY` set to what the
+budget allows.
+
 ## Future Mac server
 
 The Mac can host the API, query database, collection worker and web frontend.

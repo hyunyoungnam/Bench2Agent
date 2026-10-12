@@ -447,6 +447,17 @@ def cmd_web(args, root: Path) -> int:
         return web_app.serve(root, host=args.host, port=args.port)
     from bench2agent.web.store import WebStore
     store = WebStore(root / "data/bench2agent/web.sqlite")
+    if args.web_action == "invite":
+        if args.invite_action == "add":
+            result = store.add_invite(args.label, uses=args.uses, days=args.days or None)
+            print(json.dumps({k: result[k] for k in ("label", "uses", "expires_at")}, ensure_ascii=False))
+            print(f"Invite code (shown once; the user enters it on the page): {result['code']}", file=sys.stderr)
+            return 0
+        if args.invite_action == "revoke":
+            print(json.dumps({"revoked": store.revoke_invite(args.label)}))
+            return 0
+        print(json.dumps(store.invites(), ensure_ascii=False, indent=2))
+        return 0
     if args.web_action == "attempts":
         print(json.dumps(store.attempts(args.user, args.limit), ensure_ascii=False, indent=2))
         return 0
@@ -576,6 +587,18 @@ def main(argv=None) -> int:
         common_options(sub, child=True)
         sub.add_argument("name")
     common_options(user_actions.add_parser("list"), child=True)
+    invite = web_actions.add_parser("invite", help="invite codes: add, list, revoke (a web user signs in with one)")
+    common_options(invite, child=True)
+    invite_actions = invite.add_subparsers(dest="invite_action", required=True)
+    invite_add = invite_actions.add_parser("add")
+    common_options(invite_add, child=True)
+    invite_add.add_argument("label", help="who or what this invite is for")
+    invite_add.add_argument("--uses", type=int, default=1)
+    invite_add.add_argument("--days", type=int, default=14, help="validity; 0 for no expiry")
+    invite_revoke = invite_actions.add_parser("revoke")
+    common_options(invite_revoke, child=True)
+    invite_revoke.add_argument("label")
+    common_options(invite_actions.add_parser("list"), child=True)
     attempts = web_actions.add_parser("attempts", help="recent questions: outcome, duration, tool calls (no credentials, no answer text)")
     common_options(attempts, child=True)
     attempts.add_argument("--user")

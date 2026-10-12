@@ -13,9 +13,15 @@ conversations and one data revision per conversation.
     DELETE /api/conversations/{cid}
     /mcp-server/...                          the HTTP MCP server this host calls; internal token only
 
-Every API route needs `Authorization: Bearer <token>`; a token is issued with
-`bench2agent web user add NAME`. Ownership is checked on read, ask, cancel
-and delete alike: another user's conversation does not exist.
+A web user arrives at the address, redeems an invite code once
+(`POST /api/login` with the code and a display name; the operator makes codes
+with `bench2agent web invite add`) and gets a browser session cookie
+(HttpOnly, SameSite=Lax); from then on the page just works. Cookie-
+authenticated state changes must also carry `X-Requested-With: Bench2Agent`,
+which a cross-site form cannot add. API clients may instead send
+`Authorization: Bearer <token>` from `bench2agent web user add`. Ownership
+is checked on read, ask, cancel and delete alike: another user's
+conversation does not exist.
 
 A question is a job with one state at a time, changed only under its lock:
 running -> cancelled, or running -> committing -> saved | failed. Cancel is
@@ -37,11 +43,15 @@ calls). The mount accepts nothing else, and the token is never logged or
 shown. A conversation created on v1 keeps v1 after v2 is published; a missing
 v1 is a recovery error, never an answer from v2.
 
-Model credentials are deployment configuration: BENCH2AGENT_WEB_CREDENTIALS
-is `user` (default: each request carries `X-Model-Key`, bound to that request
-only, never stored or logged) or `service` (the host process's environment
-pays for everyone; use with the limits). The operator's coding-CLI login is
-never used for web users.
+Model credentials are deployment configuration (BENCH2AGENT_WEB_CREDENTIALS):
+`service` means the operator configured a provider key on the server and the
+host uses it for every user's questions, under the per-user attempt limits;
+the key is never sent to a user. `user` means each question carries the
+user's own provider key in `X-Model-Key`: it travels from the browser through
+this backend to the model provider for that request and is neither stored
+nor logged. Unset, the mode is `service` when the host environment holds a
+provider key, else `user`. The operator's coding-CLI login is never used
+for web users.
 """
 from __future__ import annotations
 
@@ -54,7 +64,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -81,15 +91,24 @@ class Settings:
         # the credential for that service: ours is generated per process; an
         # external service's comes from configuration, kept apart from ours
         self.external_mcp_token = mcp_token or os.environ.get("BENCH2AGENT_MCP_TOKEN")
-        self.credentials = credentials or os.environ.get("BENCH2AGENT_WEB_CREDENTIALS", "user")
+        configured = credentials or os.environ.get("BENCH2AGENT_WEB_CREDENTIALS")
+        if configured is None:
+            configured = "service" if any(os.environ.get(k) for k in providers.KEY_NAMES.values()) else "user"
+        self.credentials = configured
         if self.credentials not in ("user", "service"):
             raise ValueError("BENCH2AGENT_WEB_CREDENTIALS must be user or service")
+        self.cookie_secure = os.environ.get("BENCH2AGENT_WEB_SECURE_COOKIES", "").lower() in ("1", "true", "yes")
         self.turns_per_day = turns_per_day if turns_per_day is not None else int(os.environ.get("BENCH2AGENT_WEB_TURNS_PER_DAY", "100"))
         self.concurrent_per_user = concurrent_per_user
 
 
 class Ask(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
+
+
+class Login(BaseModel):
+    invite: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=80)
 
 
 class NewConversation(BaseModel):
@@ -177,12 +196,27 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
         return {"Authorization": "Bearer " + token} if token else {}
 
     # -- auth and ownership ----------------------------------------------------
-    def current_user(authorization: str | None = Header(default=None)) -> dict:
+    SESSION_COOKIE = "b2a_session"
+
+    def current_user(request: Request, authorization: str | None = Header(default=None),
+                     x_requested_with: str | None = Header(default=None),
+                     b2a_session: str | None = Cookie(default=None)) -> dict:
         token = authorization[7:].strip() if authorization and authorization.lower().startswith("bearer ") else None
-        user = web.authenticate(token)
+        if token:
+            user = web.authenticate(token)
+            if user:
+                return {**user, "auth": "token"}
+            raise HTTPException(401, "This bearer token is not valid.")
+        user = web.authenticate_session(b2a_session)
         if not user:
-            raise HTTPException(401, "A valid bearer token is required (bench2agent web user add NAME issues one).")
-        return user
+            raise HTTPException(401, "Sign in first (an invite code from the operator opens your session).")
+        if request.method not in ("GET", "HEAD", "OPTIONS") and x_requested_with != "Bench2Agent":
+            raise HTTPException(403, "State-changing requests from a browser session need X-Requested-With: Bench2Agent.")
+        return {**user, "auth": "session"}
+
+    def set_session(response: Response, session: str) -> None:
+        response.set_cookie(SESSION_COOKIE, session, httponly=True, samesite="lax", secure=settings.cookie_secure,
+                            max_age=30 * 24 * 3600, path="/")
 
     def owned(user: dict, cid: str, *, with_doc: bool = True) -> dict:
         if not cid.isalnum() or len(cid) > 32:
@@ -204,11 +238,32 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     def render_js():
         return Response((STATIC / "render.js").read_text(encoding="utf-8"), media_type="application/javascript")
 
+    @app.get("/api/app.js")
+    def app_js():
+        return Response((STATIC / "app.js").read_text(encoding="utf-8"), media_type="application/javascript")
+
+    @app.post("/api/login")
+    def login(body: Login, response: Response, x_requested_with: str | None = Header(default=None)):
+        if x_requested_with != "Bench2Agent":
+            raise HTTPException(403, "Sign-in needs X-Requested-With: Bench2Agent.")
+        try:
+            opened = web.redeem_invite(body.invite, body.name)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        set_session(response, opened["session"])
+        return {"name": opened["name"]}
+
+    @app.post("/api/logout")
+    def logout(response: Response, user: dict = Depends(current_user), b2a_session: str | None = Cookie(default=None)):
+        web.close_session(b2a_session)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return {"signed_out": True}
+
     @app.get("/api/me")
     def me(user: dict = Depends(current_user)):
         usage = web.usage_today(user["user_id"])
-        return {"name": user["name"], "credentials": settings.credentials, "turns_per_day": settings.turns_per_day,
-                "attempts_today": usage["attempts"], "answers_today": usage["answers"],
+        return {"name": user["name"], "auth": user["auth"], "credentials": settings.credentials,
+                "turns_per_day": settings.turns_per_day, "attempts_today": usage["attempts"], "answers_today": usage["answers"],
                 "turns_today": usage["attempts"]}
 
     @app.get("/api/revisions")
@@ -308,10 +363,18 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
     rid = conv["revision"]
     started = time.perf_counter()
     tools = None
+    marks = {"loop": None, "verify": None}
+
+    def breakdown() -> dict:
+        tool_s = tools.seconds if tools else 0.0
+        loop_s = marks["loop"] if marks["loop"] is not None else 0.0
+        return {"duration_ms": int((time.perf_counter() - started) * 1000),
+                "model_ms": int(max(0.0, loop_s - tool_s) * 1000), "tool_ms": int(tool_s * 1000),
+                "verify_ms": int((marks["verify"] or 0.0) * 1000), "tool_calls": tools.calls if tools else 0}
 
     def finish(outcome: str, usage: dict | None = None):
-        web.finish_attempt(job.attempt_id, outcome, duration_ms=int((time.perf_counter() - started) * 1000),
-                           tool_calls=tools.calls if tools else 0, usage=usage)
+        t = breakdown()
+        web.finish_attempt(job.attempt_id, outcome, duration_ms=t["duration_ms"], tool_calls=t["tool_calls"], usage=usage, timing=t)
     try:
         try:
             revisions.paths_for(root, rid)
@@ -328,18 +391,21 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
         # user mode binds the request's own key and nothing else
         bound = providers.using_credentials(keys) if keys is not None else contextlib.nullcontext()
         with mcp.using(store), bound:
+            loop_started = time.perf_counter()
             answer = providers.generate(conv["provider"], conv["model"], system, conv["messages"], question, emit,
                                         tools=tools, cancelled=job.cancelled)
+            marks["loop"] = time.perf_counter() - loop_started
             if job.cancelled():
                 raise providers.Cancelled("The question was cancelled; nothing was saved.")
+            verify_started = time.perf_counter()
             corpus = mcp.Store()
             segs, verified = chat.segment(answer["text"], corpus, Verifier(corpus), answer["trail"])
+            marks["verify"] = time.perf_counter() - verify_started
         if not job.commit():                                     # a cancel accepted during verification wins
             raise providers.Cancelled("The question was cancelled; nothing was saved.")
         snapshot = store.data()
-        duration_ms = int((time.perf_counter() - started) * 1000)
         turn = {"q": question, "segs": segs, "verified": verified, "trail": answer["trail"], "usage": answer["usage"],
-                "timing": {"attempt": job.attempt_id, "duration_ms": duration_ms, "tool_calls": tools.calls},
+                "timing": {"attempt": job.attempt_id, **breakdown()},
                 "on": {"benchmarks": {k: snapshot.get(k) for k in ("snapshot_id", "revision", "generated_at", "source")}}}
         saved = web.append_turn(user["user_id"], conv["cid"], messages=answer["messages"], turn=turn,
                                 expected_version=conv["version"])

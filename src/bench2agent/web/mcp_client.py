@@ -26,6 +26,7 @@ class HttpMcpTools:
         self.timeout = timeout
         self._specs = None
         self.calls = 0
+        self.seconds = 0.0   # time spent inside tool transport, for the timing breakdown
 
     def _run(self, coro):
         return asyncio.run(asyncio.wait_for(coro, self.timeout))
@@ -48,11 +49,15 @@ class HttpMcpTools:
         return self._specs
 
     def call(self, name: str, arguments) -> dict:
+        import time
         self.calls += 1
+        started = time.perf_counter()
         try:
             result = self._run(self._session(lambda s: s.call_tool(name, arguments or {})))
         except Exception as exc:  # noqa: BLE001
             return {"error": f"Benchmark tool call failed in transport: {type(exc).__name__}"}
+        finally:
+            self.seconds += time.perf_counter() - started
         text = "".join(getattr(c, "text", "") for c in result.content)
         try:
             value = json.loads(text)

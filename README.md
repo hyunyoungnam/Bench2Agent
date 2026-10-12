@@ -49,6 +49,15 @@ Answers include repository, dataset or homepage links and reviewed introducing
 papers where available. Locations are our mapping; a repository link does not
 guarantee a direct data download. Missing links mean no confirmed location.
 
+## On the web (private test)
+
+The intended way to use Bench2Agent is a web address: open it, sign in with
+an invite code, ask. Nothing to install. The test host is private for now;
+operators find the host, its sign-in and limits in
+[docs/terminal.md](docs/terminal.md#hosted-conversation-web) and the
+real-model check procedure in [docs/web-live-check.md](docs/web-live-check.md).
+The terminal and MCP routes below remain for developers and for agents.
+
 ## Get started
 
 ### Terminal conversation — macOS / Linux
