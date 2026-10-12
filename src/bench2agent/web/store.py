@@ -25,13 +25,18 @@ CREATE TABLE IF NOT EXISTS tokens (
 CREATE TABLE IF NOT EXISTS conversations (
     cid TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(user_id), revision TEXT NOT NULL,
     provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT NOT NULL, title TEXT NOT NULL,
-    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, doc TEXT NOT NULL);
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, doc TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_conversations_user ON conversations(user_id, updated_at);
-CREATE TABLE IF NOT EXISTS turn_log (
-    user_id TEXT NOT NULL, cid TEXT NOT NULL, at TEXT NOT NULL, outcome TEXT NOT NULL,
-    input_tokens INTEGER, output_tokens INTEGER);
-CREATE INDEX IF NOT EXISTS ix_turn_log_user ON turn_log(user_id, at);
+CREATE TABLE IF NOT EXISTS attempts (
+    attempt_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, cid TEXT NOT NULL, started_at TEXT NOT NULL,
+    finished_at TEXT, outcome TEXT NOT NULL, duration_ms INTEGER, tool_calls INTEGER,
+    input_tokens INTEGER, output_tokens INTEGER, question TEXT);
+CREATE INDEX IF NOT EXISTS ix_attempts_user ON attempts(user_id, started_at);
 """
+MIGRATIONS = [
+    # earlier files lack the version column that conditional saves rely on
+    ("conversations", "version", "ALTER TABLE conversations ADD COLUMN version INTEGER NOT NULL DEFAULT 0"),
+]
 
 
 def _now() -> str:
@@ -49,6 +54,9 @@ class WebStore:
         self._lock = threading.Lock()
         with self._con() as con:
             con.executescript(SCHEMA)
+            for table, column, statement in MIGRATIONS:
+                if column not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
+                    con.execute(statement)
 
     def _con(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.path, timeout=30, isolation_level=None)
@@ -111,7 +119,8 @@ class WebStore:
         now = _now()
         doc = {"messages": [], "turns": []}
         with self._lock, self._con() as con:
-            con.execute("INSERT INTO conversations VALUES (?,?,?,?,?,?,?,?,?,?)",
+            con.execute("INSERT INTO conversations (cid, user_id, revision, provider, model, language, title, created_at, "
+                        "updated_at, doc) VALUES (?,?,?,?,?,?,?,?,?,?)",
                         (cid, user_id, revision, provider, model, language, "New conversation", now, now, json.dumps(doc)))
         return self.conversation(user_id, cid)
 
@@ -121,7 +130,7 @@ class WebStore:
             row = con.execute("SELECT * FROM conversations WHERE cid = ? AND user_id = ?", (cid, user_id)).fetchone()
         if not row:
             return None
-        out = {k: row[k] for k in ("cid", "revision", "provider", "model", "language", "title", "created_at", "updated_at")}
+        out = {k: row[k] for k in ("cid", "revision", "provider", "model", "language", "title", "created_at", "updated_at", "version")}
         if with_doc:
             doc = json.loads(row["doc"])
             out["turns"] = doc["turns"]
@@ -133,40 +142,91 @@ class WebStore:
             return [{k: r[k] for k in ("cid", "revision", "provider", "model", "title", "created_at", "updated_at")}
                     for r in con.execute("SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))]
 
-    def append_turn(self, user_id: str, cid: str, *, messages: list, turn: dict, expected_updated_at: str) -> dict:
-        """Save a finished, verified turn. Refused when the conversation moved
-        on meanwhile (another request of the same user), so two overlapping
-        turns cannot interleave their histories."""
+    def append_turn(self, user_id: str, cid: str, *, messages: list, turn: dict, expected_version: int) -> dict:
+        """Save a finished, verified turn as a conditional update on the
+        conversation's version number: the row must still be at the version
+        the question started from, or the save is refused, so two overlapping
+        turns can never interleave their histories (clock resolution plays no
+        part)."""
         with self._lock, self._con() as con:
-            row = con.execute("SELECT doc, title, updated_at FROM conversations WHERE cid = ? AND user_id = ?", (cid, user_id)).fetchone()
-            if not row:
-                raise ValueError("Conversation not found.")
-            if row["updated_at"] != expected_updated_at:
-                raise ValueError("The conversation changed while this answer was being produced; it was not saved.")
-            doc = json.loads(row["doc"])
-            doc["messages"] = messages
-            doc["turns"].append(turn)
-            title = row["title"] if doc["turns"][:-1] else (turn["q"][:80] or row["title"])
-            now = _now()
-            con.execute("UPDATE conversations SET doc = ?, title = ?, updated_at = ? WHERE cid = ?",
-                        (json.dumps(doc, ensure_ascii=False), title, now, cid))
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                row = con.execute("SELECT doc, title, version FROM conversations WHERE cid = ? AND user_id = ?", (cid, user_id)).fetchone()
+                if not row:
+                    raise ValueError("Conversation not found.")
+                if row["version"] != expected_version:
+                    raise ValueError("The conversation changed while this answer was being produced; it was not saved.")
+                doc = json.loads(row["doc"])
+                doc["messages"] = messages
+                doc["turns"].append(turn)
+                title = row["title"] if doc["turns"][:-1] else (turn["q"][:80] or row["title"])
+                changed = con.execute(
+                    "UPDATE conversations SET doc = ?, title = ?, updated_at = ?, version = version + 1 WHERE cid = ? AND version = ?",
+                    (json.dumps(doc, ensure_ascii=False), title, _now(), cid, expected_version)).rowcount
+                if changed != 1:
+                    raise ValueError("The conversation changed while this answer was being produced; it was not saved.")
+                con.execute("COMMIT")
+            except BaseException:
+                con.execute("ROLLBACK")
+                raise
         return self.conversation(user_id, cid)
 
     def delete_conversation(self, user_id: str, cid: str) -> bool:
         with self._lock, self._con() as con:
             return con.execute("DELETE FROM conversations WHERE cid = ? AND user_id = ?", (cid, user_id)).rowcount == 1
 
-    # -- usage ---------------------------------------------------------------
-    def log_turn(self, user_id: str, cid: str, outcome: str, usage: dict | None = None) -> None:
+    # -- attempts: the unit the limit counts, reserved before the model is called
+    @staticmethod
+    def _since() -> str:
+        return (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).isoformat(timespec="seconds")
+
+    def reserve_attempt(self, user_id: str, cid: str, question: str, limit: int) -> int | None:
+        """Count the day's attempts and record this one in a single write
+        transaction, so two requests arriving with one attempt left cannot
+        both pass. Returns the attempt id, or None when the limit is reached.
+        Cancelled and failed attempts count: the model was called."""
+        with self._lock, self._con() as con:
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                used = con.execute("SELECT COUNT(*) FROM attempts WHERE user_id = ? AND started_at >= ?",
+                                   (user_id, self._since())).fetchone()[0]
+                if used >= limit:
+                    con.execute("ROLLBACK")
+                    return None
+                cur = con.execute("INSERT INTO attempts (user_id, cid, started_at, outcome, question) VALUES (?,?,?,?,?)",
+                                  (user_id, cid, _now(), "running", question[:200]))
+                con.execute("COMMIT")
+                return cur.lastrowid
+            except BaseException:
+                con.execute("ROLLBACK")
+                raise
+
+    def finish_attempt(self, attempt_id: int, outcome: str, *, duration_ms: int, tool_calls: int = 0, usage: dict | None = None) -> None:
+        """outcome: saved, failed, cancelled, refused. No credential, no answer text."""
         usage = usage or {}
         with self._lock, self._con() as con:
-            con.execute("INSERT INTO turn_log VALUES (?,?,?,?,?,?)",
-                        (user_id, cid, _now(), outcome,
+            con.execute("UPDATE attempts SET finished_at = ?, outcome = ?, duration_ms = ?, tool_calls = ?, input_tokens = ?, "
+                        "output_tokens = ? WHERE attempt_id = ?",
+                        (_now(), outcome, duration_ms, tool_calls,
                          usage.get("input_tokens") or usage.get("prompt_tokens"),
-                         usage.get("output_tokens") or usage.get("completion_tokens")))
+                         usage.get("output_tokens") or usage.get("completion_tokens"), attempt_id))
 
-    def turns_today(self, user_id: str) -> int:
-        since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).isoformat(timespec="seconds")
+    def usage_today(self, user_id: str) -> dict:
         with self._con() as con:
-            return con.execute("SELECT COUNT(*) FROM turn_log WHERE user_id = ? AND at >= ? AND outcome IN ('saved', 'failed')",
-                               (user_id, since)).fetchone()[0]
+            rows = con.execute("SELECT outcome, COUNT(*) FROM attempts WHERE user_id = ? AND started_at >= ? GROUP BY outcome",
+                               (user_id, self._since())).fetchall()
+        by = {r[0]: r[1] for r in rows}
+        return {"attempts": sum(by.values()), "answers": by.get("saved", 0), "by_outcome": by}
+
+    def attempts(self, user_name: str | None = None, limit: int = 50) -> list[dict]:
+        """Recent attempts with outcome and timing, for review beside the
+        saved conversation (cid + attempt id link them)."""
+        with self._con() as con:
+            sql = ("SELECT a.attempt_id, u.name, a.cid, a.started_at, a.finished_at, a.outcome, a.duration_ms, a.tool_calls, "
+                   "a.input_tokens, a.output_tokens, a.question FROM attempts a JOIN users u USING (user_id)")
+            args: tuple = ()
+            if user_name:
+                sql += " WHERE u.name = ?"
+                args = (user_name,)
+            sql += " ORDER BY a.attempt_id DESC LIMIT ?"
+            return [dict(r) for r in con.execute(sql, (*args, limit))]

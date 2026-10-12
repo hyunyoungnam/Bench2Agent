@@ -34,4 +34,4 @@ where = ["src"]
 include = ["bench2agent*"]
 
 [tool.setuptools.package-data]
-"bench2agent.web" = ["static/*.html"]
+"bench2agent.web" = ["static/*.html", "static/*.js"]

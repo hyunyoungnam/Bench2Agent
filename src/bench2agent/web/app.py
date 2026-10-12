@@ -3,31 +3,45 @@ loop and the same verifier as the terminal, with users who own their
 conversations and one data revision per conversation.
 
     GET  /                                   the page
-    GET  /api/me                             who the token is
+    GET  /api/me                             who the token is, today's attempts and answers
     GET  /api/revisions                      installed revisions; which new conversations get
     GET  /api/conversations                  the caller's conversations
     POST /api/conversations                  new one, pinned to the active revision now
-    GET  /api/conversations/{cid}            history, turns, verification marks
+    GET  /api/conversations/{cid}            history, turns, verification marks, timing
     POST /api/conversations/{cid}/ask        {question} -> NDJSON: progress events, then the turn
-    POST /api/conversations/{cid}/cancel     withdraw the running question; nothing is saved
+    POST /api/conversations/{cid}/cancel     withdraw the running question (accepted only before saving starts)
     DELETE /api/conversations/{cid}
-    /mcp-server/...                          the HTTP MCP server this host calls (same process)
+    /mcp-server/...                          the HTTP MCP server this host calls; internal token only
 
-Every route except the page needs `Authorization: Bearer <token>`; a token is
-issued with `bench2agent web user add NAME`. Ownership is checked on read,
-ask, cancel and delete alike: another user's conversation does not exist.
+Every API route needs `Authorization: Bearer <token>`; a token is issued with
+`bench2agent web user add NAME`. Ownership is checked on read, ask, cancel
+and delete alike: another user's conversation does not exist.
+
+A question is a job with one state at a time, changed only under its lock:
+running -> cancelled, or running -> committing -> saved | failed. Cancel is
+accepted only while running, and a job that has reached committing can no
+longer be cancelled, so an accepted cancel is never followed by a save. The
+job, not the browser connection, holds the conversation's running slot: a
+dropped connection releases nothing until the job ends.
+
+The daily limit counts attempts (the model was called), reserved in one
+database transaction before the first model call, so two requests with one
+attempt left cannot both pass. Each attempt records outcome, duration and
+tool calls, never a credential.
 
 The model loop runs in a worker thread with the conversation's revision bound
-to it (`mcp.using`) and its tools reached through the HTTP MCP endpoint of
-that revision; figure recomputation and quote checks use the same revision.
-A conversation created on v1 keeps v1 after v2 is published; a missing v1 is
-a recovery error, never an answer from v2.
+to it (`mcp.using`); its tools are reached over HTTP MCP at the endpoint of
+that revision on the server this host mounts, with an internal bearer token
+generated at startup and sent on every internal request (initialize, listing,
+calls). The mount accepts nothing else, and the token is never logged or
+shown. A conversation created on v1 keeps v1 after v2 is published; a missing
+v1 is a recovery error, never an answer from v2.
 
 Model credentials are deployment configuration: BENCH2AGENT_WEB_CREDENTIALS
 is `user` (default: each request carries `X-Model-Key`, bound to that request
 only, never stored or logged) or `service` (the host process's environment
-pays for everyone; use with quotas). The operator's coding-CLI login is never
-used for web users.
+pays for everyone; use with the limits). The operator's coding-CLI login is
+never used for web users.
 """
 from __future__ import annotations
 
@@ -35,11 +49,13 @@ import contextlib
 import json
 import os
 import queue
+import secrets
 import threading
+import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from bench2agent import providers
@@ -56,17 +72,20 @@ STATIC = Path(__file__).with_name("static")
 
 class Settings:
     def __init__(self, root: Path, *, host: str = "127.0.0.1", port: int = 8780, mcp_url: str | None = None,
-                 credentials: str | None = None, turns_per_day: int | None = None, concurrent_per_user: int = 2):
+                 mcp_token: str | None = None, credentials: str | None = None, turns_per_day: int | None = None,
+                 concurrent_per_user: int = 2):
         self.root = root
         self.host, self.port = host, port
         # the HTTP MCP this host calls: its own mount by default, or another service
         self.mcp_url = (mcp_url or os.environ.get("BENCH2AGENT_MCP_URL") or f"http://{host}:{port}/mcp-server").rstrip("/")
+        # the credential for that service: ours is generated per process; an
+        # external service's comes from configuration, kept apart from ours
+        self.external_mcp_token = mcp_token or os.environ.get("BENCH2AGENT_MCP_TOKEN")
         self.credentials = credentials or os.environ.get("BENCH2AGENT_WEB_CREDENTIALS", "user")
         if self.credentials not in ("user", "service"):
             raise ValueError("BENCH2AGENT_WEB_CREDENTIALS must be user or service")
         self.turns_per_day = turns_per_day if turns_per_day is not None else int(os.environ.get("BENCH2AGENT_WEB_TURNS_PER_DAY", "100"))
         self.concurrent_per_user = concurrent_per_user
-        self.max_question = 4000
 
 
 class Ask(BaseModel):
@@ -79,20 +98,68 @@ class NewConversation(BaseModel):
     language: str = Field(default="auto", pattern="^(auto|ko|en)$")
 
 
-class Running:
-    """One question in flight, per conversation; cancellation is a flag the
-    model loop polls between rounds."""
+class Job:
+    """One question in flight. `state` changes only under `lock`."""
 
-    def __init__(self):
-        self.cancel = threading.Event()
+    def __init__(self, user_id: str, attempt_id: int):
+        self.user_id = user_id
+        self.attempt_id = attempt_id
+        self.lock = threading.Lock()
+        self.state = "running"
         self.events: queue.Queue = queue.Queue()
+
+    def cancel(self) -> bool:
+        """Accepted only while running; after that the answer is being saved."""
+        with self.lock:
+            if self.state == "running":
+                self.state = "cancelled"
+                return True
+            return False
+
+    def cancelled(self) -> bool:
+        return self.state == "cancelled"
+
+    def commit(self) -> bool:
+        """Move to committing unless a cancel was accepted first."""
+        with self.lock:
+            if self.state != "running":
+                return False
+            self.state = "committing"
+            return True
+
+    def finish(self, state: str) -> None:
+        with self.lock:
+            self.state = state
+
+
+class InternalAuth:
+    """Only the host itself (or whoever holds this process's internal token)
+    reaches the mounted MCP server: every path under the mount, every
+    method. The token is compared in constant time and never echoed."""
+
+    def __init__(self, app, token: str):
+        self.app, self.token = app, token
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        auth = next((v.decode() for k, v in scope.get("headers", []) if k == b"authorization"), "")
+        offered = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+        if not offered or not secrets.compare_digest(offered, self.token):
+            body = json.dumps({"error": "The internal MCP mount accepts only the host's own token."}).encode()
+            await send({"type": "http.response.start", "status": 401,
+                        "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]})
+            await send({"type": "http.response.body", "body": body})
+            return
+        await self.app(scope, receive, send)
 
 
 def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings(root)
     web = WebStore(root / "data/bench2agent/web.sqlite")
     http_mcp = HttpMcp(root, host=settings.host)
-    running: dict[str, Running] = {}
+    internal_token = secrets.token_urlsafe(32)
+    running: dict[str, Job] = {}
     running_lock = threading.Lock()
 
     @contextlib.asynccontextmanager
@@ -102,7 +169,12 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Bench2Agent", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.settings, app.state.web, app.state.http_mcp = settings, web, http_mcp
-    app.mount("/mcp-server", http_mcp)
+    app.mount("/mcp-server", InternalAuth(http_mcp, internal_token))
+
+    def mcp_headers() -> dict:
+        own = settings.mcp_url.startswith(f"http://{settings.host}:{settings.port}")
+        token = internal_token if own else settings.external_mcp_token
+        return {"Authorization": "Bearer " + token} if token else {}
 
     # -- auth and ownership ----------------------------------------------------
     def current_user(authorization: str | None = Header(default=None)) -> dict:
@@ -128,10 +200,16 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     def page():
         return (STATIC / "index.html").read_text(encoding="utf-8")
 
+    @app.get("/render.js")
+    def render_js():
+        return Response((STATIC / "render.js").read_text(encoding="utf-8"), media_type="application/javascript")
+
     @app.get("/api/me")
     def me(user: dict = Depends(current_user)):
-        return {"name": user["name"], "credentials": settings.credentials, "turns_today": web.turns_today(user["user_id"]),
-                "turns_per_day": settings.turns_per_day}
+        usage = web.usage_today(user["user_id"])
+        return {"name": user["name"], "credentials": settings.credentials, "turns_per_day": settings.turns_per_day,
+                "attempts_today": usage["attempts"], "answers_today": usage["answers"],
+                "turns_today": usage["attempts"]}
 
     @app.get("/api/revisions")
     def list_revisions(user: dict = Depends(current_user)):
@@ -160,11 +238,18 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/conversations/{cid}")
     def get_conversation(cid: str, user: dict = Depends(current_user)):
-        return public(owned(user, cid))
+        conv = public(owned(user, cid))
+        with running_lock:
+            job = running.get(cid)
+        conv["running"] = job.state if job else None
+        return conv
 
     @app.delete("/api/conversations/{cid}", status_code=204)
     def delete_conversation(cid: str, user: dict = Depends(current_user)):
         owned(user, cid, with_doc=False)
+        with running_lock:
+            if cid in running:
+                raise HTTPException(409, "A question is running in this conversation; cancel it first.")
         web.delete_conversation(user["user_id"], cid)
         return JSONResponse(status_code=204, content=None)
 
@@ -174,48 +259,59 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
         with running_lock:
             job = running.get(cid)
         if job is None:
-            return {"cancelled": False, "running": False}
-        job.cancel.set()
-        return {"cancelled": True, "running": True}
+            return {"cancelled": False, "state": None, "message": "No question is running."}
+        if job.cancel():
+            return {"cancelled": True, "state": "cancelled", "message": "Cancelled; nothing will be saved."}
+        return {"cancelled": False, "state": job.state,
+                "message": "Too late to cancel: the answer passed verification and is being saved."}
 
     @app.post("/api/conversations/{cid}/ask")
-    def ask(cid: str, body: Ask, request: Request, user: dict = Depends(current_user),
-            x_model_key: str | None = Header(default=None)):
+    def ask(cid: str, body: Ask, user: dict = Depends(current_user), x_model_key: str | None = Header(default=None)):
         conv = owned(user, cid)
         if settings.credentials == "user" and not x_model_key:
             raise HTTPException(400, "This host uses your own model credential: send it as X-Model-Key for each question. "
                                      "It is bound to this request only and never stored.")
-        if web.turns_today(user["user_id"]) >= settings.turns_per_day:
-            raise HTTPException(429, f"Daily limit of {settings.turns_per_day} questions reached.")
         with running_lock:
             if cid in running:
                 raise HTTPException(409, "A question is already running in this conversation.")
-            if sum(1 for c in running if c in {x["cid"] for x in web.conversations(user["user_id"])}) >= settings.concurrent_per_user:
+            if sum(1 for j in running.values() if j.user_id == user["user_id"]) >= settings.concurrent_per_user:
                 raise HTTPException(429, f"At most {settings.concurrent_per_user} questions at once.")
-            job = running[cid] = Running()
-        keys = {conv["provider"]: x_model_key} if settings.credentials == "user" else {}
-        thread = threading.Thread(target=_run_turn, args=(root, settings, web, user, conv, body.question, keys, job), daemon=True)
-        thread.start()
+            attempt = web.reserve_attempt(user["user_id"], cid, body.question, settings.turns_per_day)
+            if attempt is None:
+                raise HTTPException(429, f"Daily limit of {settings.turns_per_day} attempts reached.")
+            job = running[cid] = Job(user["user_id"], attempt)
+        keys = {conv["provider"]: x_model_key} if settings.credentials == "user" else None
+
+        def release():
+            with running_lock:
+                if running.get(cid) is job:
+                    del running[cid]
+        threading.Thread(target=_run_turn, args=(root, settings, web, user, conv, body.question, keys, job, mcp_headers(), release),
+                         daemon=True).start()
 
         def stream():
-            try:
-                while True:
-                    event = job.events.get()
-                    yield json.dumps(event, ensure_ascii=False) + "\n"
-                    if event.get("t") in ("turn", "error"):
-                        break
-            finally:
-                with running_lock:
-                    running.pop(cid, None)
+            # the connection may drop; the job keeps its slot until it ends on its own
+            while True:
+                event = job.events.get()
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+                if event.get("t") in ("turn", "error"):
+                    break
         return StreamingResponse(stream(), media_type="application/x-ndjson")
 
     return app
 
 
-def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: dict, question: str, keys: dict, job: Running) -> None:
+def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: dict, question: str, keys: dict | None,
+              job: Job, headers: dict, release) -> None:
     """One question, start to finish, on the conversation's revision."""
     emit = job.events.put
     rid = conv["revision"]
+    started = time.perf_counter()
+    tools = None
+
+    def finish(outcome: str, usage: dict | None = None):
+        web.finish_attempt(job.attempt_id, outcome, duration_ms=int((time.perf_counter() - started) * 1000),
+                           tool_calls=tools.calls if tools else 0, usage=usage)
     try:
         try:
             revisions.paths_for(root, rid)
@@ -227,30 +323,43 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
         language = conv.get("language", "auto")
         system = BENCHMARK_SYSTEM + ("\nAnswer in the user's language." if language == "auto" else
                                     "\nWrite prose in " + {"ko": "Korean", "en": "English"}.get(language, language) + ".")
-        tools = HttpMcpTools(f"{settings.mcp_url}/revisions/{rid}/mcp")
-        with mcp.using(store), providers.using_credentials(keys):
+        tools = HttpMcpTools(f"{settings.mcp_url}/revisions/{rid}/mcp", headers=headers)
+        # service mode leaves the process environment visible to the provider;
+        # user mode binds the request's own key and nothing else
+        bound = providers.using_credentials(keys) if keys is not None else contextlib.nullcontext()
+        with mcp.using(store), bound:
             answer = providers.generate(conv["provider"], conv["model"], system, conv["messages"], question, emit,
-                                        tools=tools, cancelled=job.cancel.is_set)
-            if job.cancel.is_set():
+                                        tools=tools, cancelled=job.cancelled)
+            if job.cancelled():
                 raise providers.Cancelled("The question was cancelled; nothing was saved.")
             corpus = mcp.Store()
             segs, verified = chat.segment(answer["text"], corpus, Verifier(corpus), answer["trail"])
+        if not job.commit():                                     # a cancel accepted during verification wins
+            raise providers.Cancelled("The question was cancelled; nothing was saved.")
         snapshot = store.data()
+        duration_ms = int((time.perf_counter() - started) * 1000)
         turn = {"q": question, "segs": segs, "verified": verified, "trail": answer["trail"], "usage": answer["usage"],
+                "timing": {"attempt": job.attempt_id, "duration_ms": duration_ms, "tool_calls": tools.calls},
                 "on": {"benchmarks": {k: snapshot.get(k) for k in ("snapshot_id", "revision", "generated_at", "source")}}}
         saved = web.append_turn(user["user_id"], conv["cid"], messages=answer["messages"], turn=turn,
-                                expected_updated_at=conv["updated_at"])
-        web.log_turn(user["user_id"], conv["cid"], "saved", answer["usage"])
-        emit({"t": "turn", "turn": turn, "conversation": {k: saved[k] for k in ("cid", "title", "revision", "updated_at")}})
+                                expected_version=conv["version"])
+        job.finish("saved")
+        finish("saved", answer["usage"])
+        emit({"t": "turn", "turn": turn, "conversation": {k: saved[k] for k in ("cid", "title", "revision", "updated_at", "version")}})
     except providers.Cancelled as exc:
-        web.log_turn(user["user_id"], conv["cid"], "cancelled")
+        job.finish("cancelled")
+        finish("cancelled")
         emit({"t": "error", "cancelled": True, "message": str(exc)})
     except (providers.ProviderError, ValueError) as exc:
-        web.log_turn(user["user_id"], conv["cid"], "failed")
+        job.finish("failed")
+        finish("failed")
         emit({"t": "error", "message": str(exc)})
     except Exception:  # noqa: BLE001 — never a traceback or a credential to the client
-        web.log_turn(user["user_id"], conv["cid"], "failed")
+        job.finish("failed")
+        finish("failed")
         emit({"t": "error", "message": "The question failed inside the host; nothing was saved."})
+    finally:
+        release()
 
 
 def serve(root: Path, *, host: str = "127.0.0.1", port: int = 8780) -> int:

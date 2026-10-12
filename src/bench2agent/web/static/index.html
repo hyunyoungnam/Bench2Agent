@@ -59,9 +59,11 @@
     </div>
   </section>
 </div>
+<script src="/render.js"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
+  const prose = s => (window.B2ARender ? B2ARender.toHtml(s) : esc(s));
   let token = "", cid = null, me = null;
   try { token = localStorage.getItem("b2a_token") || ""; $("token").value = token; } catch (e) {}
   const headers = extra => Object.assign({"Authorization": "Bearer " + token, "Content-Type": "application/json"}, extra || {});
@@ -75,7 +77,7 @@
 
   function renderTurn(t) {
     const parts = t.segs.map(s => {
-      if (s.t === "p") return esc(s.s);
+      if (s.t === "p") return prose(s.s);
       if (s.t === "c") {
         const where = [s.venue, s.year].filter(Boolean).join(" ");
         const title = s.url ? link(s.url, s.title || s.paper_id) : esc(s.title || "");
@@ -86,8 +88,9 @@
     }).join("");
     const v = t.verified || {};
     const on = (t.on && t.on.benchmarks) || {};
+    const timing = t.timing ? ` · ${(t.timing.duration_ms/1000).toFixed(1)} s, ${t.timing.tool_calls} tool calls` : "";
     return `<div class="turn"><div class="q">${esc(t.q)}</div><div>${parts}</div>
-      <details><summary>Sources and checks: ${v.passed||0}/${v.checked||0} quotes verified, ${v.fpassed||0}/${v.fchecked||0} figures recomputed · data revision ${esc(on.revision||on.snapshot_id||"?")}</summary>
+      <details><summary>Sources and checks: ${v.passed||0}/${v.checked||0} quotes verified, ${v.fpassed||0}/${v.fchecked||0} figures recomputed · data revision ${esc(on.revision||on.snapshot_id||"?")}${timing}</summary>
       <div class="muted">Tools used: ${(t.trail||[]).map(x => esc(x.name + " " + x.arg)).join("<br>") || "none"}<br>Source: ${esc(on.source||"")}, generated ${esc(on.generated_at||"")}</div></details></div>`;
   }
 
@@ -107,7 +110,7 @@
     try { localStorage.setItem("b2a_token", token); } catch (e) {}
     try {
       me = await api("/api/me");
-      $("who").textContent = `${me.name} · ${me.turns_today}/${me.turns_per_day} questions today · credentials: ${me.credentials}`;
+      $("who").textContent = `${me.name} · ${me.attempts_today}/${me.turns_per_day} attempts today (${me.answers_today} answers) · credentials: ${me.credentials}`;
       $("modelKey").hidden = me.credentials !== "user";
       $("setup").hidden = false; await loadConversations();
     } catch (e) { $("who").textContent = e.message; }
@@ -117,7 +120,10 @@
     await loadConversations(); await open(c.cid);
   };
   let controller = null;
-  $("cancelBtn").onclick = () => api(`/api/conversations/${cid}/cancel`, {method: "POST"}).catch(() => {});
+  $("cancelBtn").onclick = async () => {
+    try { const r = await api(`/api/conversations/${cid}/cancel`, {method: "POST"}); $("status").textContent = r.message; }
+    catch (e) { $("status").textContent = e.message; }
+  };
   $("askBtn").onclick = async () => {
     const q = $("question").value.trim(); if (!q || !cid) return;
     $("askBtn").disabled = true; $("cancelBtn").hidden = false; $("events").textContent = ""; $("status").textContent = "asking…";

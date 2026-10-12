@@ -251,8 +251,13 @@ Collection and model-call logs remain distinct from user-visible evidence.
    limits, NDJSON progress then the verified turn, a minimal page. Tested
    over a real uvicorn server with a scripted provider: ownership on every
    route, v1 conversations after v2, two overlapping users, cancel saves
-   nothing, failures echo no secret. Not yet: public deployment (HTTPS,
-   supervision, backups), token streaming, PostgreSQL.
+   nothing, failures echo no secret. Second pass (same day): service-
+   credential mode fixed, job state machine (an accepted cancel is never
+   followed by a save), attempts reserved atomically against the daily
+   limit, internal bearer token on the mounted MCP, version-numbered
+   conditional saves, safe link rendering, per-attempt timing. Not yet:
+   public deployment (HTTPS, supervision, backups), token streaming,
+   PostgreSQL.
 5. Prepare Mac/Linux deployment and restore tests. Add PostgreSQL when measured
    write concurrency or multiple service instances justify it.
 

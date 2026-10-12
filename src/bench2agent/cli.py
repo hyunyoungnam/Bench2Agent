@@ -447,6 +447,9 @@ def cmd_web(args, root: Path) -> int:
         return web_app.serve(root, host=args.host, port=args.port)
     from bench2agent.web.store import WebStore
     store = WebStore(root / "data/bench2agent/web.sqlite")
+    if args.web_action == "attempts":
+        print(json.dumps(store.attempts(args.user, args.limit), ensure_ascii=False, indent=2))
+        return 0
     if args.web_action == "user":
         if args.user_action == "add":
             result = store.add_user(args.name)
@@ -573,6 +576,10 @@ def main(argv=None) -> int:
         common_options(sub, child=True)
         sub.add_argument("name")
     common_options(user_actions.add_parser("list"), child=True)
+    attempts = web_actions.add_parser("attempts", help="recent questions: outcome, duration, tool calls (no credentials, no answer text)")
+    common_options(attempts, child=True)
+    attempts.add_argument("--user")
+    attempts.add_argument("--limit", type=int, default=50)
     web.set_defaults(fn=cmd_web)
     benchmarks = commands.add_parser("benchmarks", help="build the benchmark snapshot from reviewed extraction")
     common_options(benchmarks, child=True)

@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test vscode-extension/test/*.test.js
+      - run: node --test vscode-extension/test/*.test.js tests/node/*.test.js
       - run: python -m pip install build twine
       - run: python -m build
       - run: python -m twine check dist/*

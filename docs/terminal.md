@@ -412,17 +412,36 @@ revision.
   pays for everyone; use it with the limits below. The operator's Claude
   Code or Codex login is never used for web users.
 - **Limits and cancellation.** One question at a time per conversation, at
-  most two per user, a daily cap (`BENCH2AGENT_WEB_TURNS_PER_DAY`, default
-  100), questions up to 4,000 characters. `POST /api/conversations/{id}/cancel`
-  withdraws a running question; nothing of it is saved. A failed or
-  cancelled question saves nothing and echoes no credential.
+  most two per user, questions up to 4,000 characters. The daily cap
+  (`BENCH2AGENT_WEB_TURNS_PER_DAY`, default 100) counts *attempts*, reserved
+  in one database transaction before the model is called, so a cancelled or
+  failed question counts and two requests with one attempt left cannot both
+  pass. `POST /api/conversations/{id}/cancel` is accepted only while the
+  question is still running (model loop or verification); once saving has
+  started it answers `cancelled: false` with "too late", and the answer is
+  saved. An accepted cancel is never followed by a save. The running slot
+  belongs to the job, not to the browser connection: a dropped connection
+  releases nothing until the job ends. A failed or cancelled question saves
+  nothing and echoes no credential.
 - **Streaming.** `POST /api/conversations/{id}/ask` answers as NDJSON: tool
-  events as they happen, then the verified turn (or an error).
+  events as they happen, then the verified turn (or an error). Each saved
+  turn carries `timing` (attempt id, elapsed milliseconds, tool calls), and
+  `bench2agent web attempts [--user NAME]` lists attempts with outcome and
+  duration for review beside the saved conversation.
+- **Internal MCP.** The host mounts its HTTP MCP server at `/mcp-server` and
+  reaches it over HTTP with an internal bearer token generated at startup and
+  sent on every internal request; the mount accepts nothing else, and the
+  token is never logged or shown. `BENCH2AGENT_MCP_URL` and
+  `BENCH2AGENT_MCP_TOKEN` point the host at an external HTTP MCP instead.
+- **Links in answers.** The page renders the model's prose as text, turning
+  only `[text](https://…)` links and bare http(s) addresses into anchors, with
+  text and address escaped separately; no other markup is interpreted.
 
-The host's own state (users, tokens as hashes, conversations) lives in
-`data/bench2agent/web.sqlite`, apart from the research revisions. It binds
+The host's own state (users, tokens as hashes, conversations, attempts) lives
+in `data/bench2agent/web.sqlite`, apart from the research revisions. It binds
 to loopback by default; a public deployment needs HTTPS termination in front
-and is not part of this release.
+and is not part of this release. [web-live-check.md](web-live-check.md) is
+the procedure for checking real answers from the page.
 
 ## Build a release
 

@@ -6,7 +6,7 @@ import asyncio
 import json
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 from bench2agent.providers import ProviderError
 
@@ -15,32 +15,32 @@ class HttpMcpTools:
     """`specs()` and `call()` for `providers.generate`, over the Streamable
     HTTP endpoint of one revision (`.../revisions/<id>/mcp`). Each call is its
     own stateless MCP session, run on a private event loop, so it can be used
-    from the worker thread that drives the model loop."""
+    from the worker thread that drives the model loop. `headers` carry the
+    credential the endpoint requires (the host's internal token for its own
+    mount); they are sent on every request, listing and calls alike, and
+    never appear in results or errors."""
 
-    def __init__(self, endpoint: str, timeout: float = 120.0):
+    def __init__(self, endpoint: str, headers: dict | None = None, timeout: float = 120.0):
         self.endpoint = endpoint
+        self.headers = dict(headers or {})
         self.timeout = timeout
         self._specs = None
+        self.calls = 0
 
     def _run(self, coro):
         return asyncio.run(asyncio.wait_for(coro, self.timeout))
 
-    async def _list(self):
-        async with streamable_http_client(self.endpoint) as (read, write, *_):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                return await session.list_tools()
-
-    async def _call(self, name: str, arguments):
-        async with streamable_http_client(self.endpoint) as (read, write, *_):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                return await session.call_tool(name, arguments or {})
+    async def _session(self, work):
+        async with create_mcp_http_client(headers=self.headers or None) as http:
+            async with streamable_http_client(self.endpoint, http_client=http) as (read, write, *_):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await work(session)
 
     def specs(self) -> list[dict]:
         if self._specs is None:
             try:
-                listed = self._run(self._list())
+                listed = self._run(self._session(lambda s: s.list_tools()))
             except Exception as exc:  # noqa: BLE001 — transport trouble, reported without internals
                 raise ProviderError(f"Benchmark tools are unreachable at {self.endpoint}: {type(exc).__name__}") from None
             self._specs = [{"name": t.name, "description": t.description or "", "inputSchema": t.input_schema}
@@ -48,8 +48,9 @@ class HttpMcpTools:
         return self._specs
 
     def call(self, name: str, arguments) -> dict:
+        self.calls += 1
         try:
-            result = self._run(self._call(name, arguments))
+            result = self._run(self._session(lambda s: s.call_tool(name, arguments or {})))
         except Exception as exc:  # noqa: BLE001
             return {"error": f"Benchmark tool call failed in transport: {type(exc).__name__}"}
         text = "".join(getattr(c, "text", "") for c in result.content)
