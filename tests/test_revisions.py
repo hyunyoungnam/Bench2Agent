@@ -113,6 +113,91 @@ class RevisionTests(unittest.TestCase):
         self.assertEqual((d / "manifest.json").read_bytes(), manifest_before)
         self.assertEqual(data_module.status(self.root)["verification"], "ok")
 
+    def test_verification_failure_blocks_every_serving_path(self):
+        d = revisions.revision_dir(self.root, "v1")
+        healthy = BenchmarkStore(self.root)                                 # verified when pinned
+        self.assertTrue(healthy.usage({})["available"])
+        edited = json.loads((d / "benchmark_snapshot.json").read_text())
+        edited["papers"][0]["uses"] = {}                                      # remove a stated use, keep the id
+        (d / "benchmark_snapshot.json").write_text(json.dumps(edited))
+        # the already pinned store notices the change on its next call
+        self.assertIn("failed verification", healthy.usage({})["error"])
+        self.assertFalse(healthy.scope({})["available"])
+        for backend in ("json", "sqlite", "auto"):                           # no backend serves a damaged revision
+            self.assertIn("not served until it is restored", BenchmarkStore(self.root, backend=backend).usage({})["error"])
+        status = data_module.status(self.root)
+        self.assertEqual((status["available"], "failed verification" in status["verification"]), (False, True))
+        with self.assertRaisesRegex(ValueError, "failed verification"):
+            cli.require_data(self.root, interactive=True)
+        with patch.object(mcp, "B", BenchmarkStore(self.root)):              # the MCP route that uses the store directly
+            self.assertIn("error", mcp.execute_tool("benchmark_usage", {}, mcp._benchmark_tools()))
+        # restoring the original bytes brings it back, with its original manifest
+        manifest_before = (d / "manifest.json").read_bytes()
+        self.assertEqual(data_module.install(self.root, file=str(self.v1))["outcome"], "restored")
+        self.assertEqual((d / "manifest.json").read_bytes(), manifest_before)
+        self.assertTrue(healthy.usage({})["available"])                     # the same store serves again
+        self.assertEqual(healthy.usage({})["results"][0]["papers"], 1)
+
+    def test_manifest_changes_are_detected_too(self):
+        d = revisions.revision_dir(self.root, "v1")
+        store = BenchmarkStore(self.root)
+        self.assertTrue(store.usage({})["available"])
+        manifest = json.loads((d / "manifest.json").read_text())
+        original = (d / "manifest.json").read_bytes()
+        manifest["sha256"] = "0" * 64                                        # a manifest that no longer matches its files
+        (d / "manifest.json").write_text(json.dumps(manifest))
+        self.assertIn("failed verification", store.usage({})["error"])
+        (d / "manifest.json").write_bytes(original)
+        self.assertTrue(store.usage({})["available"])
+        (d / "manifest.json").unlink()                                      # or disappears
+        self.assertIn("error", store.usage({}))
+        self.assertFalse(store.usage({})["available"])
+
+    def test_restore_touches_only_the_damaged_file(self):
+        d = revisions.revision_dir(self.root, "v1")
+        db = d / "benchmark_snapshot.sqlite"
+        db_bytes, db_inode = db.read_bytes(), db.stat().st_ino
+        with (d / "benchmark_snapshot.json").open("ab") as fh:
+            fh.write(b" ")
+        copied = []
+        original_copy = revisions.shutil.copyfile
+
+        def copyfile(src, dst, *a, **k):
+            if Path(dst).parent == d:                                        # copies into the revision directory
+                copied.append(Path(src).name)
+            return original_copy(src, dst, *a, **k)
+        with patch.object(revisions.shutil, "copyfile", side_effect=copyfile):
+            self.assertEqual(data_module.install(self.root, file=str(self.v1))["outcome"], "restored")
+        self.assertEqual(copied, ["benchmark_snapshot.json"])                # the healthy database was never copied
+        self.assertEqual((db.read_bytes(), db.stat().st_ino), (db_bytes, db_inode))
+        self.assertEqual(data_module.status(self.root)["verification"], "ok")
+
+    def test_failed_restore_damages_nothing_further_and_cleans_up(self):
+        d = revisions.revision_dir(self.root, "v1")
+        db, js = d / "benchmark_snapshot.sqlite", d / "benchmark_snapshot.json"
+        js_bytes = js.read_bytes()
+        db.write_bytes(db.read_bytes()[:1000])                               # the database is damaged
+        damaged = db.read_bytes()
+        bundle = self.root / "v1.tar.gz"
+        other = self.root / "other"
+        data_module.install(other, file=str(self.v1))                        # a healthy copy to bundle from
+        data_module.bundle(other, bundle)
+        original_replace = os.replace
+
+        def failing_replace(src, dst, *a, **k):
+            if Path(dst).name == "benchmark_snapshot.sqlite" and Path(dst).parent == d:
+                raise OSError("disk full")
+            return original_replace(src, dst, *a, **k)
+        with patch.object(revisions.os, "replace", side_effect=failing_replace):
+            with self.assertRaises(OSError):
+                data_module.install(self.root, file=str(bundle))
+        self.assertEqual((js.read_bytes(), db.read_bytes()), (js_bytes, damaged))   # nothing else touched, nothing half-written
+        self.assertEqual([p.name for p in d.glob(".restore-*")], [])                # temp file cleaned up
+        self.assertEqual([p.name for p in revisions.revisions_dir(self.root).glob(".staging-*")], [])
+        self.assertFalse(data_module.status(self.root)["available"])                # still not served
+        self.assertEqual(data_module.install(self.root, file=str(bundle))["outcome"], "restored")   # the real restore works
+        self.assertTrue(data_module.status(self.root)["available"])
+
     def test_failed_install_leaves_the_active_revision_consistent(self):
         d = revisions.revision_dir(self.root, "v1")
         before = {p.name: p.read_bytes() for p in d.iterdir()}

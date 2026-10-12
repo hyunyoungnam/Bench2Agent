@@ -294,6 +294,7 @@ class BenchmarkStore:
         store (a terminal question, a restarted MCP server)."""
         self.root = root
         self.unavailable = None
+        self._verified = (None, None)   # (file stamps at the last verification, its error or None)
         try:
             self.revision = revision or revisions.active_revision(root)
             if self.revision and not (revisions.revision_dir(root, self.revision) / "manifest.json").is_file():
@@ -310,6 +311,30 @@ class BenchmarkStore:
         self._local = threading.local()
 
     # -- storage selection and pinning ------------------------------------
+    def _verification(self) -> str | None:
+        """The pinned revision checked against its manifest: in full when the
+        store is built and again whenever the JSON, the database or the
+        manifest changes on disk (identity, size, mtime, ctime); a cached
+        verdict otherwise. Returns the error, or None when the revision is
+        sound. Integrity rests on the checksums; the stamps only decide when
+        to recompute them."""
+        d = revisions.revision_dir(self.root, self.revision)
+        stamps = {}
+        for name in (SNAPSHOT, DATABASE, "manifest.json"):
+            try:
+                st = (d / name).stat()
+                stamps[name] = (st.st_ino, st.st_dev, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+            except FileNotFoundError:
+                stamps[name] = None
+        if stamps != self._verified[0]:
+            try:
+                revisions.verify_dir(d)
+                error = None
+            except (revisions.RevisionError, OSError, ValueError) as exc:
+                error = f"{exc} Revision {self.revision} is not served until it is restored."
+            self._verified = (stamps, error)
+        return self._verified[1]
+
     def _json_sha(self, path: Path) -> str:
         # keyed by the path too: two revisions' files can share size and mtime
         stamp = (str(path), path.stat().st_mtime_ns, path.stat().st_size)
@@ -329,6 +354,8 @@ class BenchmarkStore:
             return None, self.backend if self.backend != "auto" else "json", (
                 "No data revision is installed. Run bench2agent data install (or data install --file FILE).")
         json_path, db_path, _ = revisions.paths_for(self.root, self.revision)
+        if error := self._verification():
+            return None, self.backend if self.backend != "auto" else "json", error
         if self.backend == "json":
             return (json_path if json_path.exists() else None), "json", (
                 None if json_path.exists() else f"Revision {self.revision} has no JSON snapshot; set BENCH2AGENT_STORE=sqlite.")

@@ -214,12 +214,7 @@ def publish(root: Path, stage: Path, rid: str, *, activate: bool = True) -> tupl
             verify_dir(target, old)
             outcome = "reused"
         except RevisionError:
-            restored = []
-            for name, key in ((SNAPSHOT, "sha256"), (DATABASE, "sqlite_sha256")):
-                staged = stage / name
-                if old.get(key) and staged.is_file() and file_sha256(staged) == old[key]:
-                    shutil.copyfile(staged, target / name)
-                    restored.append(name)
+            restored = restore_damaged(target, old, stage)
             try:
                 verify_dir(target, old)
             except RevisionError as exc:
@@ -232,6 +227,43 @@ def publish(root: Path, stage: Path, rid: str, *, activate: bool = True) -> tupl
     if activate:
         set_active(root, rid)
     return target, outcome
+
+
+def damaged_files(target: Path, manifest: dict) -> list[str]:
+    """The files of an installed revision that do not match its manifest."""
+    out = []
+    for name, key in ((SNAPSHOT, "sha256"), (DATABASE, "sqlite_sha256")):
+        expected = manifest.get(key)
+        if expected and (not (target / name).is_file() or file_sha256(target / name) != expected):
+            out.append(name)
+    return out
+
+
+def restore_damaged(target: Path, manifest: dict, offered: Path) -> list[str]:
+    """Put back only the damaged files of `target`, and only from files in
+    `offered` whose bytes match the manifest's recorded checksums. Each file
+    is copied to a temporary file beside its destination, checked there, and
+    swapped in with one replace, so a failure mid-copy leaves every existing
+    file as it was and no temporary file behind. Healthy files are not
+    touched; the manifest is never rewritten."""
+    restored = []
+    for name in damaged_files(target, manifest):
+        key = "sha256" if name == SNAPSHOT else "sqlite_sha256"
+        source = offered / name
+        if not source.is_file() or file_sha256(source) != manifest[key]:
+            continue
+        fd, tmp = tempfile.mkstemp(prefix=".restore-", dir=target)
+        os.close(fd)
+        tmp = Path(tmp)
+        try:
+            shutil.copyfile(source, tmp)
+            if file_sha256(tmp) != manifest[key]:
+                raise RevisionError(f"Copy of {name} did not reproduce its checksum; nothing was replaced.")
+            os.replace(tmp, target / name)
+        finally:
+            tmp.unlink(missing_ok=True)
+        restored.append(name)
+    return restored
 
 
 def _rmtree(path: Path) -> None:

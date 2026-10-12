@@ -218,50 +218,32 @@ class ParityTests(Fixture):
         toy = {r["id"]: r["papers"] for r in first["results"]}["toy"]
         # identity and counts both come from the version the call opened
         self.assertEqual((first["snapshot_id"], toy), (self.report["snapshot_id"], 4))
+        # files replaced underneath a published revision are damage: the next
+        # call finds the checksums wrong and refuses rather than serving them
         second = self.sqlite.usage({"latest": False, "limit": 50})
-        self.assertEqual((second["snapshot_id"], {r["id"]: r["papers"] for r in second["results"]}["toy"]), ("second-version", 3))
+        self.assertIn("failed verification", second["error"])
 
-    def test_auto_refuses_a_stale_or_corrupt_database(self):
-        os.replace(self._second_version(), self.json_path)       # the revision's JSON is replaced underneath, the database is not
-        auto = BenchmarkStore(self.root, backend="auto")
-        self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("json", "second-version"))
-        self.assertEqual(auto.usage({"latest": False})["snapshot_id"], "second-version")
-        self.assertFalse(data_module.status(self.root)["sqlite"]["matches_json"])
-        # an explicit sqlite backend answers with the reason, never from the old file
-        self.assertIn("different snapshot", BenchmarkStore(self.root, backend="sqlite").usage({})["error"])
-        os.environ["BENCH2AGENT_STORE"] = "sqlite"
-        try:
-            status = data_module.status(self.root)
-            self.assertFalse(status["available"])
-            self.assertIn("different snapshot", status["reason"])
-        finally:
-            del os.environ["BENCH2AGENT_STORE"]
-        repository.import_snapshot(self.json_path, self.db_path)   # directory made consistent again: auto returns to SQLite
-        auto = BenchmarkStore(self.root, backend="auto")
-        self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("sqlite", "second-version"))
+    def test_files_changed_underneath_make_the_revision_unavailable(self):
+        os.replace(self._second_version(), self.json_path)       # the revision's JSON is replaced, the database is not
+        for backend in ("json", "sqlite", "auto"):
+            store = BenchmarkStore(self.root, backend=backend)
+            self.assertFalse(store.data()["available"])
+            self.assertIn("does not match its recorded sha256", store.usage({})["error"])
+        status = data_module.status(self.root)
+        self.assertFalse(status["available"])
+        self.assertFalse(status["sqlite"]["matches_json"])
+        self.assertIn("failed verification", status["verification"])
+        os.replace(self.built, self.json_path)                    # the original bytes back: served again
+        self.assertTrue(BenchmarkStore(self.root).usage({})["available"])
         self.db_path.write_bytes(b"SQLite format 3\x00" + b"garbage" * 100)
-        self.assertEqual(BenchmarkStore(self.root, backend="auto").data()["backend"], "json")
-        self.assertRegex(BenchmarkStore(self.root, backend="sqlite").usage({})["error"], "unreadable|rebuild")
-        self.assertFalse(data_module.status(self.root)["sqlite"]["available"])
+        self.assertIn("failed verification", BenchmarkStore(self.root, backend="auto").usage({})["error"])
+        self.assertFalse(data_module.status(self.root)["available"])
 
     def test_sqlite_only_install_is_ready(self):
         from bench2agent.cli import require_data
         bundle = self.root / "bundle.tar.gz"
         report = data_module.bundle(self.root, bundle)
         self.assertTrue(report["includes_sqlite"])
-        self.json_path.unlink()
-        for backend in ("sqlite", "auto"):
-            os.environ["BENCH2AGENT_STORE"] = backend
-            try:
-                status = data_module.status(self.root)
-                self.assertEqual((status["available"], status["backend"], status["paper_observations"]), (True, "sqlite", 14))
-                require_data(self.root, interactive=False)
-                self.assertEqual(BenchmarkStore(self.root).usage({"topic": "robotics"})["coverage"]["parsed_papers"], 7)
-            finally:
-                del os.environ["BENCH2AGENT_STORE"]
-        self.assertFalse(data_module.status(self.root)["available"])   # json backend: nothing to read
-        with self.assertRaises(ValueError):
-            require_data(self.root, interactive=False)
         # a bundle carrying the database installs both files; a bare .sqlite installs alone
         other = self.root / "other"
         installed = data_module.install(other, file=str(bundle))
@@ -271,11 +253,20 @@ class ParityTests(Fixture):
         installed = data_module.install(alone, file=str(self.db_path))
         self.assertEqual(sorted(p.name for p in Path(installed["path"]).iterdir()),
                          ["benchmark_snapshot.sqlite", "benchmark_snapshot.sqlite.sha256", "manifest.json"])
-        os.environ["BENCH2AGENT_STORE"] = "auto"
-        try:
-            self.assertEqual(BenchmarkStore(alone).usage({})["coverage"]["parsed_papers"], 9)
-        finally:
-            del os.environ["BENCH2AGENT_STORE"]
+        for backend in ("sqlite", "auto"):
+            os.environ["BENCH2AGENT_STORE"] = backend
+            try:
+                status = data_module.status(alone)
+                self.assertEqual((status["available"], status["backend"], status["paper_observations"]), (True, "sqlite", 14))
+                require_data(alone, interactive=False)
+                self.assertEqual(BenchmarkStore(alone).usage({"topic": "robotics"})["coverage"]["parsed_papers"], 7)
+            finally:
+                del os.environ["BENCH2AGENT_STORE"]
+        status = data_module.status(alone)                          # json backend: this revision has no JSON to read
+        self.assertFalse(status["available"])
+        self.assertIn("no JSON", status["reason"])
+        with self.assertRaisesRegex(ValueError, "no JSON"):
+            require_data(alone, interactive=False)
 
     def test_backend_selection_and_status(self):
         self.assertEqual(self.sqlite.data()["backend"], "sqlite")
@@ -285,11 +276,11 @@ class ParityTests(Fixture):
         status = data_module.status(self.root)
         self.assertTrue(status["sqlite"]["matches_json"])
         self.assertEqual(status["sqlite"]["paper_observations"], 14)
-        self.db_path.unlink()
-        self.assertEqual(BenchmarkStore(self.root, backend="auto").data()["backend"], "json")
-        missing = BenchmarkStore(self.root, backend="sqlite")
-        self.assertFalse(missing.data()["available"])
-        self.assertIn("reinstall", missing.usage({})["error"])
+        self.db_path.unlink()                                    # a listed file missing is damage, for every backend
+        for backend in ("auto", "sqlite", "json"):
+            missing = BenchmarkStore(self.root, backend=backend)
+            self.assertFalse(missing.data()["available"])
+            self.assertIn("not served until it is restored", missing.usage({})["error"])
         self.assertFalse(data_module.status(self.root)["sqlite"]["available"])
         with self.assertRaises(ValueError):
             BenchmarkStore(self.root, backend="postgres")
