@@ -57,7 +57,8 @@ def benchmark_pool(obj, key=None) -> list[float]:
     elif isinstance(obj, (int, float)) and not isinstance(obj, bool):
         out.append(float(obj))
     elif isinstance(obj, str) and key in _TEXT_FIGURE_KEYS and len(obj) <= 400:
-        out.extend(_val(m.group(0)) for m in _NUM.finditer(obj))
+        # unsigned: the hyphen in "iclr-2026" is a separator, not a minus
+        out.extend(_val(m.group(0)) for m in _UNSIGNED_NUM.finditer(obj))
     return out
 
 # Ids are not figures. A gid is a five-digit number that would make almost any
@@ -69,6 +70,7 @@ SKIP_KEYS = {"gid", "gids", "attackers", "namers", "results", "cards",
 # reports "324" as an unexplained figure — measured on a real answer.
 _NUM = re.compile(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?")
 _YEAR = re.compile(r"^(?:19|20)\d\d$")
+_UNSIGNED_NUM = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 
 
 def _val(raw: str) -> float:
