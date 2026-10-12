@@ -18,12 +18,17 @@ class Run:
     own conversation id for the next turn, and usage when known."""
 
     def __init__(self, text: str, trail: list[dict], provider_session: str | None = None, usage: dict | None = None,
-                 messages: list | None = None):
+                 messages: list | None = None, unverifiable: str | None = None):
         self.text = text
         self.trail = trail
         self.provider_session = provider_session
         self.usage = usage or {}
         self.messages = messages           # only connectors that keep their own history fill this
+        # set when the trail cannot stand for what the model read: no log
+        # although tools were called, a damaged log, a call on another
+        # revision, fewer logged calls than the CLI showed. Such a turn is
+        # saved as unverifiable, never with verification marks.
+        self.unverifiable = unverifiable
 
     def trail_for_turn(self) -> list[dict]:
         """The shape the verifier and the saved turn use."""
@@ -72,18 +77,49 @@ def mcp_environment(root: Path, tool_log: Path) -> dict:
     return env
 
 
-def read_tool_log(path: Path) -> list[dict]:
-    """The MCP server's record of this run: every call with its result."""
+def read_tool_log(path: Path) -> tuple[list[dict], str | None]:
+    """The MCP server's record of this run: every call with its result, and
+    the reason it cannot be trusted, if any (damaged lines)."""
     if not path.exists():
-        return []
-    out = []
+        return [], None
+    out, damaged = [], 0
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             try:
-                out.append(json.loads(line))
+                entry = json.loads(line)
+                if not isinstance(entry, dict) or "name" not in entry or "result" not in entry:
+                    raise ValueError("shape")
+                out.append(entry)
             except ValueError:
-                continue
-    return out
+                damaged += 1
+    return out, (f"{damaged} damaged entries in the tool log" if damaged else None)
+
+
+def check_trail(log: list[dict], damaged: str | None, seen: list[dict], revision: str) -> str | None:
+    """Why this turn cannot be verified, or None when the log stands for
+    what the model read: every logged call on the requested revision, and at
+    least as many logged calls as the CLI showed."""
+    if damaged:
+        return damaged
+    if seen and not log:
+        return "the CLI called tools but the MCP server left no log"
+    if len(log) < len(seen):
+        return f"the MCP log has {len(log)} calls but the CLI showed {len(seen)}"
+    wrong = sorted({str(e.get("revision")) for e in log if e.get("revision") != revision})
+    if wrong:
+        return f"tool calls were answered from revision {', '.join(wrong)} instead of {revision}"
+    return None
+
+
+def transcript(turns: list[dict] | None, limit: int = 6) -> str:
+    """Earlier saved turns as plain text for a fresh provider session: used
+    after a cancel, a failure or an unverifiable turn, when the CLI's own
+    session is not resumed. Only turns Bench2Agent saved appear here."""
+    out = []
+    for t in (turns or [])[-limit:]:
+        answer = "".join(s.get("s", "") for s in t.get("segs", []) if s.get("t") in ("p", "n"))
+        out.append(f"User: {t.get('q', '')}\nAssistant: {answer[:2000]}")
+    return ("Earlier in this conversation:\n\n" + "\n\n".join(out) + "\n\n") if out else ""
 
 
 _REGISTRY: dict[str, type] = {}

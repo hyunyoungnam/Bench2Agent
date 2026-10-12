@@ -44,6 +44,12 @@ class Session:
     def path(self) -> Path:
         return self.directory / (self.doc["id"] + ".json")
 
+    def _drop_provider_session(self) -> None:
+        """A cancelled, failed, unverifiable or unsaved turn must not be
+        continued inside the CLI's own session; forget it, keep our turns."""
+        if self.doc.pop("provider_session", None) is not None and self.path.exists():
+            write_json(self.path, self.doc)
+
     def store(self):
         """The data this conversation reads, always as an explicit revision:
         the one its first answer was given on, or for a new conversation the
@@ -90,29 +96,39 @@ class Session:
         conn = connector(name, provider=self.doc["provider"]) if name == "api" else connector(name)
         tool_log = self.directory / "toollogs" / f"{self.doc['id']}-{int(time.time() * 1000)}.jsonl"
         tool_log.parent.mkdir(parents=True, exist_ok=True)
+        from bench2agent.core import figures
         with mcp.using(store):   # the answer check reads this revision, whatever is active
             try:
+                # a CLI connector resumes its own session only after a saved,
+                # verified turn; otherwise it starts fresh from the saved turns
                 run = conn.ask(root=self.root, revision=store.revision, question=question, system=system,
-                               history=self.doc["messages"], provider_session=self.doc.get("provider_session") or
-                               (self.doc["model"] if name == "api" else None), emit=emit, cancelled=lambda: False, tool_log=tool_log)
+                               history=self.doc["messages"] if name == "api" else self.doc["turns"],
+                               provider_session=self.doc.get("provider_session") or (self.doc["model"] if name == "api" else None),
+                               emit=emit, cancelled=lambda: False, tool_log=tool_log)
             except ConnectorError as exc:
+                self._drop_provider_session()
                 raise providers.ProviderError(str(exc)) from None
             if store.data().get("snapshot_id") != sid:
                 raise ValueError("The dataset changed during this answer. Start a new turn; this answer was not saved.")
-            corpus = mcp.Store()
             trail = run.trail_for_turn()
-            segs, verified = chat.segment(run.text, corpus, Verifier(corpus), trail)
-        turn = {"q": question, "segs": segs, "verified": verified, "trail": trail, "connector": name,
-                "tool_log": tool_log.name if tool_log.exists() else None,
+            if run.unverifiable:
+                segs, verified = [{"t": "p", "s": run.text}], None
+            else:
+                corpus = mcp.Store()
+                segs, verified = chat.segment(run.text, corpus, Verifier(corpus), trail, figures.TurnLog(run.trail))
+        turn = {"q": question, "segs": segs, "verified": verified, "unverifiable": run.unverifiable, "trail": trail,
+                "connector": name, "tool_log": tool_log.name if tool_log.exists() else None,
                 "usage": run.usage, "on": {"benchmarks": {key: snapshot.get(key)
                          for key in ("snapshot_id", "revision", "generated_at", "source")}}}
         if (self.path.stat().st_mtime_ns if self.path.exists() else None) != original_revision:
+            self._drop_provider_session()
             raise ValueError("This conversation changed in another terminal; answer was not saved.")
         updated = {**self.doc, "messages": run.messages if run.messages is not None else self.doc["messages"],
                    "snapshot_id": sid, "ts": int(time.time()),
                    "title": self.doc["title"] if self.doc["turns"] else question[:80],
                    "turns": [*self.doc["turns"], turn]}
-        if name != "api" and run.provider_session:
+        updated.pop("provider_session", None)
+        if name != "api" and run.provider_session and not run.unverifiable:
             updated["provider_session"] = run.provider_session
         write_json(self.path, updated)
         self.doc = updated

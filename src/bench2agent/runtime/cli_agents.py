@@ -18,7 +18,8 @@ import threading
 from collections import deque
 from pathlib import Path
 
-from .base import Connector, ConnectorError, Run, mcp_environment, mcp_stdio_command, read_tool_log, register, which
+from .base import (Connector, ConnectorError, Run, check_trail, mcp_environment, mcp_stdio_command, read_tool_log,
+                   register, transcript, which)
 
 CLAUDE_PUBLIC_HOSTING = (
     "Documented (code.claude.com/docs/en/legal-and-compliance): a platform may host the unmodified Claude Code "
@@ -47,16 +48,35 @@ def _failure(code: int, stderr: str) -> str:
     return f"The agent CLI exited with status {code}."
 
 
+# What a visitor's isolated CLI process may inherit from the host: the path
+# to the binaries and the TLS/proxy settings the network needs. Never a
+# provider key, never the operator's login, never the host's HOME.
+ISOLATED_ENV_ALLOWLIST = ("PATH", "LANG", "LC_ALL", "TZ", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
+                          "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
+                          "https_proxy", "http_proxy", "no_proxy")
+
+
+def isolated_environment(home: Path) -> dict:
+    env = {k: os.environ[k] for k in ISOLATED_ENV_ALLOWLIST if k in os.environ}
+    env.update({"HOME": str(home), "TERM": "dumb", "NO_COLOR": "1"})
+    return env
+
+
 class _CliConnector(Connector):
     owns_loop = True
     binary = ""
     options = ("config_dir",)
 
-    def __init__(self, config_dir: str | None = None):
+    def __init__(self, config_dir: str | None = None, env: dict | None = None, cwd: str | None = None):
+        """`env` given: the process gets exactly that environment (a hosted
+        visitor's isolated one) plus the connector's own variables; absent:
+        the terminal user's own environment."""
         self.config_dir = str(Path(config_dir).expanduser()) if config_dir else None
+        self.base_env = dict(env) if env is not None else None
+        self.cwd = Path(cwd) if cwd else None
 
     def _env(self, extra: dict | None = None) -> dict:
-        env = dict(os.environ)
+        env = dict(self.base_env) if self.base_env is not None else dict(os.environ)
         env.update(extra or {})
         return env
 
@@ -142,9 +162,13 @@ class ClaudeCodeConnector(_CliConnector):
         mcp = {"mcpServers": {"bench2agent": {"command": mcp_stdio_command(root, revision)[0],
                                               "args": mcp_stdio_command(root, revision)[1:],
                                               "env": mcp_environment(root, tool_log)}}}
-        cmd = [path, "-p", question, "--output-format", "stream-json", "--verbose", "--max-turns", "12",
-               "--mcp-config", json.dumps(mcp), "--strict-mcp-config", "--allowedTools", "mcp__bench2agent",
-               "--append-system-prompt", system]
+        prompt = question if provider_session else transcript(history) + question
+        # --tools "" removes every built-in tool (shell, files, web); the MCP
+        # server's six read-only tools are the only ones left, and
+        # --strict-mcp-config keeps any other MCP configuration out
+        cmd = [path, "-p", prompt, "--output-format", "stream-json", "--verbose", "--max-turns", "12",
+               "--tools", "", "--mcp-config", json.dumps(mcp), "--strict-mcp-config",
+               "--allowedTools", "mcp__bench2agent", "--append-system-prompt", system]
         if provider_session:
             cmd += ["--resume", provider_session]
         seen: list[dict] = []
@@ -159,11 +183,11 @@ class ClaudeCodeConnector(_CliConnector):
             elif ev.get("type") == "result":
                 return ev.get("result") or "", ev.get("session_id"), ((ev.get("result") or "agent failed")[:300] if ev.get("is_error") else None)
             return None, None, None
-        text, session, failed = self._run(cmd, cwd=root, emit=emit, cancelled=cancelled, parse=parse)
+        text, session, failed = self._run(cmd, cwd=self.cwd or root, emit=emit, cancelled=cancelled, parse=parse)
         if failed or text is None:
             raise ConnectorError(failed or "Claude Code returned no answer.")
-        trail = read_tool_log(tool_log) or seen
-        return Run(text, trail, provider_session=session)
+        log, damaged = read_tool_log(tool_log)
+        return Run(text, log, provider_session=session, unverifiable=check_trail(log, damaged, seen, revision))
 
 
 @register
@@ -210,7 +234,7 @@ class CodexConnector(_CliConnector):
         for key, value in values.items():
             literal = ("{ " + ", ".join(k + " = " + json.dumps(v) for k, v in value.items()) + " }") if isinstance(value, dict) else json.dumps(value)
             cmd += ["-c", key + "=" + literal]
-        cmd.append(system + "\n\nUSER QUESTION:\n" + question)
+        cmd.append(system + "\n\n" + (transcript(history) if not provider_session else "") + "USER QUESTION:\n" + question)
         seen: list[dict] = []
 
         def parse(ev, emit):
@@ -230,8 +254,8 @@ class CodexConnector(_CliConnector):
                 elif ity == "agent_message" and ty == "item.completed":
                     return it.get("text") or "", None, None
             return None, None, None
-        text, session, failed = self._run(cmd, cwd=root, emit=emit, cancelled=cancelled, parse=parse)
+        text, session, failed = self._run(cmd, cwd=self.cwd or root, emit=emit, cancelled=cancelled, parse=parse)
         if failed or text is None:
             raise ConnectorError(failed or "Codex returned no answer.")
-        trail = read_tool_log(tool_log) or seen
-        return Run(text, trail, provider_session=session)
+        log, damaged = read_tool_log(tool_log)
+        return Run(text, log, provider_session=session, unverifiable=check_trail(log, damaged, seen, revision))

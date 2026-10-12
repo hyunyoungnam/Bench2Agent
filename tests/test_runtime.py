@@ -27,22 +27,49 @@ except ImportError:
 # real CLI prints. `SLEEP` lets the cancel test catch it mid-run.
 STUB_CLAUDE = textwrap.dedent('''\
     #!/usr/bin/env python3
+    """A stand-in for the official claude CLI. Environment switches drive the
+    scenarios: STUB_SLEEP (slow run), STUB_SKIP_MCP (show a tool call but never
+    reach the MCP server), STUB_FAKE_REVISION (append a log entry claiming
+    another revision), STUB_RECORD (write argv, env and the prompt to this
+    path). `auth login` plays the headless sign-in: a URL, then a code prompt;
+    any input line signs in by writing a marker into CLAUDE_CONFIG_DIR."""
     import json, os, subprocess, sys, time
     args = sys.argv[1:]
+    cfg_dir = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    marker = os.path.join(cfg_dir, ".credentials.json")
     if args[:2] == ["auth", "status"]:
-        print(json.dumps({"loggedIn": True, "authMethod": "stub", "email": "stub@example.org"})); sys.exit(0)
+        ok = os.path.exists(marker)
+        print(json.dumps({"loggedIn": ok, "authMethod": "stub" if ok else None, "email": "stub@example.org" if ok else None})); sys.exit(0)
+    if args[:2] == ["auth", "login"]:
+        print("Opening browser to sign in…"); print("If the browser didn't open, visit: https://example.invalid/oauth?state=STUBSTATE"); sys.stdout.flush()
+        print("Paste code here if prompted >", end="", flush=True)
+        line = sys.stdin.readline()
+        if not line.strip():
+            print("\\nno code"); sys.exit(1)
+        os.makedirs(cfg_dir, exist_ok=True); open(marker, "w").write("{}")
+        print("\\nLogin successful"); sys.exit(0)
+    if args[:2] == ["auth", "logout"]:
+        try: os.remove(marker)
+        except FileNotFoundError: pass
+        print("Logged out"); sys.exit(0)
+    if os.environ.get("STUB_RECORD"):
+        json.dump({"argv": args, "env": dict(os.environ), "cwd": os.getcwd()}, open(os.environ["STUB_RECORD"], "w"))
     cfg = json.loads(args[args.index("--mcp-config") + 1])["mcpServers"]["bench2agent"]
     if os.environ.get("STUB_SLEEP"):
         time.sleep(float(os.environ["STUB_SLEEP"]))
     env = dict(os.environ); env.update(cfg["env"])
-    req = "\\n".join(json.dumps(m) for m in [
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "benchmark_usage", "arguments": {"topic": "robotics"}}}]) + "\\n"
-    out = subprocess.run([cfg["command"], *cfg["args"]], input=req, capture_output=True, text=True, env=env)
-    result = json.loads(json.loads(out.stdout.splitlines()[-1])["result"]["content"][0]["text"])
     print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "mcp__bench2agent__benchmark_usage", "input": {"topic": "robotics"}}]}}))
-    n = result["results"][0]["papers"]
+    n = 1
+    if not os.environ.get("STUB_SKIP_MCP"):
+        req = "\\n".join(json.dumps(m) for m in [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "benchmark_usage", "arguments": {"topic": "robotics"}}}]) + "\\n"
+        out = subprocess.run([cfg["command"], *cfg["args"]], input=req, capture_output=True, text=True, env=env)
+        n = json.loads(json.loads(out.stdout.splitlines()[-1])["result"]["content"][0]["text"])["results"][0]["papers"]
+    if os.environ.get("STUB_FAKE_REVISION"):
+        with open(cfg["env"]["BENCH2AGENT_TOOL_LOG"], "a") as fh:
+            fh.write(json.dumps({"name": "benchmark_scope", "arguments": {}, "result": {}, "revision": os.environ["STUB_FAKE_REVISION"]}) + "\\n")
     text = "Toy is used by ⟦benchmark_usage:{\\"topic\\":\\"robotics\\"}|%d paper⟧ ⟦arxiv:2501.00001|__QUOTE__⟧" % n
     print(json.dumps({"type": "result", "result": text, "session_id": "sess-stub-1", "is_error": False}))
 ''').replace("__QUOTE__", QUOTE_V1)
@@ -148,6 +175,59 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(Exception):
             connector("claude").ask(root=self.root, revision="v9", question="q", system="s", history=None,
                                     provider_session=None, emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
+
+    def test_no_log_damaged_log_or_other_revision_makes_the_turn_unverifiable(self):
+        with patch.dict(os.environ, {"STUB_SKIP_MCP": "1"}):
+            run, _ = self.ask("claude")                              # the CLI showed a tool call, the server saw none
+        self.assertIn("left no log", run.unverifiable)
+        self.assertEqual(run.trail, [])
+        with patch.dict(os.environ, {"STUB_FAKE_REVISION": "v9"}):
+            run, _ = self.ask("claude")
+        self.assertIn("revision v9 instead of v1", run.unverifiable)
+        self.log.unlink()
+        run, _ = self.ask("claude")
+        self.assertIsNone(run.unverifiable)                          # the healthy case
+        self.log.write_text(self.log.read_text() + "{not json\n")
+        from bench2agent.runtime.base import read_tool_log
+        _, damaged = read_tool_log(self.log)
+        self.assertIn("damaged", damaged)
+
+    def test_built_in_tools_are_disabled_and_the_environment_is_the_one_given(self):
+        record = self.root / "record.json"
+        (self.root / "visitor/.claude").mkdir(parents=True)
+        # the isolated environment is exactly what the caller gives (the stub's
+        # recording switch rides inside it); the operator's key sits outside
+        env = {"PATH": os.environ["PATH"], "HOME": str(self.root / "visitor"), "NODE_EXTRA_CA_CERTS": "/certs", "STUB_RECORD": str(record)}
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "operator-secret"}):
+            connector("claude", config_dir=str(self.root / "visitor/.claude"), env=env, cwd=str(self.root / "visitor")).ask(
+                root=self.root, revision="v1", question="q", system="s", history=None, provider_session=None,
+                emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
+        rec = json.loads(record.read_text())
+        argv = rec["argv"]
+        self.assertEqual(argv[argv.index("--tools") + 1], "")           # no shell, files or web
+        self.assertIn("--strict-mcp-config", argv)
+        self.assertEqual(argv[argv.index("--allowedTools") + 1], "mcp__bench2agent")
+        self.assertNotIn("ANTHROPIC_API_KEY", rec["env"])                 # the operator's key never enters
+        self.assertEqual((rec["env"]["HOME"], rec["env"]["CLAUDE_CONFIG_DIR"], rec["env"]["NODE_EXTRA_CA_CERTS"]),
+                         (str(self.root / "visitor"), str(self.root / "visitor/.claude"), "/certs"))
+        self.assertEqual(rec["cwd"], str(self.root / "visitor"))
+
+    def test_saved_turns_are_carried_into_a_fresh_session_only(self):
+        record = self.root / "record.json"
+        turns = [{"q": "earlier question", "segs": [{"t": "p", "s": "earlier answer"}]}]
+        with patch.dict(os.environ, {"STUB_RECORD": str(record)}):
+            connector("claude").ask(root=self.root, revision="v1", question="follow-up", system="s", history=turns,
+                                    provider_session=None, emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
+            argv = json.loads(record.read_text())["argv"]
+            prompt = argv[argv.index("-p") + 1]
+            self.assertIn("earlier question", prompt)
+            self.assertIn("earlier answer", prompt)
+            self.assertTrue(prompt.endswith("follow-up"))
+            connector("claude").ask(root=self.root, revision="v1", question="follow-up", system="s", history=turns,
+                                    provider_session="sess-1", emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
+            argv = json.loads(record.read_text())["argv"]
+            self.assertEqual(argv[argv.index("-p") + 1], "follow-up")   # a resumed session carries its own history
+            self.assertEqual(argv[argv.index("--resume") + 1], "sess-1")
 
     def test_api_key_connector_records_calls_in_the_same_shape(self):
         script = [

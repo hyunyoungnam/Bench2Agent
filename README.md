@@ -51,15 +51,21 @@ guarantee a direct data download. Missing links mean no confirmed location.
 
 ## On the web (private test)
 
-The intended way to use Bench2Agent is a web address: open it, connect an AI
-account you already have (Claude Code or Codex on your machine, or a provider
-key), ask, and read the sources and verification marks. No Bench2Agent
-account. The test host is private for now; what each account route permits
-and what a public host can offer is in
-[docs/account-connections.md](docs/account-connections.md), the host itself in
-[docs/terminal.md](docs/terminal.md#hosted-conversation-web), and the
-real-model check in [docs/web-live-check.md](docs/web-live-check.md). The
-terminal and MCP routes below remain for developers and for agents.
+Two ways to use Bench2Agent, both with an AI account you already have and
+no Bench2Agent account or API key:
+
+- **Locally, in the terminal.** Install Bench2Agent next to a signed-in
+  Claude Code or Codex and run `bench2agent`; it answers with that login,
+  through its own pinned tools, and verifies every quote and figure. (The
+  code described here is newer than the 0.3.0 release on PyPI; until the next
+  release install from this repository.)
+- **On the web, hosted.** Open the address, connect your own Claude account,
+  ask. The test host is private for now.
+
+What each account route permits, what was executed and what remains before
+public operation is in [docs/account-connections.md](docs/account-connections.md);
+the host in [docs/terminal.md](docs/terminal.md#hosted-conversation-web); the
+real-model check in [docs/web-live-check.md](docs/web-live-check.md).
 
 ## Get started
 

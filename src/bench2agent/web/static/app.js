@@ -40,20 +40,34 @@
     async function refreshConnectors() {
       const d = await api("/api/connectors");
       state.connectors = d.connectors;
-      view.showConnectors(state.connectors, d.local_mode);
+      view.showConnectors(state.connectors);
       return state.connectors;
     }
 
-    async function login(invite, name) {
-      await api("/api/login", {method: "POST", body: JSON.stringify({invite, name})});
-      return connect();
+    // Connecting the visitor's own Claude account: the official CLI's sign-in,
+    // relayed. Output goes to this visitor's screen only; input goes back.
+    let connectCursor = 0, connectTimer = null;
+    async function connectStart() {
+      connectCursor = 0;
+      view.hideConnect();
+      const r = await api("/api/connect/claude/start", {method: "POST"});
+      view.showConnect("", r.state, false);
+      poll();
+      return r;
     }
-
-    async function logout() {
-      await api("/api/logout", {method: "POST"});
-      state.me = null; state.cid = null;
-      view.showSignedOut();
+    async function poll() {
+      if (connectTimer) clearTimeout(connectTimer);
+      try {
+        const r = await api("/api/connect/claude/read?since=" + connectCursor);
+        connectCursor = r.cursor;
+        view.showConnect(r.output, r.state, r.finished);
+        if (r.finished) { await refreshConnectors(); return; }
+      } catch (e) { view.showConnect("", "error", true); return; }
+      connectTimer = setTimeout(poll, 700);
     }
+    async function connectInput(text) { return api("/api/connect/claude/input", {method: "POST", body: JSON.stringify({text})}); }
+    async function connectCancel() { const r = await api("/api/connect/claude/cancel", {method: "POST"}); view.showConnect("", "cancelled", true); await refreshConnectors(); return r; }
+    async function disconnect() { const r = await api("/api/connect/claude/disconnect", {method: "POST"}); view.hideConnect(); await refreshConnectors(); return r; }
 
     async function refreshList() {
       const d = await api("/api/conversations");
@@ -62,7 +76,7 @@
     }
 
     async function newConversation(provider, model, language, connectorName) {
-      const c = await api("/api/conversations", {method: "POST", body: JSON.stringify({provider, model: model || null, language, connector: connectorName || "api"})});
+      const c = await api("/api/conversations", {method: "POST", body: JSON.stringify({provider, model: model || null, language, connector: connectorName || "claude"})});
       await refreshList();
       await open(c.cid);
       return c;
@@ -123,7 +137,8 @@
       return r;
     }
 
-    return {state, connect, start, login, logout, refreshList, refreshConnectors, newConversation, open, ask, cancel, isOpen};
+    return {state, connect, start, refreshList, refreshConnectors, newConversation, open, ask, cancel, isOpen,
+            connectStart, connectInput, connectCancel, disconnect};
   }
 
   // NDJSON lines from a fetch Response, as parsed objects.

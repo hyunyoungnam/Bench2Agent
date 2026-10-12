@@ -253,8 +253,15 @@ class WebStore:
             return [{k: r[k] for k in ("cid", "revision", "provider", "model", "title", "created_at", "updated_at", "connector")}
                     for r in con.execute("SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))]
 
+    def reset_provider_session(self, user_id: str, cid: str) -> None:
+        """After a cancel, a failure or an unverifiable turn the CLI's own
+        session is not resumed; the next question starts fresh from the
+        saved turns."""
+        with self._lock, self._con() as con:
+            con.execute("UPDATE conversations SET provider_session = NULL WHERE cid = ? AND user_id = ?", (cid, user_id))
+
     def append_turn(self, user_id: str, cid: str, *, messages: list, turn: dict, expected_version: int,
-                    provider_session: str | None = None) -> dict:
+                    provider_session: str | None = None, reset_session: bool = False) -> dict:
         """Save a finished, verified turn as a conditional update on the
         conversation's version number: the row must still be at the version
         the question started from, or the save is refused, so two overlapping
@@ -274,8 +281,9 @@ class WebStore:
                 title = row["title"] if doc["turns"][:-1] else (turn["q"][:80] or row["title"])
                 changed = con.execute(
                     "UPDATE conversations SET doc = ?, title = ?, updated_at = ?, version = version + 1, "
-                    "provider_session = COALESCE(?, provider_session) WHERE cid = ? AND version = ?",
-                    (json.dumps(doc, ensure_ascii=False), title, _now(), provider_session, cid, expected_version)).rowcount
+                    "provider_session = CASE WHEN ? THEN NULL ELSE COALESCE(?, provider_session) END WHERE cid = ? AND version = ?",
+                    (json.dumps(doc, ensure_ascii=False), title, _now(), 1 if reset_session else 0, provider_session or None,
+                     cid, expected_version)).rowcount
                 if changed != 1:
                     raise ValueError("The conversation changed while this answer was being produced; it was not saved.")
                 con.execute("COMMIT")

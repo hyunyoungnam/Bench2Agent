@@ -92,14 +92,119 @@ listed), which the checker does not derive. Quotes: 15 of 15 verbatim.
 The terminal, through the same layer (`bench2agent ask --connector claude`),
 gave the CIFAR-10 series with the same figures.
 
+## The two sides, as built now
+
+**Local = the terminal.** `pip install bench2agent` (the current code is not
+on PyPI yet; install from the repository or a built wheel until a release),
+then `bench2agent`. With no `--connector`, an interactive run looks for the
+Claude Code and Codex CLIs signed in on the machine and uses the one it finds
+(asks when both are); scripts (`bench2agent ask`) take `--connector` or the
+saved choice, else the API key. Bench2Agent's install is separate from the
+official CLIs' installs and logins. `--connector api` is the explicit
+alternative.
+
+**Hosted = the web.** `bench2agent web serve` offers one way to answer: the
+visitor's own Claude account in a runtime of their own on the host. A visitor
+opens the address, gets a session cookie (no name, no code), presses
+*Connect your Claude account*, and the host runs the official
+`claude auth login` in that runtime under a pseudo-terminal. What the CLI
+prints is relayed to that visitor's browser and what the visitor types is
+relayed back; the host records only the shape of the exchange (started, link
+shown, awaiting input, success or failure), never a link, code or token.
+Connecting is the visitor's access: without it they can read, not ask.
+Disconnect stops any running question, runs the official `claude auth logout`
+and removes the runtime directory; conversations stay.
+
+The headless sign-in, as the CLI runs it in an empty configuration directory
+(observed 2026-10-12, values masked):
+
+```
+Opening browser to sign in…
+If the browser didn't open, visit: <Anthropic sign-in URL>
+Paste code here if prompted >
+```
+
+The visitor opens that link in their own browser, signs in to Anthropic
+there, and the browser shows a code to paste back. Relaying that exchange is
+the part whose acceptability Bench2Agent has **not** confirmed with
+Anthropic; the inquiry draft below asks exactly that. The flow has run end to
+end only against a stub CLI in tests; the real sign-in needs a person at a
+browser, which the owner can perform from the page.
+
+### What one visitor's runtime is, and is not
+
+Each visitor gets `data/bench2agent/visitors/<id>/home/` (mode 0700) as HOME
+and working directory, with `home/.claude/` as `CLAUDE_CONFIG_DIR`, the
+CLI's own credential store. The process environment is an allowlist (PATH,
+locale, TLS and proxy variables) plus that HOME; the operator's keys, login
+and environment never enter it, which a test checks by injecting an operator
+key and asserting the CLI never sees it. The CLI runs with every built-in
+tool disabled (`--tools ""`), only Bench2Agent's pinned MCP server
+(`--strict-mcp-config`, six read-only tools), and no other settings source;
+a live check confirmed the shell is gone and the MCP tools remain.
+
+This is directory and environment isolation. It separates logins, sessions
+and settings between visitors; it is **not** an OS-user or container
+boundary, because this host cannot create users without a password. The
+stronger boundary is a deployment step. Limits: at most 50 runtimes and 4
+concurrent CLI processes per host, idle runtimes removed after 30 days
+(after the official logout); all configurable.
+
+### Same-account tests, stated plainly
+
+The automated tests use a stub CLI with two visitors and show that logins,
+runtimes and conversations are kept apart and that a second visitor is not
+connected when the first is. A real check with two different Anthropic
+accounts has not been done: the owner has one account. Signing one account
+into two runtimes would show directory and conversation separation, not
+that two accounts' authentication and usage are separated. That remains a
+beta item.
+
+### Recovery rules
+
+After a cancel, a failure, an unverifiable turn or a save conflict, the
+CLI's own session is not resumed. The next question starts a fresh session
+whose prompt carries only the turns Bench2Agent saved (question and answer
+text), so nothing from a cancelled or unsaved turn can reach the model. A
+turn is unverifiable when the MCP server left no log although the CLI
+called tools, the log is damaged, it has fewer calls than the CLI showed, or
+any call was answered from another revision; such a turn is saved as plain
+text without marks and says so.
+
+### Inquiry draft for Anthropic (no credentials, no account data)
+
+> We run Bench2Agent, an open-source research tool. We would like to host
+> the unmodified Claude Code binary so that each visitor of our web service
+> answers questions with their own Claude subscription. Each visitor gets an
+> isolated runtime (own HOME and CLAUDE_CONFIG_DIR, allowlisted environment,
+> built-in tools disabled, only our read-only MCP server). To sign in, we run
+> `claude auth login` in that runtime under a pseudo-terminal and relay its
+> terminal output to the visitor's browser and the visitor's keystrokes
+> back; the visitor completes sign-in on anthropic.com in their own browser
+> and pastes the code the page shows. We do not read, copy, store or forward
+> the resulting credential; the CLI keeps it in the visitor's runtime, and
+> disconnect runs `claude auth logout` and deletes the runtime. We do not pay
+> for or resell usage. Is this configuration consistent with the conditions
+> under "Can customers offer Claude Code in their products?", and is relaying
+> the sign-in exchange this way acceptable, or should the visitor interact
+> with the CLI through another means?
+
 ## Local vs. public, stated plainly
 
-Today Bench2Agent can be used **locally, without any Bench2Agent account or
-API key**: the web host on this machine (or the terminal) uses the Claude
-Code or Codex login already on the machine. A **public** web address can
-today offer only the API-key route (service-funded or user-supplied). The
-account-connected routes on a public host need, respectively, a per-visitor
-Claude Code runtime under Anthropic's Commercial Terms, and OpenAI's approval
-of a remotely hosted *Sign in with ChatGPT* app. Neither is built, and the
-page shows those connectors as unavailable on a hosted deployment rather than
-offering a button that is not backed.
+**Local terminal: done.** `bench2agent` on a machine with Claude Code or
+Codex signed in answers with that login, no Bench2Agent account or API key;
+verified with real logins on the three representative questions, a resumed
+follow-up and a cancel-then-follow-up on both CLIs.
+
+**Hosted minimal implementation: done, not yet exercised with a real
+sign-in.** The visitor runtime, the relayed official sign-in, the restricted
+CLI, the recorded tool log, verification on the conversation's revision,
+disconnect and limits exist and are tested against a stub CLI. The real
+sign-in from the page needs the owner at a browser.
+
+**Public operation: not done.** Needs the owner's agreement to Anthropic's
+Commercial Terms and an answer to the inquiry above, a stronger isolation
+boundary (OS users or containers) on a host that permits it, HTTPS in front,
+and a real two-account check. OpenAI's route is not offered on the web (a
+remotely hosted app needs OpenAI's approval); Codex remains a terminal
+connector.

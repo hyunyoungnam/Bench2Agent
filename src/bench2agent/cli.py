@@ -159,15 +159,23 @@ def _client_line(name: str, c: dict) -> str:
 
 def cmd_status(args, root: Path) -> int:
     from .data import status
+    from bench2agent.runtime import available_connectors
     result = {"version": __version__, "home": str(root), "data": status(root),
               "settings": settings(root), "api_keys_present": {
                   provider: bool(os.environ.get(name)) for provider, name in providers.KEY_NAMES.items()},
+              "connectors": [{k: c.get(k) for k in ("name", "label", "installed", "connected", "account", "detail")}
+                             for c in available_connectors()],
               "clients": client_status()}
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
         print(f"Bench2Agent {__version__} · {root}")
         print(json.dumps(result["data"], ensure_ascii=False, indent=2))
+        print("Ways to answer (Bench2Agent is installed separately from the official CLIs):")
+        for c in result["connectors"]:
+            state = ("connected" + (f" · {c['account']}" if c.get("account") else "")) if c["connected"] else (
+                "installed, not signed in" if c.get("installed") else "not installed")
+            print(f"  --connector {c['name']:6} {c['label']}: {state}")
         keys = ", ".join(f"{p}: {'set' if v else 'not set'}" for p, v in result["api_keys_present"].items())
         print(f"Standalone conversation (`bench2agent`): needs an API key — {keys}")
         print("Through an AI client (no API key; uses the client's own login):")
@@ -218,11 +226,36 @@ def load_session(args, root: Path, *, interactive: bool) -> Session:
         if not args.model:
             config["model"] = input(f"Model [{config['model']}]: ").strip() or config["model"]
         write_json(settings_path(root), config)
-    session = Session(root, **config, cid=cid, connector=getattr(args, "connector", None) or "api")
+    connector = getattr(args, "connector", None) or saved_connector(root) or default_connector(interactive)
+    session = Session(root, **config, cid=cid, connector=connector)
     if cid and ((args.provider and args.provider != session.doc["provider"]) or
                 (args.model and args.model != session.doc["model"])):
         raise ValueError("A resumed conversation keeps its provider and model. Start a new conversation to change them.")
     return session
+
+
+def saved_connector(root: Path) -> str | None:
+    return (settings(root) or {}).get("connector")
+
+
+def default_connector(interactive: bool) -> str:
+    """No API key by default: the official CLIs already signed in on this
+    machine come first. An interactive run looks for them and asks when more
+    than one is connected; a scripted run (`ask`, piped input) does not probe
+    the CLIs and takes `--connector` or the saved choice, else the API key."""
+    if not interactive:
+        return "api"
+    from bench2agent.runtime import available_connectors
+    connected = [c for c in available_connectors() if c["name"] in ("claude", "codex") and c.get("connected")]
+    if not connected:
+        return "api"
+    if len(connected) == 1:
+        return connected[0]["name"]
+    names = [c["name"] for c in connected]
+    print("Signed-in agent CLIs on this machine: " + ", ".join(f"{c['name']} ({c.get('account') or 'signed in'})" for c in connected),
+          file=sys.stderr)
+    choice = input(f"Answer with [{names[0]}]: ").strip() or names[0]
+    return choice if choice in names else names[0]
 
 
 def require_data(root: Path, *, interactive: bool):

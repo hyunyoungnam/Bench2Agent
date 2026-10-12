@@ -180,10 +180,59 @@ def recompute(tool: str, arg: str, cache: dict, run=None) -> list[float] | None:
     return vals
 
 
-def check(tool: str, arg: str, claim: str, cache: dict | None = None) -> dict:
+def canonical_args(arg) -> str:
+    """One spelling for a tool's arguments: parsed JSON re-serialised with
+    sorted keys, so an anchor and a log entry compare regardless of spacing
+    or key order. Unparseable text compares as itself."""
+    if isinstance(arg, (dict, list)):
+        return json.dumps(arg, sort_keys=True, ensure_ascii=False)
+    try:
+        return json.dumps(json.loads(arg), sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(arg).strip()
+
+
+class TurnLog:
+    """The tool calls one turn actually made, as the MCP server recorded
+    them (name, arguments, result, revision). Figures are checked against
+    these results: a number the model printed must come from a result the
+    model was shown, not from a call recomputed on its behalf."""
+
+    def __init__(self, entries: list[dict]):
+        self.entries = entries
+        self._by = {}
+        for e in entries:
+            self._by.setdefault((e.get("name"), canonical_args(e.get("arguments") or {})), []).append(e)
+
+    def results(self, tool: str, arg) -> list[dict] | None:
+        return self._by.get((tool, canonical_args(arg)))
+
+    def pool(self, tool: str, arg) -> list[float] | None:
+        found = self.results(tool, arg)
+        if found is None:
+            return None
+        out: list[float] = []
+        for e in found:
+            out.extend(benchmark_pool(e.get("result")))
+        return out
+
+    def all_values(self) -> list[float]:
+        out: list[float] = []
+        for e in self.entries:
+            out.extend(benchmark_pool(e.get("result")))
+        return out
+
+
+def check(tool: str, arg: str, claim: str, cache: dict | None = None, log: TurnLog | None = None) -> dict:
     cache = {} if cache is None else cache
-    vals = recompute(tool, arg, cache)
     nums = claimed(claim)
+    if log is not None:
+        vals = log.pool(tool, arg)
+        if vals is None:
+            return {"state": "no", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
+                    "why": "this turn did not call the tool with these arguments"}
+    else:
+        vals = recompute(tool, arg, cache)
     if vals is None:
         return {"state": "na", "tool": tool, "arg": arg, "n": len(nums),
                 "why": "not recomputable"}
@@ -230,9 +279,12 @@ def derived_set(vals: list[float]) -> set:
     return out
 
 
-def turn_pool(trail: list, cache: dict | None = None) -> tuple[list[float], list[str]]:
-    """Everything the deterministic tools of THIS turn return, recomputed."""
+def turn_pool(trail: list, cache: dict | None = None, log: TurnLog | None = None) -> tuple[list[float], list[str]]:
+    """Everything the tools of THIS turn returned: from the turn's own log
+    when there is one, recomputed from the trail otherwise."""
     cache = {} if cache is None else cache
+    if log is not None:
+        return log.all_values(), [f"{e.get('name')}:{canonical_args(e.get('arguments') or {})}" for e in log.entries]
     vals: list[float] = []
     used: list[str] = []
     for step in trail or []:

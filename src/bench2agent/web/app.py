@@ -1,11 +1,17 @@
-"""The hosted conversation: a web API over the same tools, the same model
-loop and the same verifier as the terminal, with users who own their
-conversations and one data revision per conversation.
+"""The hosted conversation: a web address where a visitor connects their
+own Claude account, asks, and reads sources and verification marks.
 
     GET  /                                   the page
-    GET  /api/me                             who the token is, today's attempts and answers
+    POST /api/session                        a visitor session (cookie); no sign-up, no name
+    GET  /api/me                             this visitor: today's attempts, limits
     GET  /api/revisions                      installed revisions; which new conversations get
-    GET  /api/conversations                  the caller's conversations
+    GET  /api/connectors                     what this host offers and the visitor's connection state
+    POST /api/connect/claude/start           run the official `claude auth login` in the visitor's runtime
+    GET  /api/connect/claude/read?since=N    what that process printed (relayed to this visitor only)
+    POST /api/connect/claude/input           what the visitor types into it
+    POST /api/connect/claude/cancel          stop the sign-in
+    POST /api/connect/claude/disconnect      stop any question, official logout, remove the runtime
+    GET  /api/conversations                  the visitor's conversations
     POST /api/conversations                  new one, pinned to the active revision now
     GET  /api/conversations/{cid}            history, turns, verification marks, timing
     POST /api/conversations/{cid}/ask        {question} -> NDJSON: progress events, then the turn
@@ -13,45 +19,44 @@ conversations and one data revision per conversation.
     DELETE /api/conversations/{cid}
     /mcp-server/...                          the HTTP MCP server this host calls; internal token only
 
-A web user arrives at the address, redeems an invite code once
-(`POST /api/login` with the code and a display name; the operator makes codes
-with `bench2agent web invite add`) and gets a browser session cookie
-(HttpOnly, SameSite=Lax); from then on the page just works. Cookie-
-authenticated state changes must also carry `X-Requested-With: Bench2Agent`,
-which a cross-site form cannot add. API clients may instead send
-`Authorization: Bearer <token>` from `bench2agent web user add`. Ownership
-is checked on read, ask, cancel and delete alike: another user's
-conversation does not exist.
+This is the hosted side of Bench2Agent; the local side is the terminal
+(`pip install bench2agent`, `bench2agent --connector claude|codex`). The
+web never uses the host's own Claude Code or Codex login: every question is
+answered by the visitor's own Claude account in an isolated runtime
+(`web/visitors.py`). Connecting is the visitor's access: a visitor who has
+not connected can read, but not ask.
+
+A visitor session is an HttpOnly, SameSite=Lax cookie opened on first visit,
+with no name, code or password; it only keeps conversations apart and owned.
+State-changing requests from a browser session must carry
+`X-Requested-With: Bench2Agent`, which the page adds and a cross-site form
+cannot. Scripts may authenticate with a bearer token from
+`bench2agent web user add` (an operator path).
 
 A question is a job with one state at a time, changed only under its lock:
 running -> cancelled, or running -> committing -> saved | failed. Cancel is
-accepted only while running, and a job that has reached committing can no
-longer be cancelled, so an accepted cancel is never followed by a save. The
-job, not the browser connection, holds the conversation's running slot: a
-dropped connection releases nothing until the job ends.
+accepted only while running; a job that has reached committing can no longer
+be cancelled, so an accepted cancel is never followed by a save. The job, not
+the browser connection, holds the conversation's running slot.
 
 The daily limit counts attempts (the model was called), reserved in one
-database transaction before the first model call, so two requests with one
-attempt left cannot both pass. Each attempt records outcome, duration and
-tool calls, never a credential.
+database transaction before the first model call. Each attempt records
+outcome, duration (model / tools / verification) and tool calls, never a
+credential.
 
-The model loop runs in a worker thread with the conversation's revision bound
-to it (`mcp.using`); its tools are reached over HTTP MCP at the endpoint of
-that revision on the server this host mounts, with an internal bearer token
-generated at startup and sent on every internal request (initialize, listing,
-calls). The mount accepts nothing else, and the token is never logged or
-shown. A conversation created on v1 keeps v1 after v2 is published; a missing
-v1 is a recovery error, never an answer from v2.
+The visitor's Claude Code owns the model/tool loop. Bench2Agent hands it the
+stdio MCP server pinned to the conversation's revision, with every built-in
+tool disabled and every other MCP configuration ignored, and the server logs
+every call (name, arguments, result, revision). That log is the trail; the
+answer's figures are checked against the results in it, and a turn whose log
+is missing, damaged, incomplete or from another revision is saved as
+unverifiable, without marks. After a cancel, a failure, an unverifiable turn
+or a save conflict, the CLI's own session is not resumed: the next question
+starts a fresh session carrying only the turns Bench2Agent saved.
 
-Model credentials are deployment configuration (BENCH2AGENT_WEB_CREDENTIALS):
-`service` means the operator configured a provider key on the server and the
-host uses it for every user's questions, under the per-user attempt limits;
-the key is never sent to a user. `user` means each question carries the
-user's own provider key in `X-Model-Key`: it travels from the browser through
-this backend to the model provider for that request and is neither stored
-nor logged. Unset, the mode is `service` when the host environment holds a
-provider key, else `user`. The operator's coding-CLI login is never used
-for web users.
+The API-key connector (Bench2Agent's own loop) is an operator option
+(BENCH2AGENT_WEB_API_CONNECTOR=1 with BENCH2AGENT_WEB_CREDENTIALS) for
+checking a host without a Claude login; it is not part of the visitor's path.
 """
 from __future__ import annotations
 
@@ -69,13 +74,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from pydantic import BaseModel, Field
 
 from bench2agent import providers
-from bench2agent.core import chat, mcp, revisions
+from bench2agent.core import chat, figures, mcp, revisions
 from bench2agent.core.benchmarks import BenchmarkStore
 from bench2agent.core.mcp_http import HttpMcp
 from bench2agent.core.policy import BENCHMARK_SYSTEM
 from bench2agent.core.verify import Verifier
 from bench2agent.web.mcp_client import HttpMcpTools
 from bench2agent.web.store import WebStore
+from bench2agent.web.visitors import VisitorError, VisitorRuntimes
 
 STATIC = Path(__file__).with_name("static")
 
@@ -98,29 +104,25 @@ class Settings:
         if self.credentials not in ("user", "service"):
             raise ValueError("BENCH2AGENT_WEB_CREDENTIALS must be user or service")
         self.cookie_secure = os.environ.get("BENCH2AGENT_WEB_SECURE_COOKIES", "").lower() in ("1", "true", "yes")
+        # the operator's check option; visitors use their own Claude account
+        self.api_connector = os.environ.get("BENCH2AGENT_WEB_API_CONNECTOR", "").lower() in ("1", "true", "yes")
+        self.max_runtimes = int(os.environ.get("BENCH2AGENT_WEB_MAX_RUNTIMES", "50"))
+        self.max_processes = int(os.environ.get("BENCH2AGENT_WEB_MAX_PROCESSES", "4"))
+        self.idle_days = int(os.environ.get("BENCH2AGENT_WEB_IDLE_DAYS", "30"))
         self.turns_per_day = turns_per_day if turns_per_day is not None else int(os.environ.get("BENCH2AGENT_WEB_TURNS_PER_DAY", "100"))
         self.concurrent_per_user = concurrent_per_user
-        # loopback = this machine's owner is the only visitor: the host's own
-        # Claude Code / Codex logins may answer. Anything else is hosted: those
-        # connectors need one isolated login per visitor, which is not built.
-        self.local_mode = host in ("127.0.0.1", "localhost", "::1")
-        access = os.environ.get("BENCH2AGENT_WEB_ACCESS") or ("open" if self.local_mode else "invite")
-        if access not in ("open", "invite"):
-            raise ValueError("BENCH2AGENT_WEB_ACCESS must be open or invite")
-        self.access = access
 
 
 class Ask(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
 
 
-class Login(BaseModel):
-    invite: str = Field(min_length=1, max_length=200)
-    name: str = Field(min_length=1, max_length=80)
+class LoginInput(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
 
 
 class NewConversation(BaseModel):
-    connector: str = Field(default="api", pattern="^(api|claude|codex)$")
+    connector: str = Field(default="claude", pattern="^(api|claude)$")
     provider: str = Field(default="anthropic", pattern="^(openai|anthropic)$")
     model: str | None = Field(default=None, max_length=120)
     language: str = Field(default="auto", pattern="^(auto|ko|en)$")
@@ -185,6 +187,8 @@ class InternalAuth:
 def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings(root)
     web = WebStore(root / "data/bench2agent/web.sqlite")
+    visitors = VisitorRuntimes(root, max_runtimes=settings.max_runtimes, max_processes=settings.max_processes,
+                               idle_days=settings.idle_days)
     http_mcp = HttpMcp(root, host=settings.host)
     internal_token = secrets.token_urlsafe(32)
     running: dict[str, Job] = {}
@@ -196,7 +200,7 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
             yield
 
     app = FastAPI(title="Bench2Agent", lifespan=lifespan, docs_url=None, redoc_url=None)
-    app.state.settings, app.state.web, app.state.http_mcp = settings, web, http_mcp
+    app.state.settings, app.state.web, app.state.http_mcp, app.state.visitors = settings, web, http_mcp, visitors
     app.mount("/mcp-server", InternalAuth(http_mcp, internal_token))
 
     def mcp_headers() -> dict:
@@ -251,54 +255,92 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     def app_js():
         return Response((STATIC / "app.js").read_text(encoding="utf-8"), media_type="application/javascript")
 
-    def connectors() -> list[dict]:
-        from bench2agent.runtime import available_connectors
-        out = []
-        for c in available_connectors():
-            if c["name"] == "api":
-                # service mode: any provider key on the host; user mode: a key per request
-                has_key = any(providers.credential(p) for p in providers.KEY_NAMES)
-                enabled = settings.credentials == "user" or has_key
-                c = {**c, "connected": enabled}
-                reason = None if enabled else "no provider key configured on this host"
-            else:
-                enabled = settings.local_mode and c.get("installed", False)
-                reason = (None if enabled else ("not installed on this host" if not c.get("installed")
-                          else "a hosted service would need one isolated login per visitor; not available yet"))
-            out.append({**c, "enabled": enabled, "disabled_reason": reason,
-                        "login": __import__("bench2agent.runtime", fromlist=["connector"]).connector(c["name"]).login() if c["name"] != "api" else None})
+    def connectors(user: dict) -> list[dict]:
+        """What this host offers this visitor. The host's own logins are never
+        among them: `claude` means the visitor's runtime and account."""
+        from bench2agent.runtime.cli_agents import CLAUDE_PUBLIC_HOSTING
+        st = visitors.status(user["user_id"])
+        out = [{"name": "claude", "label": "Claude Code (your Claude login)", "enabled": st["available"], "connected": st["connected"],
+                "account": st.get("account"), "detail": st.get("detail"), "login_state": st.get("login_state"), "busy": st.get("busy"),
+                "disabled_reason": None if st["available"] else st.get("detail"),
+                "how": "the official Claude Code binary in a runtime of your own on this host, signed in through Anthropic's own flow",
+                "public_hosting": CLAUDE_PUBLIC_HOSTING}]
+        if settings.api_connector:
+            has_key = any(providers.credential(p) for p in providers.KEY_NAMES)
+            enabled = settings.credentials == "user" or has_key
+            out.append({"name": "api", "label": "Provider API key (operator option)", "enabled": enabled, "connected": enabled,
+                        "account": None, "detail": "key per request" if settings.credentials == "user" else ("host key" if has_key else "no key on this host"),
+                        "disabled_reason": None if enabled else "no provider key configured on this host",
+                        "how": "Bench2Agent's own tool loop with a provider API key", "public_hosting": "the key owner's own agreement"})
         return out
+
+    def connector_usable(user: dict, name: str) -> tuple[bool, str | None]:
+        """Re-checked at every question, not only at conversation creation."""
+        for c in connectors(user):
+            if c["name"] == name:
+                if not c["enabled"]:
+                    return False, c["disabled_reason"] or "not available on this host"
+                if not c["connected"]:
+                    return False, ("Connect your Claude account first." if name == "claude" else "No provider key.")
+                return True, None
+        return False, f"Connector {name} is not offered on this host."
 
     @app.get("/api/connectors")
     def list_connectors(user: dict = Depends(current_user)):
-        return {"connectors": connectors(), "local_mode": settings.local_mode}
+        return {"connectors": connectors(user), "runtime_limits": {"runtimes": settings.max_runtimes, "processes": settings.max_processes,
+                                                                   "idle_days": settings.idle_days}}
+
+    # -- the visitor's Claude account: the official CLI's own sign-in, relayed ----
+    @app.post("/api/connect/claude/start")
+    def connect_start(user: dict = Depends(current_user)):
+        try:
+            return visitors.login_start(user["user_id"])
+        except VisitorError as exc:
+            raise HTTPException(429 if "limit" in str(exc) else 400, str(exc))
+
+    @app.get("/api/connect/claude/read")
+    def connect_read(since: int = 0, user: dict = Depends(current_user)):
+        try:
+            return visitors.login_read(user["user_id"], since)
+        except VisitorError as exc:
+            raise HTTPException(404, str(exc))
+
+    @app.post("/api/connect/claude/input")
+    def connect_input(body: LoginInput, user: dict = Depends(current_user)):
+        try:
+            return visitors.login_input(user["user_id"], body.text)
+        except VisitorError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.post("/api/connect/claude/cancel")
+    def connect_cancel(user: dict = Depends(current_user)):
+        return visitors.login_cancel(user["user_id"])
+
+    @app.post("/api/connect/claude/disconnect")
+    def connect_disconnect(user: dict = Depends(current_user)):
+        def stop_running():
+            stopped = False
+            with running_lock:
+                jobs = [j for cid, j in running.items() if j.user_id == user["user_id"]]
+            for j in jobs:
+                stopped = j.cancel() or stopped
+            return stopped
+        return visitors.disconnect(user["user_id"], stop_running=stop_running)
 
     @app.post("/api/session")
     def open_session(response: Response, x_requested_with: str | None = Header(default=None),
                      b2a_session: str | None = Cookie(default=None)):
-        """Open access: a visitor gets a session without signing up. The AI
-        account they connect is the identity that matters."""
+        """A visitor session with no sign-up: the Claude account the visitor
+        connects is the identity that matters; this cookie only keeps their
+        conversations apart."""
         if x_requested_with != "Bench2Agent":
             raise HTTPException(403, "Needs X-Requested-With: Bench2Agent.")
         existing = web.authenticate_session(b2a_session)
         if existing:
             return {"name": existing["name"], "new": False}
-        if settings.access != "open":
-            raise HTTPException(403, "This host needs an invite code to start.")
         opened = web.anonymous_session()
         set_session(response, opened["session"])
         return {"name": opened["name"], "new": True}
-
-    @app.post("/api/login")
-    def login(body: Login, response: Response, x_requested_with: str | None = Header(default=None)):
-        if x_requested_with != "Bench2Agent":
-            raise HTTPException(403, "Sign-in needs X-Requested-With: Bench2Agent.")
-        try:
-            opened = web.redeem_invite(body.invite, body.name)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc))
-        set_session(response, opened["session"])
-        return {"name": opened["name"]}
 
     @app.post("/api/logout")
     def logout(response: Response, user: dict = Depends(current_user), b2a_session: str | None = Cookie(default=None)):
@@ -309,8 +351,7 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     @app.get("/api/me")
     def me(user: dict = Depends(current_user)):
         usage = web.usage_today(user["user_id"])
-        return {"name": user["name"], "auth": user["auth"], "credentials": settings.credentials, "access": settings.access,
-                "local_mode": settings.local_mode,
+        return {"name": user["name"], "auth": user["auth"], "credentials": settings.credentials,
                 "turns_per_day": settings.turns_per_day, "attempts_today": usage["attempts"], "answers_today": usage["answers"],
                 "turns_today": usage["attempts"]}
 
@@ -336,12 +377,9 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
             raise HTTPException(503, str(exc))
         if rid is None:
             raise HTTPException(503, "No data revision is installed on this host.")
-        enabled = {c["name"]: c for c in connectors() if c["enabled"]}
-        if body.connector not in enabled:
-            reason = next((c["disabled_reason"] for c in connectors() if c["name"] == body.connector), "unknown connector")
-            raise HTTPException(400, f"Connector {body.connector} is not available here: {reason}")
-        if body.connector != "api" and not enabled[body.connector]["connected"]:
-            raise HTTPException(400, f"{enabled[body.connector]['label']} is not signed in: {enabled[body.connector]['login']['command']}")
+        ok, why = connector_usable(user, body.connector)
+        if not ok:
+            raise HTTPException(400, f"Connector {body.connector} is not available here: {why}")
         model = body.model or (providers.DEFAULT_MODELS[body.provider] if body.connector == "api" else "")
         return public(web.create_conversation(user["user_id"], revision=rid, provider=body.provider, model=model,
                                               language=body.language, connector=body.connector))
@@ -378,7 +416,10 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
     @app.post("/api/conversations/{cid}/ask")
     def ask(cid: str, body: Ask, user: dict = Depends(current_user), x_model_key: str | None = Header(default=None)):
         conv = owned(user, cid)
-        if conv.get("connector", "api") == "api" and settings.credentials == "user" and not x_model_key:
+        ok, why = connector_usable(user, conv.get("connector") or "claude")
+        if not ok:
+            raise HTTPException(409, why)
+        if conv.get("connector") == "api" and settings.credentials == "user" and not x_model_key:
             raise HTTPException(400, "This host uses your own model credential: send it as X-Model-Key for each question. "
                                      "It is bound to this request only and never stored.")
         with running_lock:
@@ -396,7 +437,7 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
             with running_lock:
                 if running.get(cid) is job:
                     del running[cid]
-        threading.Thread(target=_run_turn, args=(root, settings, web, user, conv, body.question, keys, job, mcp_headers(), release),
+        threading.Thread(target=_run_turn, args=(root, settings, web, user, conv, body.question, keys, job, mcp_headers(), release, visitors),
                          daemon=True).start()
 
         def stream():
@@ -412,7 +453,7 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
 
 
 def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: dict, question: str, keys: dict | None,
-              job: Job, headers: dict, release) -> None:
+              job: Job, headers: dict, release, visitors: VisitorRuntimes) -> None:
     """One question, start to finish, on the conversation's revision."""
     emit = job.events.put
     rid = conv["revision"]
@@ -455,49 +496,66 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
                 answer = providers.generate(conv["provider"], conv["model"], system, conv["messages"], question, emit,
                                             tools=tools, cancelled=job.cancelled)
                 text, trail, messages, usage, provider_session = answer["text"], answer["trail"], answer["messages"], answer["usage"], None
+                unverifiable, log = None, figures.TurnLog(tools.log) if hasattr(tools, "log") else None
             else:
-                # the official CLI owns the loop; the pinned stdio MCP server records it
-                from bench2agent.runtime import ConnectorError, connector
+                # the visitor's own Claude Code owns the loop in the visitor's
+                # runtime; the pinned stdio MCP server records every call
+                from bench2agent.runtime import ConnectorError
+                visitors.acquire(user["user_id"])
                 try:
-                    run = connector(name).ask(root=root, revision=rid, question=question, system=system, history=None,
-                                              provider_session=conv.get("provider_session"), emit=emit,
-                                              cancelled=job.cancelled, tool_log=tool_log)
+                    run = visitors.connector(user["user_id"]).ask(
+                        root=root, revision=rid, question=question, system=system, history=conv["turns"],
+                        provider_session=conv.get("provider_session"), emit=emit, cancelled=job.cancelled, tool_log=tool_log)
                 except ConnectorError as exc:
                     if str(exc) == "cancelled":
                         raise providers.Cancelled("The question was cancelled; nothing was saved.") from None
                     raise providers.ProviderError(str(exc)) from None
+                finally:
+                    visitors.release(user["user_id"])
                 tools = type("T", (), {"calls": len(run.trail), "seconds": 0.0})()
                 text, trail, messages, usage, provider_session = run.text, run.trail_for_turn(), conv["messages"], run.usage, run.provider_session
+                unverifiable = run.unverifiable
+                log = figures.TurnLog(run.trail)
             marks["loop"] = time.perf_counter() - loop_started
             if job.cancelled():
                 raise providers.Cancelled("The question was cancelled; nothing was saved.")
             verify_started = time.perf_counter()
-            corpus = mcp.Store()
-            segs, verified = chat.segment(text, corpus, Verifier(corpus), trail)
+            if unverifiable:
+                # no marks at all: the answer is shown as text the host could not check
+                segs, verified = [{"t": "p", "s": text}], None
+            else:
+                corpus = mcp.Store()
+                segs, verified = chat.segment(text, corpus, Verifier(corpus), trail, log)
             marks["verify"] = time.perf_counter() - verify_started
         if not job.commit():                                     # a cancel accepted during verification wins
             raise providers.Cancelled("The question was cancelled; nothing was saved.")
         snapshot = store.data()
-        turn = {"q": question, "segs": segs, "verified": verified, "trail": trail, "usage": usage, "connector": name,
-                "tool_log": tool_log.name if tool_log.exists() else None,
+        turn = {"q": question, "segs": segs, "verified": verified, "unverifiable": unverifiable, "trail": trail, "usage": usage,
+                "connector": name, "tool_log": tool_log.name if tool_log.exists() else None,
                 "timing": {"attempt": job.attempt_id, **breakdown()},
                 "on": {"benchmarks": {k: snapshot.get(k) for k in ("snapshot_id", "revision", "generated_at", "source")}}}
+        # an unverifiable turn is kept, but the CLI's session is not resumed after it
         saved = web.append_turn(user["user_id"], conv["cid"], messages=messages, turn=turn,
-                                expected_version=conv["version"], provider_session=provider_session)
+                                expected_version=conv["version"],
+                                provider_session=provider_session if not unverifiable else "",
+                                reset_session=bool(unverifiable))
         job.finish("saved")
-        finish("saved", usage)
+        finish("saved" if not unverifiable else "unverifiable", usage)
         emit({"t": "turn", "turn": turn, "conversation": {k: saved[k] for k in ("cid", "title", "revision", "updated_at", "version")}})
     except providers.Cancelled as exc:
         job.finish("cancelled")
         finish("cancelled")
+        web.reset_provider_session(user["user_id"], conv["cid"])
         emit({"t": "error", "cancelled": True, "message": str(exc)})
     except (providers.ProviderError, ValueError) as exc:
         job.finish("failed")
         finish("failed")
+        web.reset_provider_session(user["user_id"], conv["cid"])
         emit({"t": "error", "message": str(exc)})
     except Exception:  # noqa: BLE001 — never a traceback or a credential to the client
         job.finish("failed")
         finish("failed")
+        web.reset_provider_session(user["user_id"], conv["cid"])
         emit({"t": "error", "message": "The question failed inside the host; nothing was saved."})
     finally:
         release()

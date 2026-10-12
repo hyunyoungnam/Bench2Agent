@@ -45,6 +45,10 @@ class TerminalTests(unittest.TestCase):
         self.path.write_text(json.dumps(snapshot()), encoding="utf-8")
         data.install(self.root, file=str(self.path))   # the explicit one-time registration
         self.store = BenchmarkStore(self.root)
+        # these tests exercise the API connector; the machine's own agent CLIs stay out
+        self.no_clis = patch("bench2agent.runtime.available_connectors", return_value=[])
+        self.no_clis.start()
+        self.addCleanup(self.no_clis.stop)
         self.patch = patch.object(mcp, "B", self.store)
         self.patch.start()
         self.addCleanup(self.patch.stop)

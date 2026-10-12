@@ -35,7 +35,7 @@ ACTIVE_YEARS = tuple(sorted({y for _, y in ACTIVE}))
 VENUES = {
     "icml": "ICML", "iclr": "ICLR", "neurips": "NeurIPS",
     "cvpr": "CVPR", "iccv": "ICCV", "eccv": "ECCV",
-    "aaai": "AAAI", "acl": "ACL", "emnlp": "EMNLP", "corl": "CoRL",
+    "aaai": "AAAI", "acl": "ACL", "emnlp": "EMNLP", "naacl": "NAACL", "corl": "CoRL",
 }
 
 # The collection scope for benchmark usage (owner, 2026-10-02): the three most
@@ -54,6 +54,13 @@ EDITIONS = (
     ("ACL", 2024), ("ACL", 2025), ("ACL", 2026),
     ("EMNLP", 2023), ("EMNLP", 2024), ("EMNLP", 2025),
     ("CoRL", 2023), ("CoRL", 2024), ("CoRL", 2025),
+    # Expansion requested 2026-10-12 (owner): the NLP venues back to 2020 and
+    # NAACL (held 2021, 2022, 2024, 2025; none in 2020 or 2023). Collected from
+    # the ACL Anthology dump. Full text for papers before December 2023 is a
+    # separate decision: arXiv's own HTML rendering starts then.
+    ("ACL", 2020), ("ACL", 2021), ("ACL", 2022), ("ACL", 2023),
+    ("EMNLP", 2020), ("EMNLP", 2021), ("EMNLP", 2022),
+    ("NAACL", 2021), ("NAACL", 2022), ("NAACL", 2024), ("NAACL", 2025),
 )
 
 

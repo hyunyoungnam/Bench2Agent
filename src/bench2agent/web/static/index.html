@@ -36,17 +36,16 @@
     <span class="muted">Which benchmarks the field evaluates on, from the papers. Counts are papers, never quality.</span>
   </header>
 
-  <section id="login" class="row" hidden>
-    <span class="muted">This host needs an invite code.</span>
-    <input id="invite" type="password" placeholder="invite code" size="28">
-    <input id="name" placeholder="your name" size="18">
-    <button id="signin" class="primary">Continue</button>
-    <span id="loginStatus" class="muted"></span>
-  </section>
+  <section id="login" class="row" hidden><span id="loginStatus" class="error"></span></section>
 
   <section id="setup" hidden>
     <div class="row"><span id="who" class="muted"></span></div>
     <div id="connectors" class="row"></div>
+    <section id="connectPanel" hidden>
+      <div class="muted">Sign in to Claude Code with your own account. This is the official CLI's sign-in running in a runtime of your own on this host; what it prints appears below and what you type goes to it. Open the link it shows in your browser, finish signing in there, and paste the code it gives you if it asks.</div>
+      <pre id="connectOut" class="events" style="max-height:220px; overflow:auto; border:1px solid var(--line); padding:8px"></pre>
+      <div class="row"><input id="connectInput" placeholder="type here when the sign-in asks for input" size="48"><button id="connectSend">Send</button><button id="connectCancel">Cancel sign-in</button><span id="connectState" class="muted"></span></div>
+    </section>
     <div class="row">
       <select id="connector"></select>
       <span id="apiOptions">
@@ -89,9 +88,13 @@
       if (s.t === "n") return `<span class="fig ${s.v}" title="${esc(s.tool)} ${esc(s.arg)}">${esc(s.s)}</span>`;
       return esc(s.s || "");
     }).join("");
-    const v = t.verified || {};
     const on = (t.on && t.on.benchmarks) || {};
     const tm = t.timing || {};
+    if (t.unverifiable) {
+      return `<div class="turn"><div class="q">${esc(t.q)}</div><div class="muted" style="border-left:3px solid var(--bad); padding:4px 8px">This answer could not be verified (${esc(t.unverifiable)}); it is shown as plain text with no marks.</div><div>${esc("".concat(...t.segs.map(s => s.s || "")))}</div>
+        <details><summary>Data revision ${esc(on.revision||"?")}</summary><div class="muted">Tools recorded: ${(t.trail||[]).map(x => esc(x.name + " " + x.arg)).join("<br>") || "none"}</div></details></div>`;
+    }
+    const v = t.verified || {};
     const timing = tm.duration_ms != null ? ` · ${(tm.duration_ms/1000).toFixed(1)} s (model ${((tm.model_ms||0)/1000).toFixed(1)}, tools ${((tm.tool_ms||0)/1000).toFixed(1)}, checks ${((tm.verify_ms||0)/1000).toFixed(1)}), ${tm.tool_calls||0} tool calls` : "";
     return `<div class="turn"><div class="q">${esc(t.q)}</div><div>${parts}</div>
       <details><summary>Sources and checks: ${v.passed||0}/${v.checked||0} quotes verified, ${v.fpassed||0}/${v.fchecked||0} figures recomputed · data revision ${esc(on.revision||on.snapshot_id||"?")}${timing}</summary>
@@ -104,13 +107,17 @@
       $("who").textContent = `${me.attempts_today}/${me.turns_per_day} questions today`;
       $("modelKey").hidden = me.credentials !== "user";
     },
-    showConnectors(list, localMode) {
+    showConnectors(list) {
       $("connectors").innerHTML = list.map(c => {
         const state = !c.enabled ? `<span class="muted">unavailable here: ${esc(c.disabled_reason || "")}</span>`
-          : c.connected ? `<span class="fig ok">connected${c.account ? " · " + esc(c.account) : ""}</span>`
-          : `<span class="fig bad">not connected</span>${c.login && c.login.command ? ` <span class="muted">· run <code>${esc(c.login.command)}</code> on this machine, then reload</span>` : ""}`;
+          : c.connected ? `<span class="fig ok">connected${c.account ? " · " + esc(c.account) : ""}</span> <button data-act="disconnect">Disconnect</button>`
+          : `<span class="fig bad">not connected</span> ${c.name === "claude" ? `<button data-act="connect" class="primary">Connect your Claude account</button>` : ""}`;
         return `<div><strong>${esc(c.label)}</strong> ${state}</div>`;
       }).join("");
+      const connectBtn = $("connectors").querySelector('[data-act="connect"]');
+      if (connectBtn) connectBtn.onclick = () => app.connectStart().catch(e => { $("connectState").textContent = e.message; });
+      const discBtn = $("connectors").querySelector('[data-act="disconnect"]');
+      if (discBtn) discBtn.onclick = () => app.disconnect().catch(e => { $("status").textContent = e.message; });
       const usable = list.filter(c => c.enabled && (c.connected || c.name === "api"));
       $("connector").innerHTML = usable.map(c => `<option value="${esc(c.name)}">${esc(c.label)}</option>`).join("")
         || `<option value="">no connection available</option>`;
@@ -119,6 +126,14 @@
       $("newConv").disabled = usable.length === 0;
     },
     showSignedOut(message) { $("setup").hidden = true; $("chat").hidden = true; $("login").hidden = false; $("loginStatus").textContent = message || ""; },
+    showConnect(out, state, finished) {
+      $("connectPanel").hidden = false;
+      if (out) { $("connectOut").textContent += out; $("connectOut").scrollTop = $("connectOut").scrollHeight; }
+      $("connectState").textContent = {started: "starting…", url_shown: "open the link above in your browser", awaiting_code: "paste the code the browser gave you",
+        exited_ok: "signed in", exited_failed: "sign-in did not complete", cancelled: "cancelled"}[state] || state || "";
+      if (finished) { $("connectInput").disabled = true; }
+    },
+    hideConnect() { $("connectPanel").hidden = true; $("connectOut").textContent = ""; $("connectInput").disabled = false; },
     showList(convs, current, running) {
       $("convs").innerHTML = convs.map(c => `<button data-cid="${esc(c.cid)}" class="${c.cid === current ? "current" : ""}" title="revision ${esc(c.revision)}">${esc(c.title)}${running.includes(c.cid) ? " …" : ""}</button>`).join("");
       $("convs").querySelectorAll("button").forEach(b => b.onclick = () => app.open(b.dataset.cid).catch(e => { $("status").textContent = e.message; }));
@@ -143,7 +158,8 @@
 
   const app = B2AApp.create({fetch: (p, o) => fetch(p, o), ndjson: B2AApp.ndjson, abort: () => new AbortController(), view});
   app.start();
-  $("signin").onclick = () => app.login($("invite").value.trim(), $("name").value.trim()).catch(e => { $("loginStatus").textContent = e.message; });
+  $("connectSend").onclick = () => { const t = $("connectInput").value; $("connectInput").value = ""; app.connectInput(t + "\n").catch(e => { $("connectState").textContent = e.message; }); };
+  $("connectCancel").onclick = () => app.connectCancel().catch(e => { $("connectState").textContent = e.message; });
   $("newConv").onclick = () => app.newConversation($("provider").value, $("model").value, $("language").value, $("connector").value).catch(e => { $("status").textContent = e.message; });
   $("cancelBtn").onclick = () => app.cancel(app.state.cid).catch(e => { $("status").textContent = e.message; });
   $("askBtn").onclick = () => { const q = $("question").value.trim(); if (!q) return; $("events").textContent = ""; $("status").textContent = "asking…";
