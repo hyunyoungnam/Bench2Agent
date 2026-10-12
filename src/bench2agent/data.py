@@ -32,18 +32,38 @@ def validate(path: Path) -> dict:
 
 
 def status(root: Path) -> dict:
-    from bench2agent.core.repository import DATABASE, counts, file_sha256, SqliteRepository
-    path = root / MEMBER
-    out = {"available": False, "path": str(path)} if not path.exists() else {"available": True, "path": str(path), **validate(path)}
-    db = path.with_name(DATABASE)
+    """What is installed and what the store would answer from. Top-level
+    fields describe the resolved backend (BENCH2AGENT_STORE); `json` and
+    `sqlite` describe each file on its own."""
+    from bench2agent.core.benchmarks import BenchmarkStore
+    from bench2agent.core.repository import DATABASE, SqliteRepository, counts, file_sha256
+    json_path = root / MEMBER
+    db = json_path.with_name(DATABASE)
+    out = {"requested_backend": os.environ.get("BENCH2AGENT_STORE", "json")}
+    out["json"] = ({"available": True, "path": str(json_path), **validate(json_path)} if json_path.exists()
+                   else {"available": False, "path": str(json_path)})
     if db.exists():
-        meta = SqliteRepository(db).meta()
-        out["sqlite"] = {"path": str(db), "db_schema_version": meta.get("db_schema_version"),
-                         "snapshot_id": meta.get("snapshot_id"), "sha256": file_sha256(db), **counts(db),
-                         # the two files describe the same extraction only when their ids agree
-                         "matches_json": out.get("snapshot_id") == meta.get("snapshot_id") if out["available"] else None}
+        try:
+            with SqliteRepository(db).session() as repo:
+                ident = repo.identity()
+            out["sqlite"] = {"available": True, "path": str(db), "sha256": file_sha256(db), **ident, **counts(db),
+                             # the two files describe the same extraction only when the DB was built from this JSON
+                             "matches_json": (ident["source_sha256"] == file_sha256(json_path)) if json_path.exists() else None}
+        except ValueError as exc:
+            out["sqlite"] = {"available": False, "path": str(db), "error": str(exc)}
     else:
-        out["sqlite"] = {"path": str(db), "available": False}
+        out["sqlite"] = {"available": False, "path": str(db)}
+    try:
+        resolved = BenchmarkStore(root).data()
+    except ValueError as exc:
+        return {**out, "available": False, "reason": str(exc)}
+    backend = resolved["backend"]
+    detail = out.get(backend) or {}
+    out.update({"available": resolved["available"], "backend": backend, "path": detail.get("path"),
+                **{k: resolved.get(k) for k in ("snapshot_id", "generated_at", "source")},
+                **{k: detail.get(k) for k in ("editions", "benchmarks", "paper_observations")}})
+    if resolved.get("reason"):
+        out["reason"] = resolved["reason"]
     return out
 
 
@@ -54,6 +74,21 @@ def build_sqlite(root: Path) -> dict:
     if not source.exists():
         raise ValueError("No benchmark snapshot installed; run bench2agent data install first.")
     return import_snapshot(source, source.with_name(DATABASE))
+
+
+def _is_sqlite(path: Path) -> bool:
+    with path.open("rb") as fh:
+        return fh.read(16) == b"SQLite format 3\x00"
+
+
+def _check_sqlite(path: Path) -> dict:
+    from bench2agent.core.repository import DB_SCHEMA_VERSION, SqliteRepository
+    from bench2agent.core.repository import SOURCE as DB_SOURCE
+    with SqliteRepository(path).session() as repo:
+        ident = repo.identity()
+    if ident["db_schema_version"] != DB_SCHEMA_VERSION or ident["source"] != DB_SOURCE:
+        raise ValueError("Unsupported benchmark database schema or extraction source.")
+    return ident
 
 
 def install(root: Path, *, file: str | None = None, url: str | None = None, sha256: str | None = None) -> dict:
@@ -80,6 +115,18 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
         if sha256 and digest(source).lower() != sha256.lower():
             raise ValueError("Data file SHA-256 does not match; existing data was kept.")
         pending = stage / SNAPSHOT
+        if not tarfile.is_tarfile(source) and _is_sqlite(source):
+            # a database alone is a complete install for BENCH2AGENT_STORE=sqlite|auto
+            from bench2agent.core.repository import DATABASE, file_sha256
+            staged = stage / DATABASE
+            shutil.copyfile(source, staged)
+            ident = _check_sqlite(staged)
+            db_target = target.with_name(DATABASE)
+            os.replace(staged, db_target)
+            checksum = file_sha256(db_target)
+            db_target.with_name(DATABASE + ".sha256").write_text(f"{checksum}  {DATABASE}\n", encoding="utf-8")
+            return {"available": True, "path": str(db_target), "backend": "sqlite", "sha256": checksum, **ident}
+        pending_db = None
         if tarfile.is_tarfile(source):
             with tarfile.open(source) as bundle:
                 matches = [member for member in bundle.getmembers() if member.name == MEMBER]
@@ -94,10 +141,24 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
                     manifest = json.load(incoming)
                 if manifest.get("sha256") != digest(pending):
                     raise ValueError("Snapshot checksum in bundle manifest does not match.")
+                from bench2agent.core.repository import DATABASE
+                dbs = [member for member in bundle.getmembers() if member.name == "data/processed/" + DATABASE]
+                if dbs:
+                    pending_db = stage / DATABASE
+                    with bundle.extractfile(dbs[0]) as incoming, pending_db.open("wb") as outgoing:
+                        shutil.copyfileobj(incoming, outgoing)
+                    if manifest.get("sqlite_sha256") != digest(pending_db):
+                        raise ValueError("Database checksum in bundle manifest does not match.")
+                    _check_sqlite(pending_db)
         else:
             shutil.copyfile(source, pending)
         metadata = validate(pending)
         os.replace(pending, target)
+        if pending_db is not None:
+            db_target = target.with_name(pending_db.name)
+            os.replace(pending_db, db_target)
+            db_target.with_name(db_target.name + ".sha256").write_text(f"{digest(db_target)}  {db_target.name}\n", encoding="utf-8")
+            metadata["sqlite"] = str(db_target)
     return {"available": True, "path": str(target), **metadata}
 
 
@@ -114,13 +175,26 @@ def bundle(root: Path, output: Path) -> dict:
         frozen = stage / SNAPSHOT
         shutil.copyfile(source, frozen)
         metadata = validate(frozen)
+        manifest_data = {"format": "bench2agent-data-v1", "sha256": digest(frozen), **metadata}
+        from bench2agent.core.repository import DATABASE
+        db = source.with_name(DATABASE)
+        frozen_db = None
+        if db.exists():
+            frozen_db = stage / DATABASE
+            shutil.copyfile(db, frozen_db)
+            ident = _check_sqlite(frozen_db)
+            if ident["source_sha256"] != manifest_data["sha256"]:
+                raise ValueError("The SQLite file was built from a different snapshot; run bench2agent data sqlite first.")
+            manifest_data.update({"sqlite_sha256": digest(frozen_db), "db_schema_version": ident["db_schema_version"]})
         manifest = stage / "manifest.json"
-        manifest.write_text(json.dumps({"format": "bench2agent-data-v1", "sha256": digest(frozen), **metadata}), encoding="utf-8")
+        manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
         pending = stage / "bundle.tar.gz"
         with tarfile.open(pending, "w:gz") as archive:
             archive.add(frozen, arcname=MEMBER)
+            if frozen_db is not None:
+                archive.add(frozen_db, arcname="data/processed/" + DATABASE)
             archive.add(manifest, arcname="manifest.json")
         os.replace(pending, output)
     checksum = digest(output)
     output.with_name(output.name + ".sha256").write_text(checksum + "  " + output.name + "\n", encoding="utf-8")
-    return {"path": str(output), "sha256": checksum, **metadata}
+    return {"path": str(output), "sha256": checksum, **metadata, "includes_sqlite": frozen_db is not None}

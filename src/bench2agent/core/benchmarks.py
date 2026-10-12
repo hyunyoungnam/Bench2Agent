@@ -7,18 +7,21 @@ queries never substitute the abstract inventory for missing full-text data.
 from __future__ import annotations
 
 import collections
+import contextlib
 import datetime as dt
+import functools
 import hashlib
 import json
 import math
 import os
 import re
+import threading
 import unicodedata
 from pathlib import Path
 
 from .paths import ROOT
 from .repository import (BACKENDS, DATABASE, DB_SCHEMA_VERSION, SNAPSHOT, SOURCE, JsonRepository,
-                         SqliteRepository, validate_snapshot)
+                         SqliteRepository, file_sha256, validate_snapshot)
 ROLES = ("evaluates_on", "trains_on")
 # Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
 # a Hub dataset id or a GitHub repo, shown only when it answered the API at
@@ -268,6 +271,15 @@ def build_snapshot(root: Path = ROOT, out: Path | None = None) -> dict:
             "parsed_papers": len(result), "benchmarks": len(entries)}
 
 
+def _pinned(method):
+    """Run a tool method against one pinned data version."""
+    @functools.wraps(method)
+    def wrapper(self, a: dict) -> dict:
+        with self.pinned():
+            return method(self, a)
+    return wrapper
+
+
 class BenchmarkStore:
     """The six tools. Every rule lives here, once; storage is a repository
     (`core.repository`) chosen by `backend`: "json" (the reference snapshot),
@@ -281,25 +293,61 @@ class BenchmarkStore:
             raise ValueError("BENCH2AGENT_STORE must be json, sqlite or auto")
         self._stamp = None
         self._repo = None
+        self._json_sha_cache = (None, None)
+        self._local = threading.local()
 
-    def repo(self):
+    # -- storage selection and pinning ------------------------------------
+    def _json_sha(self, path: Path) -> str:
+        stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+        if self._json_sha_cache[0] != stamp:
+            self._json_sha_cache = (stamp, file_sha256(path))
+        return self._json_sha_cache[1]
+
+    def _choose(self) -> tuple[Path | None, str, str | None]:
+        """(file to read, backend, reason it is unavailable). `auto` reads the
+        SQLite file only when it was built from the JSON snapshot beside it;
+        a stale or unreadable file falls back to JSON. An explicit `sqlite`
+        with a stale file is an error, so nobody answers from old data by
+        accident."""
         json_path = self.root / "data/processed" / SNAPSHOT
         db_path = json_path.with_name(DATABASE)
-        use_db = self.backend == "sqlite" or (self.backend == "auto" and db_path.exists())
-        path = db_path if use_db else json_path
-        if not path.exists():
-            if self._stamp != ("missing", path):
-                reason = ("SQLite database is not built; run bench2agent data sqlite." if use_db else None)
-                self._repo = JsonRepository({"source": SOURCE, "benchmarks": catalogue(self.root), "papers": [],
-                                             "editions": {}, "reason": reason}, available=False)
-                self._stamp = ("missing", path)
+        if self.backend == "json":
+            return (json_path if json_path.exists() else None), "json", None
+        db_state = None  # None: no file; "ok"; or an error message
+        if db_path.exists():
+            try:
+                with SqliteRepository(db_path).session() as repo:
+                    ident = repo.identity()
+                if ident["db_schema_version"] != DB_SCHEMA_VERSION or ident["source"] != SOURCE:
+                    db_state = "Unsupported benchmark database; rebuild with bench2agent data sqlite"
+                elif json_path.exists() and ident["source_sha256"] != self._json_sha(json_path):
+                    db_state = ("SQLite database was built from a different snapshot than the installed JSON; "
+                                "run bench2agent data sqlite (or set BENCH2AGENT_STORE=json)")
+                else:
+                    db_state = "ok"
+            except ValueError as exc:
+                db_state = str(exc)
+        if db_state == "ok":
+            return db_path, "sqlite", None
+        if self.backend == "sqlite":
+            return None, "sqlite", db_state or "SQLite database is not built; run bench2agent data sqlite."
+        # auto: fall back to the reference
+        return (json_path if json_path.exists() else None), "json", db_state
+
+    def repo(self):
+        active = getattr(self._local, "repo", None)
+        if active is not None:
+            return active
+        path, backend, reason = self._choose()
+        if path is None:
+            self._repo = JsonRepository({"source": SOURCE, "benchmarks": catalogue(self.root), "papers": [],
+                                         "editions": {}, "reason": reason, "backend": backend}, available=False)
+            self._stamp = None
             return self._repo
         stamp = (path, path.stat().st_mtime_ns, path.stat().st_size)
         if stamp != self._stamp:
-            if use_db:
+            if backend == "sqlite":
                 repo = SqliteRepository(path)
-                if repo.meta().get("db_schema_version") != DB_SCHEMA_VERSION or repo.meta().get("source") != SOURCE:
-                    raise ValueError("Unsupported benchmark database; rebuild with bench2agent data sqlite")
             else:
                 data = read_json(path)
                 if data.get("schema_version") != 1 or data.get("source") != SOURCE:
@@ -308,10 +356,36 @@ class BenchmarkStore:
             self._repo, self._stamp = repo, stamp
         return self._repo
 
+    @contextlib.contextmanager
+    def pinned(self):
+        """One version of the data for everything inside: the tool methods
+        wrap themselves in this, so a file replaced mid-call is not seen
+        until the next call."""
+        if getattr(self._local, "repo", None) is not None:
+            yield self._local.repo
+            return
+        repo = self.repo()
+        if isinstance(repo, SqliteRepository):
+            with repo.session() as pinned:
+                self._local.repo = pinned
+                try:
+                    yield pinned
+                finally:
+                    self._local.repo = None
+        else:
+            self._local.repo = repo
+            try:
+                yield repo
+            finally:
+                self._local.repo = None
+
     def data(self) -> dict:
         """What the store is answering from: identity plus the catalogue."""
-        repo = self.repo()
-        return {**repo.meta(), "benchmarks": repo.benchmarks(), "editions": repo.editions()}
+        with self.pinned() as repo:
+            meta = repo.meta()
+            if not meta["available"] and repo.d.get("backend"):
+                meta["backend"] = repo.d["backend"]
+            return {**meta, "benchmarks": repo.benchmarks(), "editions": repo.editions()}
 
     def _base(self, data: dict) -> dict:
         return {k: data.get(k) for k in ("available", "source", "snapshot_id", "generated_at")}
@@ -330,6 +404,7 @@ class BenchmarkStore:
                              + json.dumps([{"id": e["id"], "name": e["name"]} for e in found]))
         return found[0]
 
+    @_pinned
     def scope(self, a: dict) -> dict:
         data = self.data()
         fields = self.repo().field_counts()
@@ -395,6 +470,7 @@ class BenchmarkStore:
                 "surfaces": p["uses"][bid].get("surfaces", {}),
                 "evidence": self.repo().evidence(p, bid, role)}
 
+    @_pinned
     def usage(self, a: dict) -> dict:
         data = self.data()
         if error := self._require(data):
@@ -418,6 +494,7 @@ class BenchmarkStore:
                 "note": "Counts measure explicitly stated use, not quality. Missing stated roles do not prove non-use. "
                         + LINK_NOTE}
 
+    @_pinned
     def evidence(self, a: dict) -> dict:
         data = self.data()
         if error := self._require(data):
@@ -433,6 +510,7 @@ class BenchmarkStore:
                 "coverage": coverage, "total": len(matches), "results": matches[offset:offset + limit],
                 "truncated": offset + limit < len(matches), "note": LINK_NOTE}
 
+    @_pinned
     def trend(self, a: dict) -> dict:
         data = self.data()
         if error := self._require(data):
@@ -470,6 +548,7 @@ class BenchmarkStore:
                 "coverage": coverage, "results": results, "comparisons": comparisons,
                 "rule": "Within venue: two-proportion z, abs(z) >= 2.576; 0 to >=8 papers is appearing."}
 
+    @_pinned
     def adoption(self, a: dict) -> dict:
         data = self.data()
         if error := self._require(data):
@@ -515,6 +594,7 @@ class BenchmarkStore:
                         "Author-name matching is conservative; same-year ordering is unknown. "
                         "first_claim means first reviewed claim in this corpus, not first public release."}
 
+    @_pinned
     def new(self, a: dict) -> dict:
         data = self.data()
         kind = a.get("kind", "benchmark")
@@ -568,4 +648,5 @@ class BenchmarkStore:
     def verify(self, paper_id: str, quote: str) -> dict | None:
         if len(quote.strip()) < 20:
             return None
-        return self.repo().verify_quote(paper_id, " ".join(quote.split()))
+        with self.pinned() as repo:
+            return repo.verify_quote(paper_id, " ".join(quote.split()))

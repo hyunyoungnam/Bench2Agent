@@ -61,13 +61,20 @@ def main() -> int:
         bad += not same
         print(f"{name:9} {json.dumps(args)[:62]:62} {'yes' if same else 'NO':5} {tx:6.2f}s {ty:6.2f}s")
     if js.data()["snapshot_id"] == "0dd4b9bbee4b54d2":
-        print("regression figures on 0dd4b9bbee4b54d2 (sqlite):")
-        u = db.usage({"topic": "robotics"})
-        top = {r["name"]: r["papers"] for r in u["results"][:3]}
-        print(f"  robotics/latest parsed {u['coverage']['parsed_papers']} (expect 509); top {top} (expect LIBERO 80, SIMPLER 41, Meta-World 29)")
-        tr = db.trend({"benchmark": "cifar-10", "venue": "iclr"})
-        print("  ICLR CIFAR-10:", ", ".join(f"{r['edition']} {r['papers']}/{r['parsed_papers']:,}" for r in tr["results"]),
-              "(expect 178/1,888, 197/3,038, 165/4,237)")
+        # revision-specific figures: a wrong number here fails the run even when
+        # both backends agree, so a shared counting bug cannot pass as parity
+        print("regression figures on 0dd4b9bbee4b54d2 (both backends):")
+        for store in (js, db):
+            u = store.usage({"topic": "robotics"})
+            got = {"parsed": u["coverage"]["parsed_papers"], **{r["name"]: r["papers"] for r in u["results"][:3]}}
+            want = {"parsed": 509, "LIBERO": 80, "SIMPLER": 41, "Meta-World": 29}
+            tr = store.trend({"benchmark": "cifar-10", "venue": "iclr"})
+            got_tr = [(r["edition"], r["papers"], r["parsed_papers"]) for r in tr["results"]]
+            want_tr = [("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)]
+            ok = got == want and got_tr == want_tr
+            bad += not ok
+            print(f"  {store.backend:7} robotics/latest {got} {'ok' if got == want else 'EXPECTED ' + str(want)}")
+            print(f"  {store.backend:7} ICLR CIFAR-10 {got_tr} {'ok' if got_tr == want_tr else 'EXPECTED ' + str(want_tr)}")
     print("mismatches:", bad)
     return 1 if bad else 0
 

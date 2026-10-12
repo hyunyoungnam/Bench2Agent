@@ -163,9 +163,14 @@ builds a temporary file and replaces the old database only after reading it
 back as the identical snapshot, so a failed import keeps what was there.
 `bench2agent data status` reports both files and whether their snapshot ids
 agree. Queries read the JSON snapshot unless `BENCH2AGENT_STORE=sqlite` (or
-`auto`, which prefers the SQLite file when it exists); both backends return
-the same results and are checked against each other in the test suite and
-by `scripts/parity_check.py`.
+`auto`, which uses the SQLite file only when it was built from the installed
+snapshot and falls back to JSON otherwise; an explicit `sqlite` with a stale
+or unreadable file reports why instead of answering). Each tool call reads
+one version of the file, so a database replaced during a call is seen only by
+the next one. A `.sqlite` file installs on its own with `data install --file`,
+and `data bundle` includes the database when it matches the snapshot. Both
+backends return the same results and are checked against each other in the
+test suite and by `scripts/parity_check.py`.
 
 `--file` also accepts the exported `benchmark_snapshot.json`. The bundle
 manifest verifies its snapshot checksum; `--sha256` additionally verifies the

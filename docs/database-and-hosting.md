@@ -5,10 +5,11 @@ conversation through the same benchmark tools. A relational database will hold
 papers, benchmark identities, stated uses and their evidence. Collection runs
 will add or revise records; agents will query a published data revision.
 
-This is the implementation design. The current application still reads the
-JSON benchmark snapshot, and `bench2agent serve` starts the local browser
-prototype. The database adapters and hosted service are the next development
-stages. This design supports a future Mac server and Linux deployment.
+This is the implementation design. The application reads the JSON benchmark
+snapshot by default and, when selected, a SQLite file imported from it (see
+*Implementation sequence*, steps 1–2); `bench2agent serve` starts the local
+browser prototype. Revisioned publication and the hosted service are the next
+development stages. This design supports a future Mac server and Linux deployment.
 
 ## Shared tools and separate interfaces
 

@@ -224,8 +224,12 @@ def load_session(args, root: Path, *, interactive: bool) -> Session:
 
 
 def require_data(root: Path, *, interactive: bool):
-    if (root / "data/processed/benchmark_snapshot.json").is_file():
+    from .data import status
+    current = status(root)
+    if current["available"]:
         return
+    if current.get("reason") and (current["json"]["available"] or current["sqlite"]["available"]):
+        raise ValueError(current["reason"])   # data exists but the chosen backend cannot use it
     if interactive:
         from .data import install
         print("Downloading benchmark data (16 MB); checking its checksum…", file=sys.stderr, flush=True)

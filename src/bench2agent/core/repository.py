@@ -20,6 +20,7 @@ checksum names these exact bytes. Dates are copied, never invented.
 from __future__ import annotations
 
 import collections
+import contextlib
 import hashlib
 import json
 import os
@@ -376,33 +377,65 @@ class JsonRepository:
 
 
 class SqliteRepository:
-    """Same contract over the imported file. A connection per call keeps it
-    safe from any thread; the file is opened read-only."""
+    """Same contract over the imported file.
+
+    Reads happen inside a pinned session: one read-only connection and one
+    read transaction, opened by `BenchmarkStore` around each tool call, so a
+    database replaced on disk mid-call cannot mix two versions in one answer
+    (the open file keeps the version it opened). Cached lists (catalogue,
+    editions, labels) are keyed by the source identity read inside that
+    session and dropped when a new file turns up."""
     backend = "sqlite"
     available = True
 
     def __init__(self, path: Path, con: sqlite3.Connection | None = None):
         self.path = path
         self._shared = con
+        self._identity = None
         self._meta = None
         self._benchmarks = None
         self._editions = None
         self._fields = None
 
+    @contextlib.contextmanager
+    def session(self):
+        """Pin every read inside to one version of the file."""
+        if self._shared is not None:
+            yield self
+            return
+        try:
+            con = _connect(self.path)
+            con.execute("BEGIN")
+            self._shared = con
+            try:
+                m = _meta(con)
+                identity = (m.get("snapshot_id"), m.get("source_sha256"), m.get("db_schema_version"))
+                if identity != self._identity:
+                    self._identity, self._meta, self._benchmarks, self._editions, self._fields = identity, None, None, None, None
+                yield self
+            finally:
+                self._shared = None
+                con.close()
+        except sqlite3.DatabaseError as exc:
+            raise ValueError(f"SQLite database is unreadable ({exc}); rebuild with bench2agent data sqlite") from None
+
     def _con(self):
-        return self._shared or _connect(self.path)
+        if self._shared is None:
+            raise RuntimeError("SqliteRepository is read inside a session: use BenchmarkStore or repo.session()")
+        return self._shared
 
     def _done(self, con):
-        if con is not self._shared:
-            con.close()
+        pass
+
+    def identity(self) -> dict:
+        """What this file holds, read once per session: enough to compare
+        with the JSON snapshot beside it without loading that snapshot."""
+        m = _meta(self._con())
+        return {k: m.get(k) for k in ("snapshot_id", "source_sha256", "db_schema_version", "source")}
 
     def meta(self) -> dict:
         if self._meta is None:
-            con = self._con()
-            try:
-                m = _meta(con)
-            finally:
-                self._done(con)
+            m = _meta(self._con())
             self._meta = {"available": True, "backend": self.backend,
                           **{k: m.get(k) for k in ("source", "snapshot_id", "generated_at", "registry_checked")},
                           "db_schema_version": m.get("db_schema_version")}

@@ -11,6 +11,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from bench2agent import data as data_module
@@ -182,6 +183,91 @@ class ParityTests(Fixture):
             repository.import_snapshot(broken, self.db_path)
         self.assertEqual(self.db_path.read_bytes(), before)
         self.assertEqual([p.name for p in self.db_path.parent.glob(".import-*")], [])
+
+    def _second_version(self, name="v2.json"):
+        """A snapshot that differs in one use and in identity."""
+        data = json.loads(self.json_path.read_text())
+        data["snapshot_id"] = "second-version"
+        del next(p for p in data["papers"] if p["paper_id"] == "2501.00006")["uses"]["toy"]
+        path = self.root / name
+        path.write_text(json.dumps(data))
+        return path
+
+    def test_one_tool_call_reads_one_database_version(self):
+        v2 = self._second_version()
+        db2 = self.root / "v2.sqlite"
+        repository.import_snapshot(v2, db2)
+        original = repository.SqliteRepository.observations
+        swapped = []
+
+        def observations(repo, *args, **kwargs):
+            out = original(repo, *args, **kwargs)
+            if not swapped:   # replace both files on disk in the middle of the call
+                os.replace(v2, self.json_path)
+                os.replace(db2, self.db_path)
+                swapped.append(True)
+            return out
+        with unittest.mock.patch.object(repository.SqliteRepository, "observations", observations):
+            first = self.sqlite.usage({"latest": False, "limit": 50})
+        toy = {r["id"]: r["papers"] for r in first["results"]}["toy"]
+        # identity and counts both come from the version the call opened
+        self.assertEqual((first["snapshot_id"], toy), (json.loads(json.dumps(self.report))["snapshot_id"], 4))
+        second = self.sqlite.usage({"latest": False, "limit": 50})
+        self.assertEqual((second["snapshot_id"], {r["id"]: r["papers"] for r in second["results"]}["toy"]), ("second-version", 3))
+
+    def test_auto_refuses_a_stale_or_corrupt_database(self):
+        os.replace(self._second_version(), self.json_path)       # JSON moves on, the database does not
+        auto = BenchmarkStore(self.root, backend="auto")
+        self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("json", "second-version"))
+        self.assertEqual(auto.usage({"latest": False})["snapshot_id"], "second-version")
+        self.assertFalse(data_module.status(self.root)["sqlite"]["matches_json"])
+        # an explicit sqlite backend answers with the reason, never from the old file
+        self.assertIn("different snapshot", BenchmarkStore(self.root, backend="sqlite").usage({})["error"])
+        os.environ["BENCH2AGENT_STORE"] = "sqlite"
+        try:
+            status = data_module.status(self.root)
+            self.assertFalse(status["available"])
+            self.assertIn("different snapshot", status["reason"])
+        finally:
+            del os.environ["BENCH2AGENT_STORE"]
+        data_module.build_sqlite(self.root)                       # rebuilt: auto returns to SQLite
+        self.assertEqual((auto.data()["backend"], auto.data()["snapshot_id"]), ("sqlite", "second-version"))
+        self.db_path.write_bytes(b"SQLite format 3\x00" + b"garbage" * 100)
+        self.assertEqual(BenchmarkStore(self.root, backend="auto").data()["backend"], "json")
+        self.assertRegex(BenchmarkStore(self.root, backend="sqlite").usage({})["error"], "unreadable|rebuild")
+        self.assertFalse(data_module.status(self.root)["sqlite"]["available"])
+
+    def test_sqlite_only_install_is_ready(self):
+        from bench2agent.cli import require_data
+        bundle = self.root / "bundle.tar.gz"
+        report = data_module.bundle(self.root, bundle)
+        self.assertTrue(report["includes_sqlite"])
+        self.json_path.unlink()
+        for backend in ("sqlite", "auto"):
+            os.environ["BENCH2AGENT_STORE"] = backend
+            try:
+                status = data_module.status(self.root)
+                self.assertEqual((status["available"], status["backend"], status["paper_observations"]), (True, "sqlite", 14))
+                require_data(self.root, interactive=False)
+                self.assertEqual(BenchmarkStore(self.root).usage({"topic": "robotics"})["coverage"]["parsed_papers"], 7)
+            finally:
+                del os.environ["BENCH2AGENT_STORE"]
+        self.assertFalse(data_module.status(self.root)["available"])   # json backend: nothing to read
+        with self.assertRaises(ValueError):
+            require_data(self.root, interactive=False)
+        # a bundle carrying the database installs both files; a bare .sqlite installs alone
+        other = self.root / "other"
+        installed = data_module.install(other, file=str(bundle))
+        self.assertTrue(Path(installed["sqlite"]).exists())
+        self.assertTrue((other / repository.DATABASE_MEMBER).exists() if hasattr(repository, "DATABASE_MEMBER") else True)
+        alone = self.root / "alone"
+        installed = data_module.install(alone, file=str(self.db_path))
+        self.assertEqual(installed["backend"], "sqlite")
+        os.environ["BENCH2AGENT_STORE"] = "auto"
+        try:
+            self.assertEqual(BenchmarkStore(alone).usage({})["coverage"]["parsed_papers"], 9)
+        finally:
+            del os.environ["BENCH2AGENT_STORE"]
 
     def test_backend_selection_and_status(self):
         self.assertEqual(self.sqlite.data()["backend"], "sqlite")
