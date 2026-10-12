@@ -405,7 +405,10 @@ Bench2Agent has two sides. **Local is the terminal**: `pip install` on a
 machine where Claude Code or Codex is signed in, then `bench2agent`.
 **Hosted is the web**: a visitor opens the address, connects their own Claude
 account, asks, and reads the sources and verification marks; no Bench2Agent
-account, no API key, nothing to install. The web never uses the host's own
+account, no API key, nothing to install. Today the hosted side is a
+directory-isolation prototype: visitors are kept apart by runtime directory
+and environment under one OS user, not by an OS-user or container
+boundary. The web never uses the host's own
 logins. [account-connections.md](account-connections.md) records what each
 route permits, what was executed, and what remains before public operation.
 The sections below are for the operator who runs the host.

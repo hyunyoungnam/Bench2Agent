@@ -42,6 +42,7 @@ import html
 import json
 import re
 import time
+import urllib.error
 import unicodedata
 from pathlib import Path
 
@@ -166,9 +167,14 @@ def from_aaai(label: str) -> tuple[list[dict], str]:
     special technical-track sections only."""
     base = "https://ojs.aaai.org/index.php/AAAI/issue"
     issues: dict[str, str] = {}
-    for page in range(1, 60):          # ~15 technical-track issues per year: 2020 sits past page 9
-        t = fetch(f"{base}/archive" + ("" if page == 1 else f"/{page}"),
-                  timeout=120).decode("utf-8", "replace")
+    for page in range(1, 60):          # ~15 technical-track issues per year
+        try:
+            t = fetch(f"{base}/archive" + ("" if page == 1 else f"/{page}"),
+                      timeout=120).decode("utf-8", "replace")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:        # past the last archive page
+                break
+            raise
         found = [(i, _text(n)) for i, n in re.findall(r'issue/view/(\d+)"[^>]*>\s*([^<]+?)\s*<', t)]
         for i, n in found:
             if n:

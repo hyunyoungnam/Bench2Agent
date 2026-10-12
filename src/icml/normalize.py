@@ -177,8 +177,13 @@ def main() -> int:
     results = load_json(snap)["results"]
 
     rows = []
+    # a retired virtual site marks every row invisible (ICLR 2020); the flag
+    # then says nothing about the paper, so it is ignored when no row is visible
+    any_visible = any(rec.get("visible", True) for rec in results)
+    if results and not any_visible:
+        print(f"note: no row is marked visible in this feed; keeping all {len(results)} rows")
     for rec in results:
-        if not rec.get("visible", True):
+        if any_visible and not rec.get("visible", True):
             continue
         area, subarea = split_topic(rec.get("topic"))
         authors = rec.get("authors") or []
