@@ -214,7 +214,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_saved_turns_are_carried_into_a_fresh_session_only(self):
         record = self.root / "record.json"
-        turns = [{"q": "earlier question", "segs": [{"t": "p", "s": "earlier answer"}]}]
+        turns = [{"q": "earlier question", "segs": [{"t": "p", "s": "earlier answer"}], "verified": {"checked": 0, "passed": 0}},
+                 {"q": "unverifiable question", "segs": [{"t": "p", "s": "unchecked answer"}], "verified": None, "unverifiable": "no log"}]
         with patch.dict(os.environ, {"STUB_RECORD": str(record)}):
             connector("claude").ask(root=self.root, revision="v1", question="follow-up", system="s", history=turns,
                                     provider_session=None, emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
@@ -222,6 +223,8 @@ class RuntimeTests(unittest.TestCase):
             prompt = argv[argv.index("-p") + 1]
             self.assertIn("earlier question", prompt)
             self.assertIn("earlier answer", prompt)
+            self.assertNotIn("unverifiable question", prompt)             # never context, whatever session
+            self.assertNotIn("unchecked answer", prompt)
             self.assertTrue(prompt.endswith("follow-up"))
             connector("claude").ask(root=self.root, revision="v1", question="follow-up", system="s", history=turns,
                                     provider_session="sess-1", emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)

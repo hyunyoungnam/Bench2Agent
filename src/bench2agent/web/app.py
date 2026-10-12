@@ -325,7 +325,10 @@ def create_app(root: Path, settings: Settings | None = None) -> FastAPI:
             for j in jobs:
                 stopped = j.cancel() or stopped
             return stopped
-        return visitors.disconnect(user["user_id"], stop_running=stop_running)
+        try:
+            return visitors.disconnect(user["user_id"], stop_running=stop_running)
+        except VisitorError as exc:
+            raise HTTPException(409, str(exc))
 
     @app.post("/api/session")
     def open_session(response: Response, x_requested_with: str | None = Header(default=None),
@@ -501,7 +504,10 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
                 # the visitor's own Claude Code owns the loop in the visitor's
                 # runtime; the pinned stdio MCP server records every call
                 from bench2agent.runtime import ConnectorError
-                visitors.acquire(user["user_id"])
+                try:
+                    visitors.acquire(user["user_id"], job_id=str(job.attempt_id))
+                except VisitorError as exc:
+                    raise providers.ProviderError(str(exc)) from None
                 try:
                     run = visitors.connector(user["user_id"]).ask(
                         root=root, revision=rid, question=question, system=system, history=conv["turns"],
@@ -511,7 +517,7 @@ def _run_turn(root: Path, settings: Settings, web: WebStore, user: dict, conv: d
                         raise providers.Cancelled("The question was cancelled; nothing was saved.") from None
                     raise providers.ProviderError(str(exc)) from None
                 finally:
-                    visitors.release(user["user_id"])
+                    visitors.release(str(job.attempt_id))
                 tools = type("T", (), {"calls": len(run.trail), "seconds": 0.0})()
                 text, trail, messages, usage, provider_session = run.text, run.trail_for_turn(), conv["messages"], run.usage, run.provider_session
                 unverifiable = run.unverifiable

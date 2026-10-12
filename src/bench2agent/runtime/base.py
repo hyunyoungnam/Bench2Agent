@@ -116,7 +116,10 @@ def transcript(turns: list[dict] | None, limit: int = 6) -> str:
     after a cancel, a failure or an unverifiable turn, when the CLI's own
     session is not resumed. Only turns Bench2Agent saved appear here."""
     out = []
-    for t in (turns or [])[-limit:]:
+    # only turns that completed and verified: an unverifiable answer is kept
+    # for the reader but is never handed back to a model as context
+    completed = [t for t in (turns or []) if not t.get("unverifiable") and t.get("verified") is not None]
+    for t in completed[-limit:]:
         answer = "".join(s.get("s", "") for s in t.get("segs", []) if s.get("t") in ("p", "n"))
         out.append(f"User: {t.get('q', '')}\nAssistant: {answer[:2000]}")
     return ("Earlier in this conversation:\n\n" + "\n\n".join(out) + "\n\n") if out else ""

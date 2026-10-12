@@ -164,9 +164,14 @@ beta item.
 
 After a cancel, a failure, an unverifiable turn or a save conflict, the
 CLI's own session is not resumed. The next question starts a fresh session
-whose prompt carries only the turns Bench2Agent saved (question and answer
-text), so nothing from a cancelled or unsaved turn can reach the model. A
-turn is unverifiable when the MCP server left no log although the CLI
+whose prompt carries only the turns Bench2Agent saved **and verified**: an
+unverifiable answer is kept for the reader, marked as such, and never enters
+any model context. Tested as a chain: unverifiable answer, next question,
+cancel, resume, on the web and on a real pseudo-terminal (where Ctrl+C ends
+the child CLI and the next question goes through). Conversation files are
+saved conditionally under a lock, so a second terminal cannot overwrite a
+newer turn, and a session's expected revision follows only its own
+successful write. A turn is unverifiable when the MCP server left no log although the CLI
 called tools, the log is damaged, it has fewer calls than the CLI showed, or
 any call was answered from another revision; such a turn is saved as plain
 text without marks and says so.
@@ -196,11 +201,18 @@ Codex signed in answers with that login, no Bench2Agent account or API key;
 verified with real logins on the three representative questions, a resumed
 follow-up and a cancel-then-follow-up on both CLIs.
 
-**Hosted minimal implementation: done, not yet exercised with a real
+**Hosted: a directory-isolation prototype, not yet exercised with a real
 sign-in.** The visitor runtime, the relayed official sign-in, the restricted
 CLI, the recorded tool log, verification on the conversation's revision,
-disconnect and limits exist and are tested against a stub CLI. The real
-sign-in from the page needs the owner at a browser.
+disconnect (refuse new work, cancel, wait for jobs to end, official logout,
+removal; pending cleanup when a job outlasts the wait) and per-job process
+limits exist and are tested against a stub CLI. Isolation is by directory
+and environment under one OS user, which keeps logins and conversations
+apart but is not a boundary between processes; the agreed per-visitor OS
+user or container is a deployment step on a host with the privilege. The
+real sign-in from the page needs the owner at a browser, and the
+acceptability of relaying the sign-in through a pseudo-terminal is not
+settled by the documents alone.
 
 **Public operation: not done.** Needs the owner's agreement to Anthropic's
 Commercial Terms and an answer to the inquiry above, a stronger isolation

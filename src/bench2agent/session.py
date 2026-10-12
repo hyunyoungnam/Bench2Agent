@@ -1,6 +1,7 @@
 """Persistent API conversations with shared benchmark answer verification."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -8,6 +9,11 @@ import secrets
 import tempfile
 import time
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows: no advisory locks; conditional saves still apply
+    fcntl = None
 
 from . import providers
 
@@ -44,11 +50,49 @@ class Session:
     def path(self) -> Path:
         return self.directory / (self.doc["id"] + ".json")
 
+    @contextlib.contextmanager
+    def _locked(self):
+        """One writer at a time per conversation file (advisory lock beside it)."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        lock = self.directory / (self.doc["id"] + ".lock")
+        with lock.open("a") as fh:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(fh, fcntl.LOCK_UN)
+
+    def _current_revision(self):
+        return self.path.stat().st_mtime_ns if self.path.exists() else None
+
+    def _save(self, doc: dict) -> None:
+        """Write only if the file is still the version this session read; then
+        this session's expected revision follows its own successful write and
+        nothing else. Another terminal's newer turns are never overwritten."""
+        with self._locked():
+            if self._current_revision() != self.expected_revision:
+                raise ValueError("This conversation changed in another terminal. Resume it again before continuing.")
+            write_json(self.path, doc)
+            self.doc = doc
+            self.expected_revision = self._current_revision()
+
     def _drop_provider_session(self) -> None:
         """A cancelled, failed, unverifiable or unsaved turn must not be
-        continued inside the CLI's own session; forget it, keep our turns."""
-        if self.doc.pop("provider_session", None) is not None and self.path.exists():
-            write_json(self.path, self.doc)
+        continued inside the CLI's own session; forget it, keep our turns.
+        Saved conditionally: if another terminal moved the file on, we drop
+        the id in memory only and leave their version alone."""
+        if self.doc.get("provider_session") is None:
+            return
+        doc = {k: v for k, v in self.doc.items() if k != "provider_session"}
+        if not self.path.exists():
+            self.doc = doc
+            return
+        try:
+            self._save(doc)
+        except ValueError:
+            self.doc = doc
 
     def store(self):
         """The data this conversation reads, always as an explicit revision:
@@ -85,8 +129,7 @@ class Session:
             raise ValueError("The dataset changed since this conversation. Start /new, or reinstall its snapshot.")
         if store.revision and store.revision != sid:
             raise ValueError(f"Revision {store.revision} holds snapshot {sid}; its directory needs recovery.")
-        original_revision = self.path.stat().st_mtime_ns if self.path.exists() else None
-        if original_revision != self.expected_revision:
+        if self._current_revision() != self.expected_revision:
             raise ValueError("This conversation changed in another terminal. Resume it again before continuing.")
         language = self.doc.get("language", "auto")
         system = BENCHMARK_SYSTEM + ("\nAnswer in the user's language." if language == "auto" else
@@ -120,9 +163,6 @@ class Session:
                 "connector": name, "tool_log": tool_log.name if tool_log.exists() else None,
                 "usage": run.usage, "on": {"benchmarks": {key: snapshot.get(key)
                          for key in ("snapshot_id", "revision", "generated_at", "source")}}}
-        if (self.path.stat().st_mtime_ns if self.path.exists() else None) != original_revision:
-            self._drop_provider_session()
-            raise ValueError("This conversation changed in another terminal; answer was not saved.")
         updated = {**self.doc, "messages": run.messages if run.messages is not None else self.doc["messages"],
                    "snapshot_id": sid, "ts": int(time.time()),
                    "title": self.doc["title"] if self.doc["turns"] else question[:80],
@@ -130,9 +170,11 @@ class Session:
         updated.pop("provider_session", None)
         if name != "api" and run.provider_session and not run.unverifiable:
             updated["provider_session"] = run.provider_session
-        write_json(self.path, updated)
-        self.doc = updated
-        self.expected_revision = self.path.stat().st_mtime_ns
+        try:
+            self._save(updated)
+        except ValueError:
+            self.doc.pop("provider_session", None)        # not resumed after an unsaved turn
+            raise ValueError("This conversation changed in another terminal; answer was not saved.")
         return turn
 
 

@@ -521,8 +521,8 @@ class WebHostTests(unittest.TestCase):
             started = threading.Event()
             original = visitors.acquire
 
-            def acquire(v):
-                original(v); started.set()
+            def acquire(v, job_id):
+                original(v, job_id); started.set()
             with patch.dict(os.environ, {"STUB_SLEEP": "5"}), patch.object(visitors, "acquire", acquire), ThreadPoolExecutor(1) as pool:
                 future = pool.submit(self.ask, self.alice, conv["cid"], "slow")
                 self.assertTrue(started.wait(timeout=30))
@@ -542,6 +542,81 @@ class WebHostTests(unittest.TestCase):
             os.utime(old, (0, 0))
             self.assertEqual(visitors.sweep(), [self.alice["user_id"]])
             self.assertFalse(old.exists())
+
+    def test_slots_are_per_job_and_disconnect_waits_for_running_jobs(self):
+        visitors = self.app.state.visitors
+        with self._with_stub_claude():
+            self._sign_in(self.alice)
+            a, b = self.new(self.alice, connector="claude"), self.new(self.alice, connector="claude")
+            started = []
+            original = visitors.acquire
+
+            def acquire(v, job_id):
+                original(v, job_id); started.append(job_id)
+            with patch.dict(os.environ, {"STUB_SLEEP": "4"}), patch.object(visitors, "acquire", acquire), ThreadPoolExecutor(3) as pool:
+                fa = pool.submit(self.ask, self.alice, a["cid"], "slow a")
+                fb = pool.submit(self.ask, self.alice, b["cid"], "slow b")
+                for _ in range(100):
+                    if len(started) == 2:
+                        break
+                    time.sleep(0.1)
+                self.assertEqual(len(visitors.running_jobs(self.alice["user_id"])), 2)      # two slots for two jobs of one visitor
+                # disconnect refuses new work and waits for the jobs; with a short wait it leaves the runtime pending
+                steps = self.client.post("/api/connect/claude/disconnect", headers=self.h(self.alice)).json() if False else visitors.disconnect(
+                    self.alice["user_id"], stop_running=lambda: True, wait_seconds=0.5)
+                self.assertTrue(steps["pending_cleanup"])
+                self.assertTrue(visitors.dir(self.alice["user_id"]).exists())                 # nothing deleted under a live process
+                r = self.client.post(f"/api/conversations/{a['cid']}/ask", json={"question": "x"}, headers=self.h(self.alice))
+                self.assertIn(r.status_code, (409, 400))                                      # refused while closing
+                self.assertEqual(self.client.post("/api/connect/claude/start", headers=self.h(self.alice)).status_code, 400)
+                fa.result(timeout=60); fb.result(timeout=60)
+            self.assertEqual(visitors.running_jobs(self.alice["user_id"]), [])
+            self.assertEqual(visitors.finish_pending(), [self.alice["user_id"]])          # the deferred cleanup completes
+            self.assertFalse(visitors.dir(self.alice["user_id"]).exists())
+            self.assertFalse({c["name"]: c for c in self.client.get("/api/connectors", headers=self.h(self.alice)).json()["connectors"]}["claude"]["connected"])
+            # a disconnect with time to spare completes in one call
+            self._sign_in(self.alice)
+            steps = self.client.post("/api/connect/claude/disconnect", headers=self.h(self.alice)).json()
+            self.assertEqual((steps["pending_cleanup"], steps["removed"], steps["logged_out"]), (False, True, True))
+
+    def test_unverifiable_then_next_then_cancel_then_resume(self):
+        visitors = self.app.state.visitors
+        with self._with_stub_claude():
+            self._sign_in(self.alice)
+            conv = self.new(self.alice, connector="claude")
+            self.ask(self.alice, conv["cid"], "verified one")
+            with patch.dict(os.environ, {"STUB_SKIP_MCP": "1"}):
+                status, events = self.ask(self.alice, conv["cid"], "unverifiable one")
+            self.assertIn("left no log", events[-1]["turn"]["unverifiable"])
+            record = self.root / "record.json"
+            with patch.dict(os.environ, {"STUB_RECORD": str(record)}):
+                status, events = self.ask(self.alice, conv["cid"], "next one")
+            argv = json.loads(record.read_text())["argv"]
+            prompt = argv[argv.index("-p") + 1]
+            self.assertNotIn("--resume", argv)                                 # fresh session after the unverifiable turn
+            self.assertIn("verified one", prompt)
+            self.assertNotIn("unverifiable one", prompt)                       # kept for the reader, never context
+            # cancel, then resume: the cancelled question is not context either
+            started = threading.Event()
+            original = visitors.acquire
+
+            def acquire(v, job_id):
+                original(v, job_id); started.set()
+            with patch.dict(os.environ, {"STUB_SLEEP": "5"}), patch.object(visitors, "acquire", acquire), ThreadPoolExecutor(1) as pool:
+                future = pool.submit(self.ask, self.alice, conv["cid"], "cancelled one")
+                self.assertTrue(started.wait(timeout=30)); time.sleep(0.3)
+                self.assertTrue(self.client.post(f"/api/conversations/{conv['cid']}/cancel", headers=self.h(self.alice)).json()["cancelled"])
+                future.result(timeout=60)
+            with patch.dict(os.environ, {"STUB_RECORD": str(record)}):
+                status, events = self.ask(self.alice, conv["cid"], "resumed one")
+            argv = json.loads(record.read_text())["argv"]
+            prompt = argv[argv.index("-p") + 1]
+            self.assertNotIn("--resume", argv)
+            self.assertNotIn("cancelled one", prompt)
+            self.assertIn("next one", prompt)
+            saved = self.client.get(f"/api/conversations/{conv['cid']}", headers=self.h(self.alice)).json()
+            self.assertEqual([t["q"] for t in saved["turns"]], ["verified one", "unverifiable one", "next one", "resumed one"])
+            self.assertEqual(saved["provider_session"], "sess-stub-1")
 
     def test_provider_failure_saves_nothing_and_echoes_no_secret(self):
         conv = self.new(self.alice)

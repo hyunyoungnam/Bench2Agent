@@ -61,6 +61,18 @@ EDITIONS = (
     ("ACL", 2020), ("ACL", 2021), ("ACL", 2022), ("ACL", 2023),
     ("EMNLP", 2020), ("EMNLP", 2021), ("EMNLP", 2022),
     ("NAACL", 2021), ("NAACL", 2022), ("NAACL", 2024), ("NAACL", 2025),
+    # Owner, 2026-10-12: every venue back to 2020. List sources checked that
+    # day: virtual feeds exist for ICLR 2020-2023 and NeurIPS 2020-2022; ICML
+    # 2020-2023 and CoRL 2020-2022 come from PMLR (with abstracts); CVPR
+    # 2021-2023 and ICCV 2021 from CVF open access. CVPR 2020 (different CVF
+    # layout) and ECCV 2020/2022 (no feed; ECVA index) need adapter work.
+    ("ICML", 2020), ("ICML", 2021), ("ICML", 2022), ("ICML", 2023),
+    ("ICLR", 2020), ("ICLR", 2021), ("ICLR", 2022), ("ICLR", 2023),
+    ("NeurIPS", 2020), ("NeurIPS", 2021), ("NeurIPS", 2022),
+    ("CVPR", 2021), ("CVPR", 2022), ("CVPR", 2023),
+    ("ICCV", 2021),
+    ("AAAI", 2020), ("AAAI", 2021), ("AAAI", 2022), ("AAAI", 2023),
+    ("CoRL", 2020), ("CoRL", 2021), ("CoRL", 2022),
 )
 
 

@@ -151,7 +151,9 @@ class VisitorRuntimes:
         self.binary = binary
         self.log_path = log_path or (root / "data/bench2agent/visitor-events.jsonl")
         self._logins: dict[str, LoginSession] = {}
-        self._active: set[str] = set()         # visitors with a running question
+        self._active: dict[str, str] = {}      # job id -> visitor, one entry per running question
+        self._disconnecting: dict[str, str] = {}   # visitor -> state while a disconnect is in progress
+        self._pending_cleanup: set[str] = set()    # runtimes whose jobs did not end in time
         self._lock = threading.Lock()
         # extra host variables allowed into visitor processes; empty in
         # production, set by tests to drive a stub CLI
@@ -221,16 +223,25 @@ class VisitorRuntimes:
         login = self._logins.get(visitor)
         return {"available": True, "connected": st["connected"], "runtime": True, "account": st.get("account"),
                 "detail": st.get("detail"), "login_state": login.state if login else None,
-                "busy": visitor in self._active}
+                "busy": visitor in self._active.values(), "disconnecting": visitor in self._disconnecting,
+                "pending_cleanup": visitor in self._pending_cleanup}
 
     # -- sign-in --------------------------------------------------------------
+    def _refuse_if_disconnecting(self, visitor: str) -> None:
+        if visitor in self._disconnecting or visitor in self._pending_cleanup:
+            raise VisitorError("This connection is being closed; wait for it to finish, then connect again.")
+
+    def _processes(self) -> int:
+        return len([s for s in self._logins.values() if not s.finished]) + len(self._active)
+
     def login_start(self, visitor: str) -> dict:
+        self._refuse_if_disconnecting(visitor)
         self.ensure(visitor)
         with self._lock:
             running = self._logins.get(visitor)
             if running and not running.finished:
                 return {"state": running.state, "already": True}
-            if len([s for s in self._logins.values() if not s.finished]) + len(self._active) >= self.max_processes:
+            if self._processes() >= self.max_processes:
                 raise VisitorError("This host is at its process limit; try again in a moment.")
             path = which(self.binary)
             if not path:
@@ -263,25 +274,70 @@ class VisitorRuntimes:
             self._event(visitor, "login", state="cancelled")
         return {"cancelled": bool(session)}
 
-    # -- running questions ---------------------------------------------------
-    def acquire(self, visitor: str) -> None:
+    # -- running questions: one slot per job, held until that job ends ---------
+    def acquire(self, visitor: str, job_id: str) -> None:
+        self._refuse_if_disconnecting(visitor)
         with self._lock:
-            if len(self._active) + len([s for s in self._logins.values() if not s.finished]) >= self.max_processes:
+            if self._processes() >= self.max_processes:
                 raise VisitorError("This host is at its process limit; try again in a moment.")
-            self._active.add(visitor)
+            self._active[job_id] = visitor
         self.touch(visitor)
 
-    def release(self, visitor: str) -> None:
+    def release(self, job_id: str) -> None:
         with self._lock:
-            self._active.discard(visitor)
+            self._active.pop(job_id, None)
 
-    # -- disconnect: stop, official logout, remove the credential store -------
-    def disconnect(self, visitor: str, *, stop_running=None) -> dict:
+    def running_jobs(self, visitor: str) -> list[str]:
+        with self._lock:
+            return [j for j, v in self._active.items() if v == visitor]
+
+    # -- disconnect: refuse new work, stop, wait for termination, official logout, remove
+    def disconnect(self, visitor: str, *, stop_running=None, wait_seconds: float = 30.0) -> dict:
+        """Closing a connection in order: no new logins or questions for this
+        visitor; cancel what runs; wait until every job of the visitor has
+        actually ended; then the official logout and the removal of the
+        credential store. If the jobs do not end in time the runtime stays
+        on disk as `pending_cleanup` (no deletion under a live process) and
+        `finish_pending()` / `sweep()` complete it later."""
         self._check(visitor)
-        steps = {"stopped": False, "logged_out": None, "removed": False}
-        if stop_running is not None:
-            steps["stopped"] = bool(stop_running())
-        self.login_cancel(visitor)
+        steps = {"stopped": False, "logged_out": None, "removed": False, "waited_for": 0, "pending_cleanup": False}
+        with self._lock:
+            self._disconnecting[visitor] = "disconnecting"
+        try:
+            if stop_running is not None:
+                steps["stopped"] = bool(stop_running())
+            self.login_cancel(visitor)
+            deadline = time.time() + wait_seconds
+            while self.running_jobs(visitor) and time.time() < deadline:
+                time.sleep(0.1)
+            steps["waited_for"] = len(self.running_jobs(visitor))
+            if self.running_jobs(visitor):
+                with self._lock:
+                    self._pending_cleanup.add(visitor)
+                steps["pending_cleanup"] = True
+                self._event(visitor, "disconnect", **steps)
+                return steps
+            steps.update(self._remove(visitor))
+        finally:
+            with self._lock:
+                self._disconnecting.pop(visitor, None)
+        self._event(visitor, "disconnect", **steps)
+        return steps
+
+    def finish_pending(self) -> list[str]:
+        """Complete disconnects whose jobs have since ended."""
+        done = []
+        for visitor in list(self._pending_cleanup):
+            if not self.running_jobs(visitor):
+                self._remove(visitor)
+                with self._lock:
+                    self._pending_cleanup.discard(visitor)
+                self._event(visitor, "disconnect_completed")
+                done.append(visitor)
+        return done
+
+    def _remove(self, visitor: str) -> dict:
+        steps = {"logged_out": None, "removed": False}
         if self.exists(visitor):
             path = which(self.binary)
             if path:
@@ -293,18 +349,17 @@ class VisitorRuntimes:
                     steps["logged_out"] = False
             shutil.rmtree(self.dir(visitor), ignore_errors=True)
             steps["removed"] = not self.dir(visitor).exists()
-        self._event(visitor, "disconnect", **steps)
         return steps
 
     # -- housekeeping ----------------------------------------------------------
     def sweep(self, now: float | None = None) -> list[str]:
         """Remove runtimes idle longer than idle_days (official logout first)."""
         now = time.time() if now is None else now
-        removed = []
+        removed = self.finish_pending()
         for d in list(self.base.iterdir()):
             if not d.is_dir() or not _ID.fullmatch(d.name):
                 continue
-            if d.name in self._active or (d.name in self._logins and not self._logins[d.name].finished):
+            if self.running_jobs(d.name) or (d.name in self._logins and not self._logins[d.name].finished):
                 continue
             if now - d.stat().st_mtime > self.idle_days * 86400:
                 self.disconnect(d.name)

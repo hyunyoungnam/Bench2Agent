@@ -340,15 +340,17 @@ def cmd_chat(args, root: Path) -> int:
             print(render(last, sources=True) if last else "No answer yet.")
             continue
         if question == "/new":
-            session = Session(root, session.doc["provider"], session.doc["model"], language=session.doc.get("language", "auto"))
+            session = Session(root, session.doc["provider"], session.doc["model"], language=session.doc.get("language", "auto"),
+                              connector=session.doc.get("connector", "api"))
             last = None
-            print("New conversation · " + session.doc["id"])
+            print(f"New conversation · {session.doc['id']} · {session.doc['connector']}")
             continue
         try:
             if question.startswith("/resume "):
                 cid = question.split(maxsplit=1)[1]
                 candidate = Session(root, session.doc["provider"], session.doc["model"], cid=cid)
-                ensure_key(candidate.doc, interactive=interactive)
+                if candidate.doc.get("connector", "api") == "api":
+                    ensure_key(candidate.doc, interactive=interactive)
                 session = candidate
                 last = session.doc["turns"][-1] if session.doc["turns"] else None
                 print("Resumed · " + session.doc["id"])
@@ -359,10 +361,16 @@ def cmd_chat(args, root: Path) -> int:
             else:
                 answer(question)
         except KeyboardInterrupt:
+            session._drop_provider_session()      # the CLI's own session is not resumed after a cancel
             print("\nCancelled; the unfinished turn was not saved.", file=sys.stderr)
             if not interactive:
                 return 130
         except (ValueError, OSError, providers.ProviderError) as exc:
+            if str(exc) == "cancelled":                       # Ctrl+C reached the CLI connector mid-answer
+                print("\nCancelled; the unfinished turn was not saved.", file=sys.stderr)
+                if not interactive:
+                    return 130
+                continue
             failed = True
             print(safe_text(str(exc)), file=sys.stderr)
             if not interactive:

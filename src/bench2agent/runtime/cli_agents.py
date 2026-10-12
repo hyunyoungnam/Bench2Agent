@@ -89,8 +89,17 @@ class _CliConnector(Connector):
         group; a terminated run has no answer."""
         text = session = failed = None
         errors: deque = deque(maxlen=12)
-        with subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                              stdin=subprocess.DEVNULL, env=self._env(self.extra_env()), start_new_session=True) as proc:
+        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                stdin=subprocess.DEVNULL, env=self._env(self.extra_env()), start_new_session=True)
+
+        def kill():
+            # the CLI runs in its own session, so a Ctrl+C in the terminal does
+            # not reach it; cancellation of any kind must end it explicitly
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
             def drain():
                 for line in proc.stderr:
                     errors.append(line[-1000:])
@@ -99,10 +108,7 @@ class _CliConnector(Connector):
             def watch():
                 while proc.poll() is None:
                     if cancelled():
-                        try:
-                            os.killpg(proc.pid, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
+                        kill()
                         return
                     threading.Event().wait(0.2)
             threading.Thread(target=watch, daemon=True).start()
@@ -116,6 +122,24 @@ class _CliConnector(Connector):
                 session = s or session
                 failed = f or failed
             code = proc.wait()
+        except BaseException as exc:          # KeyboardInterrupt in a terminal, or any abort
+            kill()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if isinstance(exc, KeyboardInterrupt):
+                raise ConnectorError("cancelled") from None
+            raise
+        finally:
+            for stream in (proc.stdout, proc.stderr):
+                try:
+                    stream.close()
+                except OSError:
+                    pass
         if cancelled():
             raise ConnectorError("cancelled")
         if code and not failed:

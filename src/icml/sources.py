@@ -77,6 +77,21 @@ SPECIAL = {
     ("naacl", 2022): ("anthology", ["2022.naacl-main"]),
     ("naacl", 2024): ("anthology", ["2024.naacl-long", "2024.naacl-short"]),
     ("naacl", 2025): ("anthology", ["2025.naacl-long", "2025.naacl-short"]),
+    ("icml", 2020): ("pmlr", "v119"),
+    ("icml", 2021): ("pmlr", "v139"),
+    ("icml", 2022): ("pmlr", "v162"),
+    ("icml", 2023): ("pmlr", "v202"),
+    ("cvpr", 2021): ("cvf", "CVPR2021"),
+    ("cvpr", 2022): ("cvf", "CVPR2022"),
+    ("cvpr", 2023): ("cvf", "CVPR2023"),
+    ("iccv", 2021): ("cvf", "ICCV2021"),
+    ("aaai", 2020): ("aaai", "AAAI-20"),
+    ("aaai", 2021): ("aaai", "AAAI-21"),
+    ("aaai", 2022): ("aaai", "AAAI-22"),
+    ("aaai", 2023): ("aaai", "AAAI-23"),
+    ("corl", 2020): ("pmlr", "v155"),
+    ("corl", 2021): ("pmlr", "v164"),
+    ("corl", 2022): ("pmlr", "v205"),
     ("corl", 2023): ("pmlr", "v229"),
     ("corl", 2024): ("pmlr", "v270"),
     ("corl", 2025): ("pmlr", "v305"),
@@ -151,7 +166,7 @@ def from_aaai(label: str) -> tuple[list[dict], str]:
     special technical-track sections only."""
     base = "https://ojs.aaai.org/index.php/AAAI/issue"
     issues: dict[str, str] = {}
-    for page in range(1, 10):
+    for page in range(1, 60):          # ~15 technical-track issues per year: 2020 sits past page 9
         t = fetch(f"{base}/archive" + ("" if page == 1 else f"/{page}"),
                   timeout=120).decode("utf-8", "replace")
         found = [(i, _text(n)) for i, n in re.findall(r'issue/view/(\d+)"[^>]*>\s*([^<]+?)\s*<', t)]
