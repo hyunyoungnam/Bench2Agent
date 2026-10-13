@@ -36,7 +36,7 @@ def write_json(path: Path, value: dict) -> None:
 
 
 class Session:
-    def __init__(self, root: Path, provider: str, model: str, *, cid: str | None = None, language: str = "auto",
+    def __init__(self, root: Path, provider: str, model: str | None, *, cid: str | None = None, language: str = "auto",
                  connector: str = "api"):
         self.root = root
         self.directory = root / "data/bench2agent/chats"
@@ -136,7 +136,7 @@ class Session:
                                     "\nWrite prose in " + {"ko": "Korean", "en": "English"}.get(language, language) + ".")
         from bench2agent.runtime import ConnectorError, connector
         name = self.doc.get("connector", "api")
-        conn = connector(name, provider=self.doc["provider"]) if name == "api" else connector(name)
+        conn = connector(name, provider=self.doc["provider"]) if name == "api" else connector(name, model=self.doc["model"])
         tool_log = self.directory / "toollogs" / f"{self.doc['id']}-{int(time.time() * 1000)}.jsonl"
         tool_log.parent.mkdir(parents=True, exist_ok=True)
         from bench2agent.core import figures

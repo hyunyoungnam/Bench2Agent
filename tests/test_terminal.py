@@ -296,7 +296,7 @@ class TerminalTests(unittest.TestCase):
     def test_default_interactive_conversation_sources_and_new(self):
         from bench2agent.session import conversations
         args = type("Args", (), {"provider": "openai", "model": "fixture-model", "language": "ko",
-                                 "resume": None, "json": False})()
+                                 "resume": None, "json": False, "connector": "api"})()
         lines = ["로보틱스에서 무엇을 쓰나요?", "/sources", "/new", "새로운 질문", "/exit"]
         with patch("sys.stdin.isatty", return_value=True), patch("builtins.input", side_effect=lines), \
              patch.dict(os.environ, {"OPENAI_API_KEY": "fixture-secret"}), \
@@ -313,6 +313,55 @@ class TerminalTests(unittest.TestCase):
         with patch.object(cli, "cmd_chat", return_value=0) as chat:
             self.assertEqual(cli.main([]), 0)
         chat.assert_called_once()
+
+    def test_first_launch_uses_cli_login_without_api_configuration_and_saves_choice(self):
+        args = type("Args", (), {"provider": None, "model": None, "language": None,
+                                 "resume": None, "connector": None})()
+        with patch("bench2agent.runtime.available_connectors", return_value=[
+                {"name": "claude", "connected": True}]), patch("builtins.input") as prompt:
+            session = cli.load_session(args, self.root, interactive=True)
+        prompt.assert_not_called()
+        self.assertEqual(session.doc["connector"], "claude")
+        self.assertIsNone(session.doc["model"])
+        self.assertEqual(cli.saved_connector(self.root), "claude")
+        with patch("bench2agent.runtime.available_connectors") as probe, patch("builtins.input") as prompt:
+            scripted = cli.load_session(args, self.root, interactive=False)
+        probe.assert_not_called()
+        prompt.assert_not_called()
+        self.assertEqual(scripted.doc["connector"], "claude")
+
+    def test_first_launch_without_cli_explains_login_and_explicit_api_alternative(self):
+        with patch("builtins.input") as prompt:
+            with self.assertRaisesRegex(ValueError, "claude auth login.*codex login.*--connector api"):
+                cli.default_connector(True)
+        prompt.assert_not_called()
+
+    def test_both_cli_logins_ask_only_for_connector(self):
+        args = type("Args", (), {"provider": None, "model": None, "language": None,
+                                 "resume": None, "connector": None})()
+        with patch("bench2agent.runtime.available_connectors", return_value=[
+                {"name": "claude", "connected": True}, {"name": "codex", "connected": True}]), \
+             patch("builtins.input", return_value="codex") as prompt, contextlib.redirect_stderr(io.StringIO()):
+            session = cli.load_session(args, self.root, interactive=True)
+        self.assertEqual(prompt.call_count, 1)
+        self.assertEqual(session.doc["connector"], "codex")
+        self.assertEqual(session.doc["model"], providers.DEFAULT_MODELS["openai"])
+
+    def test_resuming_cli_does_not_probe_or_prompt_for_api(self):
+        saved = Session(self.root, "anthropic", None, connector="claude")
+        saved._save(saved.doc)
+        args = type("Args", (), {"provider": None, "model": None, "language": None,
+                                 "resume": saved.doc["id"], "connector": None})()
+        with patch("bench2agent.runtime.available_connectors") as probe, patch("builtins.input") as prompt:
+            resumed = cli.load_session(args, self.root, interactive=True)
+        prompt.assert_not_called()
+        probe.assert_not_called()
+        self.assertEqual(resumed.doc["connector"], "claude")
+
+    def test_unverifiable_render_states_it_is_excluded_from_context(self):
+        text = cli.render({"segs": [{"t": "p", "s": "Unconfirmed answer"}], "unverifiable": "missing tool log"})
+        self.assertIn("could not be verified", text)
+        self.assertIn("excluded from follow-up context", text)
 
     def test_legacy_quote_without_gid_index_stays_unverified(self):
         from bench2agent.core.chat import segment

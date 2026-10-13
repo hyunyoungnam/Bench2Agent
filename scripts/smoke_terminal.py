@@ -76,7 +76,48 @@ def main():
         migrated = json.loads(run(["migrate", "--from", str(root / "previous")]))
         assert migrated["chats_copied"] == 1
         assert "Preserved conversation" in run(["chats"])
-        print("Installed wheel: version, external data, MCP tools and migration passed.")
+        # Exercise the new CLI-login runtime against the installed package and
+        # its real stdio MCP subprocess, without a provider key or model call.
+        if os.name != "nt":
+            from types import SimpleNamespace
+            from unittest.mock import patch
+            from bench2agent import cli
+            binary = root / "bin/claude"
+            binary.parent.mkdir()
+            binary.write_text("#!" + sys.executable + "\n" + '''
+import json, os, subprocess, sys
+args = sys.argv[1:]
+if args[:2] == ["auth", "status"]:
+    print(json.dumps({"loggedIn": True, "authMethod": "stub"})); sys.exit(0)
+cfg = json.loads(args[args.index("--mcp-config") + 1])["mcpServers"]["bench2agent"]
+env = dict(os.environ); env.update(cfg["env"])
+req = "\\n".join(json.dumps(m) for m in [
+    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
+    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "benchmark_usage", "arguments": {}}}]) + "\\n"
+out = subprocess.run([cfg["command"], *cfg["args"]], input=req, capture_output=True, text=True, env=env, check=True)
+result = json.loads(json.loads(out.stdout.splitlines()[-1])["result"]["content"][0]["text"])
+assert result["revision"] == "installed-wheel-fixture"
+print(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "mcp__bench2agent__benchmark_usage", "input": {}}]}}))
+print(json.dumps({"type": "result", "session_id": "fixture-session", "result": 'Toy ⟦benchmark_usage:{}|1 paper⟧ ⟦arxiv:2501.00001|We evaluate our policies on the Toy benchmark.⟧'}))
+''', encoding="utf-8")
+            binary.chmod(0o700)
+            args = SimpleNamespace(provider=None, model=None, language=None, connector="claude", resume=None)
+            with patch("builtins.input") as prompt:
+                session = cli.load_session(args, root, interactive=True)
+            prompt.assert_not_called()
+            assert cli.saved_connector(root) == "claude"
+            agent_env = {**env, "PATH": str(binary.parent) + os.pathsep + env["PATH"]}
+            agent_env.pop("OPENAI_API_KEY", None)
+            agent_env.pop("ANTHROPIC_API_KEY", None)
+            result = subprocess.run([str(executable), "--home", str(root), "ask", "Which benchmarks?", "--json"],
+                                    cwd=root, env=agent_env, capture_output=True, text=True, timeout=30)
+            assert result.returncode == 0, result.stderr
+            turn = json.loads(result.stdout)
+            assert turn["connector"] == "claude" and not turn["unverifiable"]
+            assert turn["verified"]["passed"] == turn["verified"]["checked"] == 1
+            assert turn["verified"]["fpassed"] == turn["verified"]["fchecked"] == 1
+        print("Installed wheel: version, external data, MCP, migration and CLI-login runtime passed.")
 
 
 if __name__ == "__main__":

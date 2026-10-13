@@ -47,6 +47,9 @@ def render(turn: dict, *, sources: bool = False) -> str:
         for i, seg in enumerate(evidence, 1):
             pieces.append(f"\n[{i}] {seg.get('title', '')} · {seg.get('url') or seg.get('paper_id') or seg.get('gid')}")
     checked = turn.get("verified") or {}
+    if turn.get("unverifiable"):
+        pieces.append("\n\nAnswer could not be verified: " + str(turn["unverifiable"]) +
+                      ". This turn is kept for display and excluded from follow-up context.")
     if checked.get("checked") or checked.get("fchecked"):
         pieces.append(f"\n\nQuotes {checked.get('passed', 0)}/{checked.get('checked', 0)} · "
                       f"Figures {checked.get('fpassed', 0)}/{checked.get('fchecked', 0)}")
@@ -177,7 +180,8 @@ def cmd_status(args, root: Path) -> int:
                 "installed, not signed in" if c.get("installed") else "not installed")
             print(f"  --connector {c['name']:6} {c['label']}: {state}")
         keys = ", ".join(f"{p}: {'set' if v else 'not set'}" for p, v in result["api_keys_present"].items())
-        print(f"Standalone conversation (`bench2agent`): needs an API key — {keys}")
+        print("Standalone conversation (`bench2agent`): uses your signed-in Claude Code or Codex.")
+        print(f"Optional --connector api: separate API billing — {keys}")
         print("Through an AI client (no API key; uses the client's own login):")
         for name, c in result["clients"].items():
             print("  " + _client_line(name, c))
@@ -221,12 +225,25 @@ def load_session(args, root: Path, *, interactive: bool) -> Session:
         if not rows:
             raise ValueError("No saved conversations to resume.")
         cid = rows[0]["id"]
-    config = configuration(args, root, interactive=interactive and not cid)
-    if interactive and not cid and not settings(root):
-        if not args.model:
-            config["model"] = input(f"Model [{config['model']}]: ").strip() or config["model"]
-        write_json(settings_path(root), config)
-    connector = getattr(args, "connector", None) or saved_connector(root) or default_connector(interactive)
+    if cid:
+        # The saved conversation owns its connector; resuming never probes or
+        # prompts for a different provider before loading it.
+        config = configuration(args, root)
+        connector = "api"  # constructor default only; Session.load replaces it
+    else:
+        connector = getattr(args, "connector", None) or saved_connector(root) or default_connector(interactive)
+        if connector == "api":
+            config = configuration(args, root, interactive=interactive)
+            if interactive and not settings(root) and not args.model:
+                config["model"] = input(f"Model [{config['model']}]: ").strip() or config["model"]
+        else:
+            saved = settings(root)
+            config = {"provider": "anthropic" if connector == "claude" else "openai",
+                      "model": args.model or (saved.get("model") if saved.get("connector") == connector else None)
+                      or (providers.DEFAULT_MODELS["openai"] if connector == "codex" else None),
+                      "language": args.language or saved.get("language", "auto")}
+        if interactive:
+            write_json(settings_path(root), {**config, "connector": connector})
     session = Session(root, **config, cid=cid, connector=connector)
     if cid and ((args.provider and args.provider != session.doc["provider"]) or
                 (args.model and args.model != session.doc["model"])):
@@ -248,7 +265,9 @@ def default_connector(interactive: bool) -> str:
     from bench2agent.runtime import available_connectors
     connected = [c for c in available_connectors() if c["name"] in ("claude", "codex") and c.get("connected")]
     if not connected:
-        return "api"
+        raise ValueError("No signed-in Claude Code or Codex was found. Install an official CLI separately, "
+                         "then run `claude auth login` or `codex login` and restart bench2agent. "
+                         "To use your own API key instead, explicitly select `bench2agent --connector api`.")
     if len(connected) == 1:
         return connected[0]["name"]
     names = [c["name"] for c in connected]
@@ -269,7 +288,7 @@ def require_data(root: Path, *, interactive: bool):
         raise ValueError(current.get("reason") or "Installed data cannot be served; run bench2agent data status.")
     if interactive:
         from .data import install
-        print("Downloading benchmark data (16 MB); checking its checksum…", file=sys.stderr, flush=True)
+        print("Downloading benchmark data; checking its checksum…", file=sys.stderr, flush=True)
         install(root)
         return
     raise ValueError("Benchmark data is missing. Run bench2agent data install.")
@@ -302,7 +321,9 @@ def cmd_chat(args, root: Path) -> int:
         from bench2agent.core.mcp import B
         snapshot = B.data()
         editions = ", ".join(sorted(snapshot["editions"]))
-        print(f"Bench2Agent · {session.doc['provider']} / {session.doc['model']} · {session.doc['id']}")
+        name = session.doc.get("connector", "api")
+        engine = session.doc['provider'] if name == "api" else CLIENT_LABELS[name]
+        print(f"Bench2Agent · {engine} / {session.doc['model'] or 'CLI default'} · {session.doc['id']}")
         print(safe_text("Data: " + editions))
         print(HELP + "\n")
         if last:

@@ -1,60 +1,57 @@
 # Bench2Agent releases
 
-Bench2Agent distributes application code and research data separately. The
-repository was renamed on 2026-10-08; the local checkout folder does not need
-to change. The released package is `bench2agent` version `0.3.0`.
+Code and research data are distributed separately. Version **0.4.0** adds the
+shared Claude Code/Codex terminal runtime, JSON/SQLite repositories, immutable
+installed revisions and answer checks based on each turn's actual tool log.
 
-## Current distribution
+| Artifact | Contents |
+|---|---|
+| [PyPI 0.4.0](https://pypi.org/project/bench2agent/0.4.0/) | Standard-library terminal and stdio MCP; optional `server` dependencies |
+| [GitHub v0.4.0](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.4.0) | Identical wheel and source archive, checksums and release notes |
+| [Data 2026-10-13](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261013) | JSON, SQLite, manifest, archive checksum and per-edition coverage CSV |
 
-| Part | Status | Installation or contents |
-|---|---|---|
-| [GitHub repository](https://github.com/hyunyoungnam/Bench2Agent) | Available | Source, documentation and Apache-2.0 license |
-| [Code release v0.3.0](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.3.0) | Available | Wheel, source archive, checksums and release notes |
-| [PyPI package](https://pypi.org/project/bench2agent/0.3.0/) | Available | `pip install bench2agent` or `uv tool install bench2agent` |
-| [Research data](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007) | Available | Benchmark snapshot, manifest and SHA-256 checksum |
-| Earlier code releases | Preserved | Tagged artifacts retain their original names and package metadata |
+Install with `python -m pip install --upgrade bench2agent`, then `bench2agent`.
+The official Claude Code or Codex CLI must be installed and signed in separately.
+First interactive launch downloads data automatically. Both logins are supported;
+API keys are an explicit alternative. See [the terminal guide](terminal.md).
 
-GitHub repository redirects preserve the previous repository address. Earlier
-tags and package-index uploads are immutable historical releases; renaming the
-repository does not rename those packages or change their installed commands.
-Existing users install the new package and follow the
-[migration guide](terminal.md#switch-from-an-earlier-installation) to retain
-their research snapshot, settings and conversations. The old package remains
-available; upgrading it does not automatically migrate to the new project.
+## Research data
 
-## Data releases
+Data revision `e41da62f2fb3616f` has 61 editions of 11 conferences,
+87,048 parsed paper-edition observations and 9,332 catalogue entries.
+It expands usage coverage back to 2020 and adds NAACL. New introduction claims
+in expanded editions await review, and field-label coverage is partial.
+The release's `coverage.csv` reports listed, arXiv-matched, parsed and labelled
+paper counts per edition. These are observations, not unique-paper counts.
 
-The `data-20261007` snapshot covers 28 editions and contains benchmark usage,
-coverage and paper evidence. Its Bench2Agent download name is
-`bench2agent-data.tar.gz`. The original asset remains available for existing
-installations; the renamed asset has identical bytes and SHA-256. Renaming
-does not change the snapshot identity or its schema.
+The bundle carries its JSON reference and published SQLite bytes. Its SHA-256 is
+`9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2`.
+The query backend remains JSON by default; SQLite is selectable.
 
-`bench2agent data install` uses the release URL and checksum pinned in the
-application. Code updates do not implicitly update installed data. Research
-corpus files and generated bundles remain Git-ignored.
+Code upgrades preserve installed data and chats. `bench2agent data install`
+installs the data URL/checksum pinned in that code version. Existing revisions
+remain installed; saved conversations keep their revision. Restart a stdio MCP
+server to pick up the active revision, or specify `--revision ID` explicitly.
+The original `data-20261007` remains available for historical reproduction.
 
-Future database releases will carry a database schema version, dataset revision,
-manifest and checksum. They must reproduce the existing tool results before
-becoming the default download. See [the database and hosting design](database-and-hosting.md).
+## Scope and limitations
 
-## Code release checklist
+The terminal and MCP are validated outside the checkout. Linux/WSL is tested;
+macOS uses the same POSIX implementation. Native Windows cancellation is not
+validated. HTTP MCP and web modules are optional development prototypes.
+Hosted real sign-in, visitor OS-user/container isolation and public operation
+are not completed. No public web deployment is included in this release.
 
-1. Choose a release version and set it in `pyproject.toml` and
-   `src/bench2agent/__init__.py`. A development version is not a public release.
-2. Run Python and extension checks, inspect the renamed command and MCP entry,
-   and verify representative queries on the released data.
-3. Build wheel and source artifacts from the tested commit. Record checksums.
-4. Install the wheel into a fresh environment and run `scripts/smoke_terminal.py`
-   outside the checkout. Exercise the public data download and verify its hash.
-5. Tag the tested commit and create a GitHub code release with artifacts,
-   checksums and release notes, linking its tested data revision.
-6. Publish the same artifacts to PyPI with a token authorized for the new
-   project. A token scoped to another package does not authorize this project.
-7. Verify package-index metadata and a fresh package-name installation before
-   switching the README to the short PyPI installation command.
+## Release checklist
 
-A new code release is separate from the name change. Historical code assets are
-preserved. GitHub's [repository rename guide](https://docs.github.com/en/repositories/creating-and-managing-repositories/renaming-a-repository)
-explains redirects; its [release guide](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
-explains the relationship between tags and releases.
+1. Set the version in `pyproject.toml` and `src/bench2agent/__init__.py`.
+2. Freeze and verify one data revision; bundle its JSON, database and manifest.
+3. Run Python, Node, backend parity and historical figure regression checks.
+4. Build wheel/sdist, check metadata and install in a fresh environment outside
+   the checkout. Exercise terminal connector selection and the published download.
+5. Commit, wait for CI, tag and publish GitHub artifacts and checksums.
+6. Publish the identical wheel/sdist to PyPI using a locally stored token.
+7. Verify a fresh package-name installation, artifact hashes and data/tool queries.
+
+Corpus exports, credentials, chats and raw paper archives remain Git-ignored.
+Research bundles ship the snapshot's attributed evidence, not archived full texts.

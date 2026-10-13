@@ -235,6 +235,17 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("-p") + 1], "follow-up")   # a resumed session carries its own history
             self.assertEqual(argv[argv.index("--resume") + 1], "sess-1")
 
+    def test_explicit_model_reaches_each_official_cli(self):
+        record = self.root / "model-record.json"
+        with patch.dict(os.environ, {"STUB_RECORD": str(record)}):
+            for name in ("claude", "codex"):
+                conn = connector(name, model="chosen-model")
+                with patch.object(conn, "_run", return_value=("done", "session", None)) as run:
+                    conn.ask(root=self.root, revision="v1", question="q", system="s", history=[],
+                             provider_session=None, emit=lambda e: None, cancelled=lambda: False, tool_log=self.log)
+                argv = run.call_args.args[0]
+                self.assertEqual(argv[argv.index("--model") + 1], "chosen-model")
+
     def test_api_key_connector_records_calls_in_the_same_shape(self):
         script = [
             {"status": "completed", "output": [{"type": "function_call", "call_id": "c1", "name": "benchmark_usage", "arguments": "{}"}]},

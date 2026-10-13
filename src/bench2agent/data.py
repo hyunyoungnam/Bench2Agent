@@ -27,8 +27,8 @@ SNAPSHOT = "benchmark_snapshot.json"
 MEMBER = "data/processed/" + SNAPSHOT
 DB_MEMBER = "data/processed/" + DATABASE
 # A release-pinned default keeps first-run downloads reproducible and checked.
-DEFAULT_URL = "https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261007/bench2agent-data.tar.gz"
-DEFAULT_SHA256 = "d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e"
+DEFAULT_URL = "https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261013/bench2agent-data.tar.gz"
+DEFAULT_SHA256 = "9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2"
 
 
 def digest(path: Path) -> str:

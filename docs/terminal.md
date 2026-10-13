@@ -5,7 +5,7 @@ editions, and which newly introduced benchmarks other researchers adopt.
 Answers carry computed counts, dataset coverage and original paper evidence.
 Usage frequency describes adoption; it does not measure benchmark quality.
 
-Python 3.10+ is required. These commands describe Bench2Agent 0.3.0, available on PyPI.
+Python 3.10+ is required. Install and sign in to the official Claude Code or Codex CLI separately before starting the conversation. These commands describe Bench2Agent 0.4.0, available on PyPI.
 The runtime uses only Python's standard library;
 no GPU, search engine, VS Code extension or extraction pipeline is needed.
 
@@ -20,14 +20,14 @@ Install using **one** of the following methods. With Python 3.10+
 in your environment:
 
 ```bash
-python -m pip install bench2agent
+python -m pip install --upgrade bench2agent
 bench2agent
 ```
 
 Or, with [uv installed](#install-uv):
 
 ```bash
-uv tool install bench2agent
+uv tool install --upgrade bench2agent
 bench2agent
 ```
 
@@ -43,7 +43,7 @@ already exist". Add `--force`; the installed package provides the same
 An installable wheel can be shared without the source checkout:
 
 ```bash
-uv tool install ./bench2agent-0.3.0-py3-none-any.whl
+uv tool install ./bench2agent-0.4.0-py3-none-any.whl
 ```
 
 The wheel includes code, not the research corpus. It runs from any working
@@ -78,10 +78,10 @@ The short setup commands below assume `uv` is on PATH.
 
 Paste this block into PowerShell after installing `uv`. It installs the
 package and starts Bench2Agent. The first launch downloads and checks its data.
-Choose the provider and model at the prompt, then enter a hidden API key.
+A signed-in Claude Code or Codex is selected; when both are present, choose one. Native Windows cancellation is unvalidated; WSL is the tested Windows path.
 
 ```powershell
-uv tool install bench2agent
+uv tool install --upgrade bench2agent
 if ($LASTEXITCODE -eq 0) { bench2agent }
 ```
 
@@ -95,14 +95,14 @@ Ask the client to use Bench2Agent for benchmark questions.
 For Codex:
 
 ```bash
-uv tool install bench2agent
+uv tool install --upgrade bench2agent
 bench2agent codex
 ```
 
 For Claude Code:
 
 ```bash
-uv tool install bench2agent
+uv tool install --upgrade bench2agent
 bench2agent claude
 ```
 
@@ -147,11 +147,11 @@ removes its old commands after migration; with pip, use
 Use a separately distributed snapshot or Bench2Agent data bundle:
 
 ```bash
-# The published bundle (GitHub release data-20261007, 16 MB):
+# The published bundle (GitHub release data-20261013, about 63 MB):
 bench2agent data install
 # Or select an explicit source:
-bench2agent data install --url https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261007/bench2agent-data.tar.gz \
-    --sha256 d19dcc2c47cc13738188176b5b87534e7e3eb0f0d11c86731bf41e0a1acca50e
+bench2agent data install --url https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261013/bench2agent-data.tar.gz \
+    --sha256 9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2
 # Or a local copy:
 bench2agent data install --file ./bench2agent-data.tar.gz
 bench2agent data status
@@ -225,8 +225,7 @@ manifest verifies its snapshot checksum; `--sha256` additionally verifies the
 entire download. Installation validates schema and stages an atomic replacement.
 Failed downloads, invalid snapshots and checksum failures retain existing data.
 Updating data uses the same install command. Conversations retain their original
-snapshot identity; continuing a conversation after a data update asks you to
-start a new one or reinstall the original snapshot.
+snapshot identity; continuing a conversation after a data update uses its original installed revision. If that revision was removed, reinstall it or start a new conversation.
 
 With no source arguments, `bench2agent data install` uses the dated release
 and SHA-256 pinned in this code version. It does not follow GitHub's latest
@@ -237,7 +236,7 @@ first-launch downloads only happen when data is missing. A headless
 On the collection machine, build and package reviewed data separately:
 
 ```bash
-PYTHONPATH=src python3 -m bench2agent benchmarks
+PYTHONPATH=src python3 -m bench2agent benchmarks --publish
 PYTHONPATH=src python3 -m bench2agent data bundle --out dist/bench2agent-data.tar.gz
 ```
 
@@ -253,7 +252,7 @@ web. Bench2Agent's install is separate from the official CLIs: install
 Claude Code or Codex and sign in with its own login first. Then an
 interactive `bench2agent` finds the signed-in CLI and answers with it
 (asking which when both are), giving it the pinned MCP server with built-in
-tools disabled and recording every call; `--connector claude|codex` names
+Claude built-in tools disabled (Codex runs in its read-only sandbox) and recording every call; `--connector claude|codex` names
 one, and `bench2agent status` lists them. Scripts (`bench2agent ask`) take
 `--connector` or the saved choice, else the API key. `bench2agent claude` /
 `bench2agent codex` are different: they open the official CLI itself with
@@ -266,7 +265,7 @@ or Anthropic and supply the key through the environment:
 ```bash
 export OPENAI_API_KEY='YOUR_API_KEY'
 bench2agent init --provider openai
-bench2agent
+bench2agent --connector api
 ```
 
 For Anthropic, set `ANTHROPIC_API_KEY` and choose `--provider anthropic`.
@@ -492,7 +491,7 @@ revision. The `Dockerfile` builds the same host as one container with a
 The host's own state (users, tokens as hashes, conversations, attempts) lives
 in `data/bench2agent/web.sqlite`, apart from the research revisions. It binds
 to loopback by default; a public deployment needs HTTPS termination in front
-and is not part of this release. [web-live-check.md](web-live-check.md) is
+and is not validated for public operation. The optional code is packaged as a prototype, not a hosted service. [web-live-check.md](web-live-check.md) is
 the procedure for checking real answers from the page.
 
 ## Build a release
@@ -510,7 +509,7 @@ Code versions, data snapshots, and PyPI publication are explained in the
 ```bash
 python -m pip install build
 python -m build
-python -m pip install dist/bench2agent-0.3.0-py3-none-any.whl
+python -m pip install dist/bench2agent-0.4.0-py3-none-any.whl
 ```
 
 The CI workflow tests Python 3.10 and 3.14, builds distribution artifacts,

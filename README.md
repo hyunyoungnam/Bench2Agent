@@ -2,19 +2,65 @@
 
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/Bench2Agent?filter=v*&label=release)](https://github.com/hyunyoungnam/Bench2Agent/releases)
 [![PyPI](https://img.shields.io/pypi/v/bench2agent)](https://pypi.org/project/bench2agent/)
-[![Data release](https://img.shields.io/badge/data-2026--10--07-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
+[![Data release](https://img.shields.io/badge/data-2026--10--13-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261013)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md)
 
-Find which benchmarks researchers evaluate on, how their use changes, and
-which new benchmarks other researchers adopt. Ask in a terminal conversation,
-or use Bench2Agent inside Claude Code or Codex.
+Ask which benchmarks researchers evaluate on, how usage changes across years,
+and which new benchmarks other researchers adopt. Bench2Agent connects your
+signed-in Claude Code or Codex to tested benchmark tools and checks answers
+against the tool results and original paper evidence.
 
-Answers include usage counts, the papers covered, and original paper evidence.
 **Usage frequency describes adoption, not benchmark quality.**
 
-[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md) ·
-[Releases](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/releases.md) · [License](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
+[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md) · [Releases](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/releases.md)
+
+## Get started
+
+You need **Python 3.10+** and **Claude Code or Codex installed and signed in**
+on your computer. Bench2Agent and the official AI CLI are separate installations.
+If needed, sign in using `claude auth login` or `codex login` first.
+
+Then install and start the terminal conversation:
+
+```bash
+python -m pip install --upgrade bench2agent
+bench2agent
+```
+
+Use an active Python environment; a virtual environment is recommended. On
+macOS/Linux, [uv](https://docs.astral.sh/uv/getting-started/installation/)
+provides an alternative isolated installation:
+
+```bash
+uv tool install --upgrade bench2agent
+bench2agent
+```
+
+Choose **one** installation method. On the first interactive launch,
+Bench2Agent automatically downloads the research-data bundle (about 63 MB),
+verifies its checksum and installs its JSON and SQLite files. Subsequent
+launches reuse the data. No GPU, database server, Bench2Agent account or API key
+is needed for the CLI-login route. Model usage follows your AI account's limits.
+
+If both AI CLIs are signed in, choose one at the prompt. Your choice is saved.
+To choose explicitly:
+
+```bash
+bench2agent --connector claude
+# Or:
+bench2agent --connector codex
+```
+
+Ask a question, then a follow-up. `/sources` shows evidence, `/chats` lists
+saved conversations, `/resume ID` continues one, `/new` starts fresh, and
+Ctrl+C cancels an unfinished answer. Saved conversations keep their data
+revision after updates. The supported, tested terminal platform is Linux/WSL;
+macOS follows the same POSIX path. Native Windows CLI cancellation has not yet
+been validated.
+
+API access is an explicit alternative: `bench2agent --connector api` prompts
+for the provider and a hidden, session-only API key. API billing is separate
+from a Claude or ChatGPT subscription.
 
 ## Ask a question
 
@@ -49,140 +95,68 @@ Answers include repository, dataset or homepage links and reviewed introducing
 papers where available. Locations are our mapping; a repository link does not
 guarantee a direct data download. Missing links mean no confirmed location.
 
-## On the web (private test)
+## Use the tools inside Claude Code or Codex
 
-Two ways to use Bench2Agent, both with an AI account you already have and
-no Bench2Agent account or API key:
-
-- **Locally, in the terminal.** Install Bench2Agent next to a signed-in
-  Claude Code or Codex and run `bench2agent`; it answers with that login,
-  through its own pinned tools, and verifies every quote and figure. (The
-  code described here is newer than the 0.3.0 release on PyPI; until the next
-  release install from this repository.)
-- **On the web, hosted.** Open the address, connect your own Claude account,
-  ask. The test host is private for now.
-
-What each account route permits, what was executed and what remains before
-public operation is in [docs/account-connections.md](docs/account-connections.md);
-the host in [docs/terminal.md](docs/terminal.md#hosted-conversation-web); the
-real-model check in [docs/web-live-check.md](docs/web-live-check.md).
-
-## Get started
-
-### Terminal conversation — macOS / Linux
-
-With Python 3.10+ in your environment, install and start Bench2Agent.
-Choose pip or the uv alternative below:
+After installation, these shortcuts download missing data and open the official
+client with Bench2Agent's MCP tools:
 
 ```bash
-python -m pip install bench2agent
-bench2agent
+bench2agent claude
+# Or:
+bench2agent codex
 ```
 
-<details>
-<summary>Alternative: install with uv</summary>
-
-Choose this instead of pip. With [uv installed](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md#install-uv):
-
-```bash
-uv tool install bench2agent
-bench2agent
-```
-
-</details>
-
-`uv tool install` creates a separate environment for the app. `pip` installs
-into your active Python environment; a virtual environment is recommended.
-
-The first launch downloads the **16 MB research-data snapshot** and checks
-its checksum automatically. Later launches reuse your installed data.
-This snapshot contains benchmark usage and paper evidence; external
-benchmarks' underlying questions, labels, and images are separate downloads.
-
-Choose OpenAI or Anthropic at the prompt, accept or change the model, and
-enter your API key when asked. The key is hidden and used only for that
-session. Existing `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` environment variables
-also work. API access uses your provider's API billing, separately from a
-ChatGPT or Claude subscription.
-
-Once installed, just run `bench2agent` to return. No GPU is needed.
-[Windows setup, saved conversations, and data updates](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
-
-### Use your existing Claude Code or Codex login
-
-Bench2Agent can supply the same data to your AI client's conversation through
-MCP. The client handles model access through its own login. Bench2Agent's MCP
-server needs no separate API key.
-
-After installing Bench2Agent, open a conversation in your preferred client.
-Claude Code or Codex must already be installed and signed in:
-
-| Command | Model access |
-|---|---|
-| `bench2agent` | OpenAI or Anthropic API key, with separate API billing |
-| `bench2agent claude` | Your existing Claude Code login |
-| `bench2agent codex` | Your existing Codex login |
-
-These commands download the data if needed and open a new session with
-Bench2Agent tools available. Ask the client to **use Bench2Agent** for your
-benchmark question.
-For a fresh installation using this route, follow the
-[complete MCP setup](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md#install-for-claude-code-or-codex).
-Your client writes its answers; Bench2Agent's final-answer checks run in the
-standalone terminal interface.
-
-## Web service direction
-
-`bench2agent serve` starts the existing local browser interface. A hosted
-conversation service is planned around the same benchmark tools, with a
-relational database, per-user conversations and a separate collection worker.
-See the [database and hosting design](docs/database-and-hosting.md) for the
-terminal, web and future Mac server architecture.
+Ask the client to **use Bench2Agent**. In this route the client writes the
+answer; Bench2Agent's final-answer checks run in the `bench2agent` conversation
+interface. [MCP setup and scripted queries](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
 ## Data coverage
 
-The current snapshot covers **28 editions of 10 conferences**, with
-**58,616 parsed paper-edition observations** and **9,332 benchmark and dataset
-entries**. Of those entries, 8,768 have reviewed introduction claims inside
-this corpus ([review rubric](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/introduced-review.md)).
+The **2026-10-13 data release** contains **61 editions of 11 conferences**,
+**87,048 parsed paper-edition observations** and **9,332 benchmark/dataset
+entries**, including 8,768 entries with reviewed introduction claims.
+Revision: `e41da62f2fb3616f`.
 
-| Venue | Editions | Venue | Editions |
-|---|---|---|---|
-| ICML | 2024 · 2025 · 2026 | ICCV | 2023 · 2025 |
-| ICLR | 2024 · 2025 · 2026 | ECCV | 2024 · 2026 |
-| NeurIPS | 2023 · 2024 · 2025 | ACL | 2024 · 2025 · 2026 |
-| CVPR | 2024 · 2025 · 2026 | EMNLP | 2023 · 2024 · 2025 |
-| AAAI | 2024 · 2025 · 2026 | CoRL | 2023 · 2024 · 2025 |
+| Venue | Included editions |
+|---|---|
+| AAAI | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 · 2026 |
+| ACL | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 · 2026 |
+| CORL | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 |
+| CVPR | 2021 · 2022 · 2023 · 2024 · 2025 · 2026 |
+| ECCV | 2024 · 2026 |
+| EMNLP | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 |
+| ICCV | 2021 · 2023 · 2025 |
+| ICLR | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 · 2026 |
+| ICML | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 · 2026 |
+| NAACL | 2021 · 2022 · 2024 · 2025 |
+| NEURIPS | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 |
 
 Counts come from explicitly stated evaluation or training use in parsed arXiv
-HTML. Each answer reports its scope and denominator. Missing full text or an
-unstated role does not establish that a benchmark was unused. Field filters
-cover papers with matching labels and can exclude unlabelled venues.
+HTML, with the analysed editions and denominator reported for each query.
+Missing or unparsed papers remain unknown. Field filters exclude papers without
+matching labels; several added editions still lack labels. New introduction
+claims in the expanded editions are not yet reviewed, so introduction discovery
+is less complete than usage coverage. “New” means a reviewed claim in this
+corpus, not the first public release worldwide.
 
-“New” means a reviewed introduction claim inside this corpus, which starts
-in 2023; it does not establish the first public release. Earlier observed use,
-self-use, use by other authors, and uncertain attribution are recorded
-separately. Recent introductions have less time to accumulate adoption.
+The bundle includes the JSON reference and its normalized SQLite database;
+`BENCH2AGENT_STORE=sqlite` selects SQLite. Both backends share counting rules.
+Each conversation and its tools and checks stay on one immutable revision.
+External benchmarks' actual questions, labels and images are separate downloads.
+[Data rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md) · [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md)
 
-Bench2Agent is a research prototype. Released snapshots have fixed identities,
-and conversations record the snapshot used for their answers.
-[Data rules and tool details](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md).
+## Updates and web development
 
-## Releases and development
+Version **0.4.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.4.0/)
+and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.4.0).
+Update code using your installation method; update research data separately
+with `bench2agent data install`. Earlier installed revisions remain available
+for saved chats. [Migration and data management](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
-Code and data are distributed separately. Bench2Agent 0.3.0 is available on
-[PyPI](https://pypi.org/project/bench2agent/0.3.0/) and as a
-[GitHub release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.3.0).
-Earlier code tags retain the installation artifacts published before the
-rename. The [data-20261007 release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261007)
-is the current research snapshot. Update code with `uv tool upgrade bench2agent`
-or `python -m pip install --upgrade bench2agent`; data updates use
-`bench2agent data install`. Existing users can follow the
-[migration guide](docs/terminal.md#switch-from-an-earlier-installation). See
-[how releases work](docs/releases.md).
+The optional web/HTTP MCP modules are development prototypes. Hosted Claude
+sign-in uses directory separation under one OS user; real hosted sign-in,
+strong visitor isolation and public operation are still unvalidated.
+This release provides the **local terminal and MCP**, not a public web service.
+[Account connections](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/account-connections.md).
 
-The earlier paper-reading interface remains available as an evidence surface:
-[browser guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/browser.md). Start it with `bench2agent serve`.
-Paper-view principles are in [docs/paper-view.md](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/paper-view.md).
-
-Bench2Agent's code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE).
+Code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE).

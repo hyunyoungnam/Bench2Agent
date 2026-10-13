@@ -94,7 +94,7 @@ class TerminalPtyTests(unittest.TestCase):
         return [json.loads(p.read_text()) for p in (self.root / "data/bench2agent/chats").glob("*.json")]
 
     def test_new_resume_ctrl_c_and_follow_up_on_a_real_terminal(self):
-        t = Terminal(self.root, self.env, "--connector", "claude", "--provider", "openai", "--model", "m")
+        t = Terminal(self.root, self.env, "--connector", "claude", "--model", "m")
         self.addCleanup(t.close)
         t.expect(r"> $")
         t.send("first question\n")
@@ -120,7 +120,7 @@ class TerminalPtyTests(unittest.TestCase):
         t.expect(r"Continue:.*")
         os.waitpid(t.pid, 0)
         env_slow = {**self.env, "STUB_SLEEP": "20"}
-        t2 = Terminal(self.root, env_slow, "--connector", "claude", "--provider", "openai", "--model", "m", "--resume", cid1)
+        t2 = Terminal(self.root, env_slow, "--connector", "claude", "--model", "m", "--resume", cid1)
         self.addCleanup(t2.close)
         t2.expect(r"> $")
         t2.send("slow question\n")
@@ -150,7 +150,7 @@ class TerminalPtyTests(unittest.TestCase):
         t2.expect(r"Continue:.*")
         os.waitpid(t2.pid, 0)
         env_fail = {**self.env, "STUB_SKIP_MCP": "1"}
-        t3 = Terminal(self.root, env_fail, "--connector", "claude", "--provider", "openai", "--model", "m", "--resume", cid1)
+        t3 = Terminal(self.root, env_fail, "--connector", "claude", "--model", "m", "--resume", cid1)
         self.addCleanup(t3.close)
         t3.expect(r"> $")
         t3.send("unverifiable question\n")
@@ -163,7 +163,7 @@ class TerminalPtyTests(unittest.TestCase):
         os.waitpid(t3.pid, 0)
         # the next terminal, same conversation: the unverifiable turn is kept but never becomes context
         record = self.root / "record.json"
-        t4 = Terminal(self.root, {**self.env, "STUB_RECORD": str(record)}, "--connector", "claude", "--provider", "openai", "--model", "m", "--resume", cid1)
+        t4 = Terminal(self.root, {**self.env, "STUB_RECORD": str(record)}, "--connector", "claude", "--model", "m", "--resume", cid1)
         self.addCleanup(t4.close)
         t4.expect(r"> $")
         t4.send("after the unverifiable one\n")
@@ -189,6 +189,26 @@ class TerminalPtyTests(unittest.TestCase):
             saved = json.loads(a.path.read_text())
             self.assertEqual([t["q"] for t in saved["turns"]], ["one", "two"])
             self.assertEqual(saved["provider_session"], "sess-stub-1")
+
+    def test_fresh_interactive_cli_selects_signed_in_agent_without_key_or_model_prompts(self):
+        config = self.root / ".claude"
+        config.mkdir()
+        (config / ".credentials.json").write_text("{}")
+        # Prevent the real machine's Codex login from being selected.
+        codex = self.root / "bin/codex"
+        codex.write_text("#!/usr/bin/env python3\nimport sys\nprint('Not logged in'); sys.exit(1)\n")
+        codex.chmod(codex.stat().st_mode | stat.S_IEXEC)
+        record = self.root / "record.json"
+        t = Terminal(self.root, {**self.env, "STUB_RECORD": str(record)})
+        self.addCleanup(t.close)
+        out = t.expect(r"Bench2Agent · Claude Code / CLI default.*> $")
+        self.assertNotIn("API_KEY", out)
+        self.assertNotIn("Model provider", out)
+        t.send("first question without setup\n")
+        t.expect(r"Quotes 1/1 · Figures 1/1.*> $")
+        self.assertEqual(self.chats()[0]["connector"], "claude")
+        self.assertEqual(json.loads((self.root / "data/bench2agent/settings.json").read_text())["connector"], "claude")
+        self.assertNotIn("--model", json.loads(record.read_text())["argv"])
 
 
 import unittest.mock  # noqa: E402

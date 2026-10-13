@@ -65,15 +65,17 @@ def isolated_environment(home: Path) -> dict:
 class _CliConnector(Connector):
     owns_loop = True
     binary = ""
-    options = ("config_dir",)
+    options = ("config_dir", "model")
 
-    def __init__(self, config_dir: str | None = None, env: dict | None = None, cwd: str | None = None):
+    def __init__(self, config_dir: str | None = None, env: dict | None = None, cwd: str | None = None,
+                 model: str | None = None):
         """`env` given: the process gets exactly that environment (a hosted
         visitor's isolated one) plus the connector's own variables; absent:
         the terminal user's own environment."""
         self.config_dir = str(Path(config_dir).expanduser()) if config_dir else None
         self.base_env = dict(env) if env is not None else None
         self.cwd = Path(cwd) if cwd else None
+        self.model = model
 
     def _env(self, extra: dict | None = None) -> dict:
         env = dict(self.base_env) if self.base_env is not None else dict(os.environ)
@@ -96,7 +98,10 @@ class _CliConnector(Connector):
             # the CLI runs in its own session, so a Ctrl+C in the terminal does
             # not reach it; cancellation of any kind must end it explicitly
             try:
-                os.killpg(proc.pid, signal.SIGTERM)
+                if os.name == "nt":
+                    proc.terminate()
+                else:
+                    os.killpg(proc.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
         try:
@@ -128,9 +133,13 @@ class _CliConnector(Connector):
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 try:
-                    os.killpg(proc.pid, signal.SIGKILL)
+                    if os.name == "nt":
+                        proc.kill()
+                    else:
+                        os.killpg(proc.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+                proc.wait(timeout=10)
             if isinstance(exc, KeyboardInterrupt):
                 raise ConnectorError("cancelled") from None
             raise
@@ -195,6 +204,8 @@ class ClaudeCodeConnector(_CliConnector):
                "--allowedTools", "mcp__bench2agent", "--append-system-prompt", system]
         if provider_session:
             cmd += ["--resume", provider_session]
+        if self.model:
+            cmd += ["--model", self.model]
         seen: list[dict] = []
 
         def parse(ev, emit):
@@ -255,6 +266,8 @@ class CodexConnector(_CliConnector):
         if provider_session:
             cmd += ["resume", provider_session]
         cmd += ["--json", "--skip-git-repo-check"]
+        if self.model:
+            cmd += ["--model", self.model]
         for key, value in values.items():
             literal = ("{ " + ", ".join(k + " = " + json.dumps(v) for k, v in value.items()) + " }") if isinstance(value, dict) else json.dumps(value)
             cmd += ["-c", key + "=" + literal]
