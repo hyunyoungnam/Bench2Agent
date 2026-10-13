@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .paths import ROOT
 from . import revisions
-from .repository import (DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SqliteRepository, Unavailable,
+from .repository import (CONTENT_HASH_RULE, DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SqliteRepository, Unavailable,
                          build_database, content_sha256)
 ROLES = ("evaluates_on", "trains_on")
 # Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
@@ -273,7 +273,7 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
     import sqlite3
     from bench2agent import __version__
     target = out or root / "data/processed" / DATABASE
-    report = build_database(data, target, {"revision_id": rid, "content_sha256": content,
+    report = build_database(data, target, {"revision_id": rid, "content_sha256": content, "content_hash_rule": CONTENT_HASH_RULE,
                                            "min_client_version": MIN_CLIENT_VERSION,
                                            "built_with": f"bench2agent {__version__}",
                                            "sqlite_library": sqlite3.sqlite_version})

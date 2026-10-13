@@ -25,9 +25,9 @@ import urllib.parse
 from pathlib import Path
 
 from bench2agent.core import revisions
-from bench2agent.core.repository import (DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SUPPORTED_SCHEMAS, SqliteRepository,
-                                         client_supports, content_sha256, counts, export_snapshot, file_sha256,
-                                         import_snapshot, version_tuple)
+from bench2agent.core.repository import (CONTENT_HASH_RULE, DATABASE, HASH_RULES, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE,
+                                         SUPPORTED_SCHEMAS, SqliteRepository, client_supports, content_hashes, counts,
+                                         export_snapshot, file_sha256, import_snapshot, version_tuple)
 from bench2agent.core.revisions import FORMAT_V2, RevisionError
 
 MEMBER = "data/processed/" + SNAPSHOT
@@ -181,11 +181,14 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
     """Install a bundle, a database or a legacy snapshot JSON as a new revision.
 
     Everything is staged and checked first: a database is checked for a
-    readable schema, a supported client version and (when it records one) a
-    content hash that its content reproduces; a legacy JSON is validated and
-    imported. Only a complete, consistent directory is moved into place, and
-    only then does `active` move. A failed install leaves the active
-    revision exactly as it was."""
+    readable schema and a supported client version; a legacy JSON is
+    validated and imported. Every content hash the source offers — in the
+    bundle manifest, in the database's own meta, or computed from a legacy
+    JSON — is verified against the staged database's content under its own
+    rule; an unknown rule or a mismatch refuses the install. The installed
+    manifest records the hashes computed from the database. Only a complete,
+    consistent directory is moved into place, and only then does `active`
+    move. A failed install leaves the active revision exactly as it was."""
     if not file and not url:
         url = DEFAULT_URL
         sha256 = sha256 or DEFAULT_SHA256
@@ -201,12 +204,20 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
         json_path, db_path = stage / SNAPSHOT, stage / DATABASE
         legacy = json_path.exists()
         built_locally = False
+        offered: dict[str, set[str]] = {}       # rule -> every hash some source vouched for
+
+        def offer(hashes: dict, who: str):
+            for rule, value in hashes.items():
+                if rule not in HASH_RULES:
+                    raise ValueError(f"Unknown content hash rule {rule!r} ({who}); upgrade bench2agent to read this data.")
+                offered.setdefault(rule, set()).add(value)
+        offer(revisions.hashes_of(bundle_manifest) if bundle_manifest else {}, "bundle manifest")
         if legacy:
             with json_path.open(encoding="utf-8") as fh:
                 loaded = json.load(fh)
             from bench2agent.core.repository import validate_snapshot
             metadata = validate_snapshot(loaded)
-            content = content_sha256(loaded)
+            offer(content_hashes(loaded), "legacy JSON")
             del loaded
             if not db_path.exists():
                 import_snapshot(json_path, db_path)      # the one-time legacy conversion
@@ -218,11 +229,16 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
         else:
             ident = _check_sqlite(db_path)
             rid = ident.get("revision_id") or ident["snapshot_id"]
-            content = ident.get("content_sha256")
-            if content and content_sha256(export_snapshot(db_path)) != content:
-                raise ValueError("The database's content does not reproduce its recorded content hash; nothing was installed.")
             metadata = {"snapshot_id": ident["snapshot_id"], "generated_at": ident.get("generated_at"),
                         "source": ident["source"], **counts(db_path)}
+        if ident.get("content_sha256"):
+            offer({ident.get("content_hash_rule") or CONTENT_HASH_RULE: ident["content_sha256"]}, "database meta")
+        # the database's actual content, under every rule: what every offer must match
+        computed = content_hashes(export_snapshot(db_path))
+        for rule, values in offered.items():
+            if values != {computed[rule]}:
+                raise ValueError(f"The database's content does not reproduce the content hash offered under rule {rule}; "
+                                 "nothing was installed.")
         if not revisions.valid_id(rid):
             raise ValueError(f"Revision identity {rid!r} cannot name a revision directory.")
         import sqlite3
@@ -235,7 +251,9 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
         manifest = {"format": FORMAT_V2, "revision_id": rid, "snapshot_id": rid,
                     **{k: metadata.get(k) for k in ("generated_at", "source", "editions", "benchmarks", "paper_observations")},
                     "db_schema_version": ident["db_schema_version"], "min_client_version": needs,
-                    "content_sha256": content, "files": files, "legacy_json": legacy,
+                    "content_sha256": computed[CONTENT_HASH_RULE], "content_hash_rule": CONTENT_HASH_RULE,
+                    "content_hashes": computed, "content_hash_from": "database",
+                    "files": files, "legacy_json": legacy,
                     "source_json_sha256": ident.get("source_sha256"),
                     # bytes of a locally built database differ between SQLite
                     # builds even for identical content; say where they came from
@@ -254,9 +272,9 @@ def install(root: Path, *, file: str | None = None, url: str | None = None, sha2
     kept = revisions.manifest_of(root, rid)   # the installed manifest, which a reuse or restore keeps
     return {"available": True, "revision": rid, "path": str(target), "active": activate, "outcome": outcome,
             "format": kept.get("format"), "files": sorted(revisions.files_of(kept)),
-            **{k: kept.get(k) for k in ("snapshot_id", "generated_at", "source", "content_sha256", "db_schema_version",
-                                        "min_client_version", "sqlite_built_locally", "editions", "benchmarks",
-                                        "paper_observations")},
+            **{k: kept.get(k) for k in ("snapshot_id", "generated_at", "source", "content_sha256", "content_hash_rule",
+                                        "content_hashes", "db_schema_version", "min_client_version", "sqlite_built_locally",
+                                        "editions", "benchmarks", "paper_observations")},
             "sqlite_sha256": revisions.files_of(kept).get(DATABASE)}
 
 
@@ -278,10 +296,17 @@ def bundle(root: Path, output: Path, revision: str | None = None) -> dict:
         frozen = stage / DATABASE
         shutil.copyfile(db, frozen)
         ident = _check_sqlite(frozen)
+        # the content under every rule, from the bytes shipped; what the
+        # installed manifest recorded must agree under every rule it has
+        computed = content_hashes(export_snapshot(frozen))
+        if revisions.compare_hashes(revisions.hashes_of(installed), computed) is False:
+            raise ValueError(f"Revision {rid}'s recorded content hash does not match its database; nothing was bundled.")
         manifest_data = {"format": FORMAT_V2, "revision_id": rid, "snapshot_id": rid,
                          **{k: installed.get(k) for k in ("generated_at", "source", "editions", "benchmarks", "paper_observations",
-                                                          "content_sha256", "sqlite_built_locally", "sqlite_library", "built_with",
+                                                          "sqlite_built_locally", "sqlite_library", "built_with",
                                                           "source_json_sha256")},
+                         "content_sha256": computed[CONTENT_HASH_RULE], "content_hash_rule": CONTENT_HASH_RULE,
+                         "content_hashes": computed,
                          "db_schema_version": ident["db_schema_version"],
                          "min_client_version": installed.get("min_client_version") or MIN_CLIENT_VERSION,
                          "files": {DATABASE: digest(frozen)}}
@@ -296,4 +321,5 @@ def bundle(root: Path, output: Path, revision: str | None = None) -> dict:
     output.with_name(output.name + ".sha256").write_text(checksum + "  " + output.name + "\n", encoding="utf-8")
     return {"path": str(output), "sha256": checksum, "revision": rid, "format": FORMAT_V2,
             **{k: manifest_data.get(k) for k in ("snapshot_id", "generated_at", "source", "editions", "benchmarks",
-                                                 "paper_observations", "content_sha256", "min_client_version")}}
+                                                 "paper_observations", "content_sha256", "content_hash_rule", "content_hashes",
+                                                 "min_client_version")}}

@@ -161,15 +161,18 @@ evidence prototype during this transition.
 **There is no Bench2Agent account** (owner decision, 2026-10-13): no sign-up,
 invite code, name or password on any surface. A visitor opens the page and,
 in Settings, connects their own Anthropic (Claude) or OpenAI account through
-the provider's official sign-in; that connection is the only identity and the
-only access control (read without it, ask with it). The visitor session cookie
-only ties conversations to a browser; it is not an account and never becomes
+the provider's official sign-in. Two separate things: permission to use a
+model comes from that connection (read without it, ask with it); ownership
+of conversations comes from the anonymous visitor session, a cookie that ties
+conversations to a browser. The session is not an account and never becomes
 one. The same AI account in another browser does not recover conversations,
 because the host never learns the account's identity. OpenAI is offered on the
 web only once OpenAI approves remote hosting; until then it stays a terminal
 connector. The API-key connector is an operator check option, not a visitor
 path. Earlier invite and bearer-token users exist in the code as remnants
-(`bench2agent web user|invite`) and are scheduled for removal.
+(`bench2agent web user|invite`) and are scheduled for removal; the web
+store's `users` table also records the anonymous sessions' ownership of
+conversations, which that removal preserves or migrates explicitly.
 
 The hosted application keeps each visitor's conversations, limits and jobs
 apart. A visitor's Claude Code runs in a runtime of its own (its own HOME and

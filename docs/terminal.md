@@ -199,6 +199,12 @@ edited.
   another day or machine, is the same revision, and installing it again is
   recognised and the installed copy kept. Same id with different content is
   refused. Revisions installed from legacy JSON keep that snapshot's own id.
+  Content hashes carry a rule name: `v1-json` is what 0.4.0 manifests
+  recorded, `v2-logical` the current id. Every hash a bundle, a database or
+  a legacy JSON offers is recomputed from the installed database's content
+  under its own rule and must match; hashes compare only under the same
+  rule; an unknown rule is refused; the installed manifest records what was
+  computed (`content_hashes`) and is never rewritten afterwards.
 - **Readable by.** The manifest records `db_schema_version` and
   `min_client_version`; older code refuses a revision it cannot read, with
   the version it needs, instead of misreading it. Revisions installed by

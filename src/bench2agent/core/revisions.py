@@ -17,15 +17,20 @@ names the recovery, never a silent switch to older data.
 Two manifest formats are read:
 
 - `bench2agent-data-v2` (from 2026-10-13): the database is the revision.
-  `files` lists every file with its sha256; `revision_id` (= `snapshot_id`)
-  is derived from the logical content (`content_sha256`,
-  `repository.content_sha256`); `db_schema_version` and `min_client_version`
+  `files` lists every file with its sha256; `content_hashes` records the
+  content under every known rule (`repository.HASH_RULES`), computed from
+  the database itself at install; `revision_id` (= `snapshot_id`) is derived
+  from the `v2-logical` hash; `db_schema_version` and `min_client_version`
   say whether this code can read it. A revision installed from a legacy JSON
   source keeps that file beside the database (`legacy_json`), listed and
   checked like any other, never queried.
 - `bench2agent-data-v1` (installed by 0.4.0 and earlier): JSON + database,
-  `sha256` / `sqlite_sha256`, a stamp-derived `snapshot_id`. Still served;
-  never rewritten.
+  `sha256` / `sqlite_sha256`, a stamp-derived `snapshot_id`, one
+  `content_sha256` under the `v1-json` rule. Still served; never rewritten.
+
+Hashes compare only under the same rule; an unknown rule is an error. A hash
+a bundle or database offers is verified against the database content at
+install, never copied; the installed manifest records what was computed.
 
 Repair is a restore: a damaged file may only be replaced by bytes that match
 the manifest's recorded checksum; the manifest is never rewritten to fit.
@@ -39,8 +44,9 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from .repository import (DATABASE, SNAPSHOT, SUPPORTED_SCHEMAS, SqliteRepository, client_supports, file_sha256,
-                         content_sha256)  # noqa: F401  (content_sha256 re-exported for callers)
+from .repository import (CONTENT_HASH_RULE, DATABASE, HASH_RULES, SNAPSHOT, SUPPORTED_SCHEMAS, SqliteRepository,
+                         client_supports, content_hashes, content_sha256, export_snapshot,  # noqa: F401
+                         file_sha256)
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 POINTER = "active"
@@ -83,14 +89,40 @@ def json_sha256(manifest: dict) -> str | None:
     return files_of(manifest).get(SNAPSHOT) or manifest.get("source_json_sha256")
 
 
-def same_content(old: dict, new: dict) -> bool:
-    """Do two manifests describe the same research content? Same logical
-    hash under the same format; across formats, the same legacy JSON bytes
-    (a v1 revision and a v2 install of the same v1 bundle)."""
-    if old.get("format") == new.get("format") and old.get("content_sha256") and new.get("content_sha256"):
-        return old["content_sha256"] == new["content_sha256"]
-    a, b = json_sha256(old), json_sha256(new)
-    return bool(a) and a == b
+def hashes_of(manifest: dict) -> dict[str, str]:
+    """rule -> content hash the manifest records. A v1 manifest recorded one
+    hash under the v1-json rule; a v2 manifest records `content_hashes`.
+    An unknown rule is refused."""
+    if manifest.get("format") == FORMAT_V2 or "content_hashes" in manifest:
+        out = {r: h for r, h in (manifest.get("content_hashes") or {}).items() if h}
+        if manifest.get("content_sha256"):
+            out.setdefault(manifest.get("content_hash_rule") or CONTENT_HASH_RULE, manifest["content_sha256"])
+    else:
+        out = {"v1-json": manifest["content_sha256"]} if manifest.get("content_sha256") else {}
+    unknown = sorted(r for r in out if r not in HASH_RULES)
+    if unknown:
+        raise RevisionError(f"Unknown content hash rule {unknown[0]!r} in a manifest; upgrade bench2agent to read this data.")
+    return out
+
+
+def compare_hashes(a: dict, b: dict) -> bool | None:
+    """Whether two hash sets describe the same content: compared under every
+    rule both record (all must agree); None when they share no rule."""
+    common = set(a) & set(b)
+    if not common:
+        return None
+    return all(a[r] == b[r] for r in common)
+
+
+def database_hashes(db_path: Path) -> dict[str, str]:
+    """The content of a database under every known rule, read from the file."""
+    return content_hashes(export_snapshot(db_path))
+
+
+def same_content(old: dict, new: dict) -> bool | None:
+    """Do two manifests describe the same research content? Decided by hashes
+    under a common rule; None when they share none."""
+    return compare_hashes(hashes_of(old), hashes_of(new))
 
 
 def pointer_state(root: Path) -> tuple[str, str | None]:
@@ -158,10 +190,18 @@ def verify_dir(path: Path, manifest: dict | None = None) -> dict:
             needs = manifest.get("min_client_version") or ident.get("min_client_version")
             if needs and not client_supports(needs):
                 problems.append(f"revision needs bench2agent {needs} or newer")
-            if manifest.get("format") == FORMAT_V2:
-                if manifest.get("content_sha256") and ident.get("content_sha256") != manifest["content_sha256"]:
+            try:
+                recorded = hashes_of(manifest)
+            except RevisionError as exc:
+                recorded, _ = {}, problems.append(str(exc))
+            if ident.get("content_sha256"):
+                rule = ident.get("content_hash_rule") or CONTENT_HASH_RULE
+                if rule not in HASH_RULES:
+                    problems.append(f"database records a content hash under unknown rule {rule!r}")
+                elif recorded.get(rule) and recorded[rule] != ident["content_sha256"]:
                     problems.append("database records a different content hash than the manifest")
-            elif manifest.get("sha256") and ident.get("source_sha256") != manifest["sha256"]:
+            json_sha = files_of(manifest).get(SNAPSHOT)
+            if json_sha and ident.get("source_sha256") and ident["source_sha256"] != json_sha:
                 problems.append("database was built from a different JSON than the one installed")
     elif not problems:
         problems.append(f"{DATABASE} is missing")
@@ -194,7 +234,8 @@ def list_revisions(root: Path) -> list[dict]:
         out.append({"id": d.name, "active": d.name == active and state == "ok", "path": str(d),
                     "format": manifest.get("format"),
                     "json": (d / SNAPSHOT).is_file(), "sqlite": (d / DATABASE).is_file(),
-                    **{k: manifest.get(k) for k in ("generated_at", "installed_at", "content_sha256", "min_client_version")},
+                    **{k: manifest.get(k) for k in ("generated_at", "installed_at", "content_sha256", "content_hash_rule",
+                                                    "min_client_version")},
                     "sqlite_sha256": files_of(manifest).get(DATABASE)})
     return out
 
@@ -251,7 +292,20 @@ def publish(root: Path, stage: Path, rid: str, *, activate: bool = True) -> tupl
         except (OSError, ValueError):
             raise RevisionError(f"Revision {rid} exists without a readable manifest; remove or restore that "
                                 f"directory from a verified bundle before installing.") from None
-        if not same_content(old, new):
+        same = same_content(old, new)
+        if same is None:
+            # the installed manifest records no comparable hash (a bare database
+            # installed by 0.4.0): equal bytes prove equal content; otherwise
+            # the installed database is read, if it is intact
+            old_db, new_db = files_of(old).get(DATABASE), files_of(new).get(DATABASE)
+            if old_db and old_db == new_db:
+                same = True
+            elif old_db and (target / DATABASE).is_file() and file_sha256(target / DATABASE) == old_db:
+                same = compare_hashes(database_hashes(target / DATABASE), hashes_of(new))
+            if same is None:
+                raise RevisionError(f"Revision {rid} is installed without a comparable content hash and its database "
+                                    "cannot be read; nothing was replaced.")
+        if not same:
             raise RevisionError(f"Revision {rid} is already installed with different content; nothing was replaced.")
         try:
             verify_dir(target, old)

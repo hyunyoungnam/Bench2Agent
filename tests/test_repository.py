@@ -22,6 +22,40 @@ from bench2agent.core import repository, revisions
 from bench2agent.core.benchmarks import BenchmarkStore, build_revision
 
 
+OLD_META_KEYS = ["db_schema_version", "generated_at", "registry_checked", "schema_version", "snapshot_id", "source", "source_sha256"]
+PUBLIC_BUNDLE = Path(os.environ.get("BENCH2AGENT_TEST_BUNDLE") or Path(__file__).resolve().parents[1] / "dist/bench2agent-data-20261013.tar.gz")
+
+
+def legacy_database(json_path: Path, db_path: Path) -> None:
+    """A database as 0.4.0's importer wrote it: the same tables, no
+    revision_id, content hash, hash rule or min_client_version in `meta`."""
+    repository.import_snapshot(json_path, db_path)
+    con = sqlite3.connect(db_path)
+    con.execute("DELETE FROM meta WHERE key IN ('revision_id', 'content_sha256', 'content_hash_rule', 'min_client_version')")
+    con.commit()
+    con.execute("VACUUM")
+    con.close()
+    db_path.with_name(db_path.name + ".sha256").write_text(f"{repository.file_sha256(db_path)}  {db_path.name}\n")
+
+
+def v1_bundle(data: dict, directory: Path, bundle: Path, content_sha256: str | None = None) -> dict:
+    """A data-v1 bundle as 0.4.0 shipped it: JSON + the database 0.4.0 built
+    from it + a v1 manifest whose content hash is the old definition."""
+    directory.mkdir(parents=True, exist_ok=True)
+    js, db = directory / "benchmark_snapshot.json", directory / "benchmark_snapshot.sqlite"
+    js.write_text(json.dumps(data))
+    legacy_database(js, db)
+    manifest = {"format": "bench2agent-data-v1", "snapshot_id": data["snapshot_id"], "source": repository.SOURCE,
+                "sha256": repository.file_sha256(js), "sqlite_sha256": repository.file_sha256(db), "db_schema_version": 1,
+                "content_sha256": content_sha256 or repository.content_hash(data, "v1-json"), "generated_at": data["generated_at"]}
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    with tarfile.open(bundle, "w:gz") as archive:
+        archive.add(js, arcname=data_module.MEMBER)
+        archive.add(db, arcname=data_module.DB_MEMBER)
+        archive.add(directory / "manifest.json", arcname="manifest.json")
+    return manifest
+
+
 class Fixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -340,28 +374,24 @@ class StorageTests(Fixture):
     def test_legacy_v1_bundle_installs_and_a_v1_revision_keeps_serving(self):
         data = repository.export_snapshot(self.db_path)
         data["snapshot_id"] = "legacy-v1"
-        js = self.root / "v1" / "benchmark_snapshot.json"
-        js.parent.mkdir()
-        js.write_text(json.dumps(data))
-        db = js.with_name("benchmark_snapshot.sqlite")
-        repository.import_snapshot(js, db)
-        v1_manifest = {"format": "bench2agent-data-v1", "snapshot_id": "legacy-v1", "source": repository.SOURCE,
-                       "sha256": repository.file_sha256(js), "sqlite_sha256": repository.file_sha256(db),
-                       "db_schema_version": 1, "content_sha256": "old-definition", "generated_at": data["generated_at"]}
-        (js.parent / "manifest.json").write_text(json.dumps(v1_manifest))
         bundle = self.root / "v1.tar.gz"
-        with tarfile.open(bundle, "w:gz") as archive:
-            archive.add(js, arcname=data_module.MEMBER)
-            archive.add(db, arcname=data_module.DB_MEMBER)
-            archive.add(js.parent / "manifest.json", arcname="manifest.json")
+        v1_manifest = v1_bundle(data, self.root / "v1", bundle)
+        con = sqlite3.connect(self.root / "v1/benchmark_snapshot.sqlite")
+        self.assertEqual(sorted(k for (k,) in con.execute("SELECT key FROM meta")), OLD_META_KEYS)   # the real 0.4.0 layout
+        con.close()
         other = self.root / "other"
         installed = data_module.install(other, file=str(bundle))
         self.assertEqual((installed["revision"], installed["format"], installed["files"], installed["sqlite_built_locally"]),
                          ("legacy-v1", "bench2agent-data-v2", ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"], False))
+        # the old hash was verified against the database content and kept under its rule; the new one computed
+        self.assertEqual(installed["content_hashes"]["v1-json"], v1_manifest["content_sha256"])
+        self.assertEqual(installed["content_hashes"]["v2-logical"], repository.content_sha256(data))
+        self.assertEqual((installed["content_sha256"], installed["content_hash_rule"]), (repository.content_sha256(data), "v2-logical"))
         self.assertEqual(BenchmarkStore(other).usage({"latest": False, "limit": 50})["coverage"]["parsed_papers"], 14)
+        self.assertEqual(data_module.status(other)["verification"], "ok")
         self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "reused")
         # a revision directory installed by 0.4.0 (v1 manifest) is still served, and a
-        # reinstall of its bundle recognises the same content across formats
+        # reinstall of its bundle recognises the same content across formats, under the v1-json rule
         old = other / "data/revisions/legacy-v1/manifest.json"
         old.write_text(json.dumps({**v1_manifest, "installed_at": "2026-10-12T00:00:00+00:00"}))
         self.assertEqual(revisions.manifest_of(other, "legacy-v1")["format"], "bench2agent-data-v1")
@@ -369,12 +399,123 @@ class StorageTests(Fixture):
         self.assertEqual(BenchmarkStore(other).usage({})["snapshot_id"], "legacy-v1")
         self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "reused")
         self.assertEqual(json.loads(old.read_text())["format"], "bench2agent-data-v1")   # the old manifest is kept
+        # re-bundling that v1 revision carries both hashes, the old one equal to what 0.4.0 recorded
+        rebundle = self.root / "rebundle.tar.gz"
+        report = data_module.bundle(other, rebundle)
+        self.assertEqual(report["content_hashes"], {"v1-json": v1_manifest["content_sha256"], "v2-logical": repository.content_sha256(data)})
+        third = self.root / "third"
+        again = data_module.install(third, file=str(rebundle))
+        self.assertEqual((again["files"], again["content_hashes"]), (["benchmark_snapshot.sqlite"], report["content_hashes"]))
+        self.assertEqual(BenchmarkStore(third).usage({"latest": False, "limit": 50})["results"][0]["papers"],
+                         BenchmarkStore(other).usage({"latest": False, "limit": 50})["results"][0]["papers"])
         # a legacy JSON kept beside the database is checked like any file
         with (other / "data/revisions/legacy-v1/benchmark_snapshot.json").open("ab") as fh:
             fh.write(b" ")
         self.assertIn("failed verification", data_module.status(other)["verification"])
         self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "restored")
         self.assertEqual(data_module.status(other)["verification"], "ok")
+
+    def test_offered_hashes_are_verified_against_the_content_and_unknown_rules_refused(self):
+        data = repository.export_snapshot(self.db_path)
+        data["snapshot_id"] = "legacy-v1"
+        # a v1 bundle whose manifest hash does not describe its content
+        forged = self.root / "forged-v1.tar.gz"
+        v1_bundle(data, self.root / "forged-v1", forged, content_sha256="0" * 64)
+        with self.assertRaisesRegex(ValueError, "does not reproduce the content hash offered under rule v1-json"):
+            data_module.install(self.root / "a", file=str(forged))
+        self.assertFalse((self.root / "a/data/revisions/legacy-v1").exists())
+        # a v2 bundle whose manifest hash was altered, under either rule
+        bundle = self.root / "bundle.tar.gz"
+        data_module.bundle(self.root, bundle)
+        with tarfile.open(bundle) as archive:
+            manifest = json.load(archive.extractfile("manifest.json"))
+
+        def rewritten(changes, name):
+            out = self.root / name
+            with tarfile.open(bundle) as src, tarfile.open(out, "w:gz") as dst:
+                for m in src.getmembers():
+                    if m.name == "manifest.json":
+                        payload = json.dumps({**manifest, **changes}).encode()
+                        m.size = len(payload)
+                        dst.addfile(m, __import__("io").BytesIO(payload))
+                    else:
+                        dst.addfile(m, src.extractfile(m))
+            return out
+        bad_v1 = rewritten({"content_hashes": {**manifest["content_hashes"], "v1-json": "1" * 64}}, "bad-v1.tar.gz")
+        with self.assertRaisesRegex(ValueError, "rule v1-json"):
+            data_module.install(self.root / "b", file=str(bad_v1))
+        bad_v2 = rewritten({"content_sha256": "2" * 64, "content_hashes": {**manifest["content_hashes"], "v2-logical": "2" * 64}}, "bad-v2.tar.gz")
+        with self.assertRaisesRegex(ValueError, "rule v2-logical"):
+            data_module.install(self.root / "b", file=str(bad_v2))
+        unknown = rewritten({"content_hashes": {**manifest["content_hashes"], "v9-future": "3" * 64}}, "unknown.tar.gz")
+        with self.assertRaisesRegex(ValueError, "Unknown content hash rule 'v9-future'"):
+            data_module.install(self.root / "b", file=str(unknown))
+        self.assertFalse((self.root / "b/data/revisions").exists() and any((self.root / "b/data/revisions").iterdir()))
+        # the same offers against the active home: nothing installed, the active revision untouched
+        before = {p.name: p.read_bytes() for p in revisions.revision_dir(self.root, self.rid).iterdir()}
+        for source in (forged, bad_v1, bad_v2, unknown):
+            with self.assertRaises(ValueError):
+                data_module.install(self.root, file=str(source))
+            self.assertEqual(revisions.active_revision(self.root), self.rid)
+            self.assertEqual({p.name: p.read_bytes() for p in revisions.revision_dir(self.root, self.rid).iterdir()}, before)
+            self.assertEqual([p.name for p in revisions.revisions_dir(self.root).glob(".staging-*")], [])
+        self.assertTrue(data_module.status(self.root)["available"])
+        # an installed manifest under an unknown rule is a verification failure, not a silent pass
+        d = revisions.revision_dir(self.root, self.rid)
+        original = (d / "manifest.json").read_bytes()
+        (d / "manifest.json").write_text(json.dumps({**json.loads(original), "content_hashes": {"v9-future": "4" * 64}}))
+        self.assertIn("Unknown content hash rule", BenchmarkStore(self.root).usage({})["error"])
+        (d / "manifest.json").write_bytes(original)
+        self.assertTrue(BenchmarkStore(self.root).usage({})["available"])
+
+    def test_reuse_decision_needs_a_common_rule_or_reads_the_installed_database(self):
+        bundle = self.root / "bundle.tar.gz"
+        data_module.bundle(self.root, bundle)
+        d = revisions.revision_dir(self.root, self.rid)
+        manifest = json.loads((d / "manifest.json").read_text())
+        original = (d / "manifest.json").read_bytes()
+        # an installed revision with no hash at all (as a bare database installed by 0.4.0):
+        # the same bytes are recognised; different bytes of the same content are read and compared
+        (d / "manifest.json").write_text(json.dumps({**manifest, "content_sha256": None, "content_hashes": {}, "content_hash_rule": None}))
+        self.assertEqual(data_module.install(self.root, file=str(bundle))["outcome"], "reused")
+        other_bytes = self.root / "other-bytes.json"
+        data = repository.export_snapshot(self.db_path)
+        other_bytes.write_text(json.dumps({**data, "generated_at": "2027-01-01"}))   # same content, another export
+        self.assertEqual(data_module.install(self.root, file=str(other_bytes))["outcome"], "reused")
+        self.assertEqual((d / "manifest.json").read_text(), json.dumps({**manifest, "content_sha256": None, "content_hashes": {}, "content_hash_rule": None}))
+        changed = {**data, "generated_at": "2027-01-01"}
+        changed["papers"][0]["uses"] = {}
+        other_content = self.root / "other-content.json"
+        other_content.write_text(json.dumps(changed))
+        with self.assertRaisesRegex(ValueError, "different content"):
+            data_module.install(self.root, file=str(other_content))
+        (d / "manifest.json").write_bytes(original)
+
+    @unittest.skipUnless(PUBLIC_BUNDLE.is_file(), "public data-20261013 bundle not present locally")
+    def test_public_v1_bundle_installs_serves_and_rebundles(self):
+        home = self.root / "public"
+        installed = data_module.install(home, file=str(PUBLIC_BUNDLE), sha256=data_module.DEFAULT_SHA256)
+        self.assertEqual((installed["revision"], installed["outcome"], installed["files"]),
+                         ("e41da62f2fb3616f", "installed", ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"]))
+        with tarfile.open(PUBLIC_BUNDLE) as archive:
+            shipped = json.load(archive.extractfile("manifest.json"))
+        self.assertEqual(installed["content_hashes"]["v1-json"], shipped["content_sha256"])     # what 0.4.0 recorded, verified
+        self.assertEqual(installed["content_hashes"]["v2-logical"][:16], "79b1b3c4d4de9d9c")  # the direct build's content id
+        store = BenchmarkStore(home)
+        usage = store.usage({"topic": "robotics"})
+        self.assertEqual((usage["coverage"]["parsed_papers"], [(r["name"], r["papers"]) for r in usage["results"][:3]]),
+                         (509, [("LIBERO", 80), ("SIMPLER", 41), ("Meta-World", 29)]))
+        rebundle = self.root / "public-v2.tar.gz"
+        report = data_module.bundle(home, rebundle)
+        self.assertEqual(report["content_hashes"], installed["content_hashes"])
+        second = self.root / "public2"
+        again = data_module.install(second, file=str(rebundle), sha256=report["sha256"])
+        self.assertEqual((again["revision"], again["files"], again["content_hashes"]),
+                         ("e41da62f2fb3616f", ["benchmark_snapshot.sqlite"], installed["content_hashes"]))
+        trend = BenchmarkStore(second).trend({"benchmark": "cifar-10", "venue": "iclr"})
+        self.assertEqual([(r["edition"], r["papers"], r["parsed_papers"]) for r in trend["results"]][-3:],
+                         [("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)])
+        self.assertEqual(BenchmarkStore(second).usage({"topic": "robotics"})["results"][0]["papers"], 80)
 
     def test_status_reports_the_database(self):
         status = data_module.status(self.root)

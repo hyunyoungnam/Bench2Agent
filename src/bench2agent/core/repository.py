@@ -52,8 +52,15 @@ RESEARCH_TABLES = ("meta", "editions", "benchmarks", "benchmark_aliases", "bench
                    "uses", "use_surfaces", "use_roles", "evidence", "unattributed", "unattributed_candidates")
 # Meta keys that say when, by what or under which name the content was
 # written, not what it is: excluded from the logical content hash.
-VOLATILE_META = ("generated_at", "snapshot_id", "revision_id", "content_sha256", "source_sha256",
-                 "db_schema_version", "min_client_version", "built_with", "importer", "sqlite_library", "built_at")
+VOLATILE_META = ("generated_at", "snapshot_id", "revision_id", "content_sha256", "content_hash_rule", "content_hashes",
+                 "source_sha256", "db_schema_version", "min_client_version", "built_with", "importer", "sqlite_library",
+                 "built_at")
+# Content hash rules, by name. Hashes compare only under the same rule; an
+# unknown rule is refused, never ignored.
+#   v1-json     the content as a data-v1 JSON snapshot, minus `generated_at` (what 0.4.0 manifests record)
+#   v2-logical  the research content minus every volatile meta key (what databases record from 0.5.0)
+HASH_RULES = ("v1-json", "v2-logical")
+CONTENT_HASH_RULE = "v2-logical"
 
 SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- value is JSON
@@ -112,8 +119,8 @@ CREATE INDEX ix_candidates_benchmark ON unattributed_candidates(benchmark_id);
 """
 
 # meta rows the writer adds; `export_snapshot` returns the content without them
-_DB_ONLY_META = ("db_schema_version", "source_sha256", "revision_id", "content_sha256", "min_client_version",
-                 "built_with", "importer", "sqlite_library", "built_at")
+_DB_ONLY_META = ("db_schema_version", "source_sha256", "revision_id", "content_sha256", "content_hash_rule",
+                 "min_client_version", "built_with", "importer", "sqlite_library", "built_at")
 _BENCH_COLUMNS = ("name", "kind", "fold", "registered", "homonym_of_registered", "first_claim", "hf", "gh", "url")
 _BENCH_CHILDREN = ("aliases", "merged_ids", "homonym_of", "developers", "claims")
 _CLAIM_COLUMNS = ("claim_id", "arxiv_base", "edition", "title", "noun", "evidence", "label")
@@ -158,13 +165,31 @@ def file_sha256(path: Path) -> str:
     return sha.hexdigest()
 
 
-def content_sha256(data: dict) -> str:
-    """The logical content of a snapshot dict (as the builder assembles it or
-    `export_snapshot` reads it back): every research field, with the volatile
-    meta keys removed. The same extraction exported twice, by two SQLite
-    builds, under two ids, hashes the same; one changed use does not."""
-    body = {k: v for k, v in data.items() if k not in VOLATILE_META}
+def content_hash(data: dict, rule: str) -> str:
+    """The content of a snapshot dict (as the builder assembles it or
+    `export_snapshot` reads it back) under one named rule. Both rules can be
+    computed from any database, so an old manifest's hash is checkable
+    against the content it describes."""
+    if rule == "v1-json":
+        body = {k: v for k, v in data.items() if k != "generated_at"}
+    elif rule == "v2-logical":
+        body = {k: v for k, v in data.items() if k not in VOLATILE_META}
+    else:
+        raise ValueError(f"Unknown content hash rule {rule!r}; upgrade bench2agent to read this data.")
     return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
+def content_sha256(data: dict) -> str:
+    """The logical content under the current rule: every research field,
+    with the volatile meta keys removed. The same extraction exported twice,
+    by two SQLite builds, under two ids, hashes the same; one changed use
+    does not."""
+    return content_hash(data, CONTENT_HASH_RULE)
+
+
+def content_hashes(data: dict) -> dict[str, str]:
+    """The content under every known rule."""
+    return {rule: content_hash(data, rule) for rule in HASH_RULES}
 
 
 def version_tuple(version: str | None) -> tuple[int, ...]:
@@ -291,7 +316,8 @@ def import_snapshot(source: Path, target: Path) -> dict:
     data = json.loads(source.read_text(encoding="utf-8"))
     validate_snapshot(data)
     report = build_database(data, target, {"source_sha256": file_sha256(source), "content_sha256": content_sha256(data),
-                                           "revision_id": data["snapshot_id"], "min_client_version": MIN_CLIENT_VERSION})
+                                           "content_hash_rule": CONTENT_HASH_RULE, "revision_id": data["snapshot_id"],
+                                           "min_client_version": MIN_CLIENT_VERSION})
     if export_snapshot(target) != data:
         target.unlink()
         raise ValueError("Imported database does not read back as the source snapshot; nothing was kept")
@@ -477,7 +503,7 @@ class SqliteRepository:
         """What this file holds, read once per session: enough to check it
         against a manifest without reading the content."""
         m = _meta(self._con())
-        return {k: m.get(k) for k in ("snapshot_id", "revision_id", "content_sha256", "source_sha256",
+        return {k: m.get(k) for k in ("snapshot_id", "revision_id", "content_sha256", "content_hash_rule", "source_sha256",
                                       "db_schema_version", "min_client_version", "source", "generated_at")}
 
     def meta(self) -> dict:
