@@ -36,7 +36,7 @@ class IdentityTests(unittest.TestCase):
         b = row(31741, "AlphaEdit: Null-Space Constrained Model Editing", ["A B"], paper_url="https://openreview.net/forum?id=2025-Oral--4871-29ca3cc8", sourceid=-4871, uid="u1", eventtype="Oral")
         self.assertIsNone(official_id(b["_rec"]))
         self.assertEqual(self.groups([a, b]), [[27888, 31741]])
-        self.assertEqual(merge_duplicates(identify([dict(a), dict(b)])[0])["identity_rule"], "merged by sourceid+uid")
+        self.assertEqual(merge_duplicates(identify([dict(a), dict(b)])[0])["identity_rule"], "merged by feed")
 
     def test_same_title_without_an_id_link_is_a_candidate_not_a_merge(self):
         a = row(1, "[Re] Explaining in Style", ["Chase van de Geijn", "Victor K"], sourceid=11)
@@ -52,52 +52,91 @@ class IdentityTests(unittest.TestCase):
 
     def test_id_conflict_merges_nothing_and_is_recorded(self):
         # measured at NeurIPS 2022: two reproducibility reports by different teams share one bibliography URL
-        a = row(1, "Paper one", ["A B"], sourceid=5, paper_url="https://rescience.github.io/bibliography/Petcu_2022.html", sourceurl="2022_rescience")
-        b = row(2, "Paper two", ["X Y"], sourceid=-5, paper_url="https://rescience.github.io/bibliography/Petcu_2022.html", sourceurl="2022_rescience")
+        a = row(1, "Paper one", ["A B"], sourceid=5, uid="u5", paper_url="https://rescience.github.io/bibliography/Petcu_2022.html", sourceurl="2022_rescience")
+        b = row(2, "Paper two", ["X Y"], sourceid=-5, uid="u5", paper_url="https://rescience.github.io/bibliography/Petcu_2022.html", sourceurl="2022_rescience")
         self.assertEqual(self.groups([a, b]), [[1], [2]])
         parts = identify([dict(a), dict(b)])
         self.assertTrue(all(merge_duplicates(g).get("identity_conflict") for g in parts))
 
     def test_rows_without_authors_merge_only_through_an_id(self):
-        a = row(1, "Same title", ["A B"], sourceid=7)
-        b = row(2, "Same title", [], sourceid=-7, eventtype="Oral")        # feed link, no authors: merges
-        c = row(3, "Same title", [], sourceid=99)                           # title only: stays apart
+        a = row(1, "Same title", ["A B"], sourceid=7, uid="u7")
+        b = row(2, "Same title", [], sourceid=-7, uid="u7", eventtype="Oral")   # feed link, no authors: merges
+        c = row(3, "Same title", [], sourceid=99, uid="u99")                    # title only: stays apart
         self.assertEqual(self.groups([a, b, c]), [[1, 2], [3]])
 
     def test_feed_ids_are_scoped_to_the_track_and_unknown_tracks_join_the_only_one(self):
         main = "https://openreview.net/group?id=NeurIPS.cc/2025/Conference"
         db = "https://openreview.net/group?id=NeurIPS.cc/2025/Datasets_and_Benchmarks_Track"
         # NeurIPS 2025 reuses sourceid 1118 in two tracks: two papers, no link, no conflict
-        a = row(115161, "Alligat0R", ["A B"], sourceid=1118, sourceurl=main)
-        b = row(121776, "FAVOR-Bench", ["X Y"], sourceid=1118, sourceurl=db)
+        a = row(115161, "Alligat0R", ["A B"], sourceid=1118, uid="ua", sourceurl=main)
+        b = row(121776, "FAVOR-Bench", ["X Y"], sourceid=1118, uid="ub", sourceurl=db)
         self.assertEqual(self.groups([a, b]), [[115161], [121776]])
         self.assertFalse(any(merge_duplicates(g).get("identity_conflict") for g in identify([dict(a), dict(b)])))
         # a satellite listing of the same track and an Oral row whose track is unknown both link
-        c = row(130310, "Alligat0R", ["A B"], sourceid=-1118, sourceurl="cdmx-" + main + "-cdmx", eventtype="Oral")
+        c = row(130310, "Alligat0R", ["A B"], sourceid=-1118, uid="ua", sourceurl="cdmx-" + main + "-cdmx", eventtype="Oral")
         self.assertEqual(self.groups([a, b, c]), [[115161, 130310], [121776]])
-        d = row(115, "Bi-directional Contextual Attention", ["C D"], sourceid=-2804, sourceurl="None", eventtype="Oral")
-        e = row(114, "Bi-directional Contextual Attention", ["C D"], sourceid=2804, sourceurl="ECCV2024")
+        d = row(115, "Bi-directional Contextual Attention", ["C D"], sourceid=-2804, uid="ue", sourceurl="None", eventtype="Oral")
+        e = row(114, "Bi-directional Contextual Attention", ["C D"], sourceid=2804, uid="ue", sourceurl="ECCV2024")
         self.assertEqual(self.groups([d, e]), [[114, 115]])
         # a feed that names no track at all still links by its sourceid (ICLR 2021, NeurIPS 2020)
-        g = row(2527, "What Matters", ["E F"], sourceid=581, sourceurl=None)
-        h = row(3534, "What Matters", ["E F"], sourceid=-581, sourceurl=None, eventtype="Oral")
+        g = row(2527, "What Matters", ["E F"], sourceid=581, uid="ug", sourceurl=None)
+        h = row(3534, "What Matters", ["E F"], sourceid=-581, uid="ug", sourceurl=None, eventtype="Oral")
         self.assertEqual(self.groups([g, h]), [[2527, 3534]])
         # an unknown-track row whose sourceid lives in two tracks stays alone
-        f = row(999, "Something", ["A B"], sourceid=-1118, sourceurl=None, eventtype="Oral")
+        f = row(999, "Something", ["A B"], sourceid=-1118, uid="uf", sourceurl=None, eventtype="Oral")
         self.assertEqual(self.groups([a, b, f]), [[999], [115161], [121776]])
 
     def test_merged_record_keeps_the_topic_and_its_origin_from_whichever_row_has_it(self):
-        poster = row(1, "T", ["A B"], sourceid=9, topic="Deep Learning->Robotics")
-        oral = row(2, "T", ["A B"], sourceid=-9, eventtype="Oral")            # the Oral row carries no topic
+        poster = row(1, "T", ["A B"], sourceid=9, uid="u9", topic="Deep Learning->Robotics")
+        oral = row(2, "T", ["A B"], sourceid=-9, uid="u9", eventtype="Oral")  # the Oral row carries no topic
         merged = merge_duplicates(identify([dict(poster), dict(oral)])[0])
         self.assertEqual((merged["event_id"], merged["area"], merged["subarea"], merged["topic_origin"]), (2, "Deep Learning", "Robotics", "declared"))
 
+    def test_feed_link_needs_both_keys_to_agree(self):
+        # sourceid mirrored but uids differ: no link, a conflict on both rows
+        a = row(1, "T", ["A B"], sourceid=7, uid="u1"); b = row(2, "T", ["A B"], sourceid=-7, uid="u2", eventtype="Oral")
+        self.assertEqual(self.groups([a, b]), [[1], [2]])
+        self.assertTrue(all("feed keys disagree" in merge_duplicates(g)["identity_conflict"][0]["reason"] for g in identify([dict(a), dict(b)])))
+        # uid equal but sourceids are not mirrored: no link, a conflict
+        c = row(3, "T", ["A B"], sourceid=7, uid="u1"); d = row(4, "T", ["A B"], sourceid=-8, uid="u1", eventtype="Oral")
+        self.assertEqual(self.groups([c, d]), [[3], [4]])
+        self.assertTrue(all(merge_duplicates(g).get("identity_conflict") for g in identify([dict(c), dict(d)])))
+        # a row missing one key links by an official id only; the missing key is recorded
+        e = row(5, "T", ["A B"], sourceid=9, uid=None); f = row(6, "T", ["A B"], sourceid=-9, uid="u9", eventtype="Oral")
+        self.assertEqual(self.groups([e, f]), [[5], [6]])
+        self.assertEqual([merge_duplicates(g).get("identity_missing_key") for g in identify([dict(e), dict(f)])], [["uid"], None])
+        g1 = row(7, "T", ["A B"], sourceid=9, uid=None, paper_url="https://openreview.net/forum?id=Z")
+        g2 = row(8, "T", ["A B"], sourceid=-9, uid="u9", eventtype="Oral", paper_url="https://openreview.net/forum?id=Z")
+        self.assertEqual(self.groups([g1, g2]), [[7, 8]])
+
+    def test_merging_checks_the_whole_groups_not_only_the_rows_on_the_key(self):
+        a = row(1, "T", ["Alice"], paper_url="https://openreview.net/forum?id=X")
+        b = row(2, "T", [], paper_url="https://openreview.net/forum?id=X", sourceid=5, uid="u5")
+        c = row(3, "U", ["Bob"], paper_url="https://openreview.net/forum?id=Y", sourceid=-5, uid="u5", eventtype="Oral")
+        self.assertEqual(self.groups([a, b, c]), [[1, 2], [3]])           # A-B by id; B-C would bring X and Y (and Alice and Bob) together
+        parts = identify([dict(a), dict(b), dict(c)])
+        reasons = {c["reason"] for g in parts for c in merge_duplicates(g).get("identity_conflict", [])}
+        self.assertIn("different openreview ids", reasons)
+        c2 = row(3, "U", ["Bob"], sourceid=-5, uid="u5", eventtype="Oral")   # no official id: only the authors of the whole group object
+        self.assertEqual(self.groups([a, b, c2]), [[1, 2], [3]])
+        parts = identify([dict(a), dict(b), dict(c2)])
+        reasons = {c["reason"] for g in parts for c in merge_duplicates(g).get("identity_conflict", [])}
+        self.assertTrue(any("through an earlier merge" in r for r in reasons), reasons)
+        # two different OpenReview ids in one would-be group is a conflict; an OpenReview id and a DOI are not
+        d = row(4, "T", ["Alice"], paper_url="https://openreview.net/forum?id=X", sourceid=6, uid="u6")
+        e = row(5, "T", ["Alice"], paper_url="https://openreview.net/forum?id=W", sourceid=-6, uid="u6", eventtype="Oral")
+        self.assertEqual(self.groups([d, e]), [[4], [5]])
+        self.assertIn("different openreview ids", merge_duplicates(identify([dict(d), dict(e)])[0])["identity_conflict"][0]["reason"])
+        f = row(6, "T", ["Alice"], paper_url="https://openreview.net/forum?id=X", sourceid=8, uid="u8")
+        g = row(7, "T", ["Alice"], paper_url="https://doi.org/10.1/abc", sourceid=-8, uid="u8", eventtype="Oral")
+        self.assertEqual(self.groups([f, g]), [[6, 7]])
+
     def test_result_is_independent_of_input_order(self):
-        base = [row(1, "T1", ["A B"], paper_url="https://openreview.net/forum?id=X1", sourceid=1),
-                row(2, "T1 (retitled)", ["A B"], paper_url="https://openreview.net/forum?id=X1", sourceid=-1, eventtype="Oral"),
-                row(3, "T2", ["C D"], sourceid=2), row(4, "T2", ["C D"], sourceid=-2, eventtype="Oral"),
-                row(5, "T3", ["E F"], sourceid=3), row(6, "T3", ["G H"], sourceid=4),
-                row(7, "T4", [], sourceid=5), row(8, "T4", ["I J"], sourceid=6)]
+        base = [row(1, "T1", ["A B"], paper_url="https://openreview.net/forum?id=X1", sourceid=1, uid="a"),
+                row(2, "T1 (retitled)", ["A B"], paper_url="https://openreview.net/forum?id=X1", sourceid=-1, uid="a", eventtype="Oral"),
+                row(3, "T2", ["C D"], sourceid=2, uid="b"), row(4, "T2", ["C D"], sourceid=-2, uid="b", eventtype="Oral"),
+                row(5, "T3", ["E F"], sourceid=3, uid="c"), row(6, "T3", ["G H"], sourceid=4, uid="d"),
+                row(7, "T4", [], sourceid=5, uid="e"), row(8, "T4", ["I J"], sourceid=6, uid="f")]
         expected = self.groups(base)
         self.assertEqual(expected, [[1, 2], [3, 4], [5], [6], [7], [8]])
         reps = sorted(merge_duplicates(g)["event_id"] for g in identify([dict(r) for r in base]))

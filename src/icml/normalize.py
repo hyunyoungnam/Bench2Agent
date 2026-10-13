@@ -172,34 +172,33 @@ def track_of(sourceurl: str | None) -> str | None:
     return re.sub(r"^cdmx-|-cdmx$", "", s)
 
 
-def feed_links(rec: dict) -> list[tuple[str, str]]:
-    """The feed's own statements that two schedule rows are one paper: the
-    virtual sites give an Oral row the Poster row's `sourceid` negated and
-    the same `uid`. Both are scoped to the track (`track_of`), because
-    NeurIPS 2025 reuses `sourceid` numbers across its Conference, Datasets
-    & Benchmarks and Position tracks; a row whose track is unknown links
-    only when its |sourceid| exists in exactly one track (see `identify`)."""
-    out = []
+def feed_keys(rec: dict) -> tuple[str | None, str | None]:
+    """The feed's two schedule keys, (|sourceid|, uid), each None when the row
+    lacks it. The virtual sites give an Oral row the Poster row's `sourceid`
+    negated and the same `uid`; a feed link needs BOTH to agree (every one of
+    the 61 feeds carries both keys, so a missing key is a feed change or a
+    collection fault, recorded and never bridged by the other key)."""
     sid = rec.get("sourceid")
-    if sid not in (None, "", 0):
-        try:
-            out.append(("sourceid", str(abs(int(sid)))))
-        except (TypeError, ValueError):
-            pass
-    if rec.get("uid"):
-        out.append(("uid", str(rec["uid"])))
-    return out
+    try:
+        sid = str(abs(int(sid))) if sid not in (None, "", 0) else None
+    except (TypeError, ValueError):
+        sid = None
+    uid = str(rec["uid"]) if rec.get("uid") else None
+    return sid, uid
 
 
 def identify(rows: list[dict]) -> list[list[dict]]:
     """Group schedule rows into papers. Rows merge only on an official id or
-    a feed link, and only when their author lists do not conflict (overlap,
-    or one side has none); a key whose rows carry disjoint author lists is a
-    conflict and merges nothing (`identity_conflict`). Titles never merge:
-    rows left apart that share a title are recorded on each other as
-    `identity_candidates` ("same title"), kept as separate papers. Rows are
-    processed in a fixed order, so the result does not depend on input
-    order. Each row gets `_identity`: the evidence that placed it."""
+    on a feed link (same |sourceid| within the track AND the same uid), and
+    only when the two groups being joined are compatible as wholes: no two
+    disjoint author lists, and no two different official ids of one kind. A
+    key whose rows are incompatible, or feed keys that disagree (one
+    matches, the other differs), merge nothing and are recorded on every
+    row involved (`identity_conflict`); a row missing one feed key is
+    recorded (`identity_missing_key`) and links by its official id only.
+    Titles never merge: rows left apart that share a title are recorded on
+    each other as `identity_candidates`. Rows are processed in a fixed
+    order, so the result does not depend on input order."""
     order = sorted(range(len(rows)), key=lambda i: (str(rows[i].get("eventtype") or ""), str(rows[i]["event_id"])))
     parent = list(range(len(rows)))
 
@@ -212,54 +211,100 @@ def identify(rows: list[dict]) -> list[list[dict]]:
     def names(i):
         return {_person(a) for a in rows[i].get("authors") or [] if _person(a)}
 
-    def compatible(group):
+    def members(root):
+        return [i for i in order if find(i) == root]
+
+    def incompatible(group) -> str | None:
+        """Why a set of rows cannot be one paper, or None."""
         sets = [names(i) for i in group]
-        return all(not a or not b or (a & b) for x, a in enumerate(sets) for b in sets[x + 1:])
+        if any(a and b and not (a & b) for x, a in enumerate(sets) for b in sets[x + 1:]):
+            return "disjoint author lists"
+        ids: dict[str, set[str]] = {}
+        for i in group:
+            key = official_id(rows[i]["_rec"])
+            if key:
+                ids.setdefault(key[0], set()).add(key[1])
+        for kind, values in ids.items():
+            if len(values) > 1:
+                return f"different {kind} ids"
+        return None
+
+    def conflict(group, key, reason):
+        for i in group:
+            rows[i].setdefault("_conflicts", []).append({"key": key[0], "value": key[1], "reason": reason,
+                                                         "rows": sorted(rows[j]["event_id"] for j in group)})
+
+    def link(members_, key):
+        """Join rows on one key, checking the whole groups they belong to."""
+        if len(members_) < 2:
+            return
+        if (reason := incompatible(members_)):
+            conflict(members_, key, reason)
+            return
+        for i in members_[1:]:
+            a, b = find(members_[0]), find(i)
+            if a == b:
+                continue
+            whole = members(a) + members(b)
+            if (reason := incompatible(whole)):
+                conflict(whole, key, reason + " (through an earlier merge)")
+                continue
+            parent[b] = a
+        for i in members_:
+            rows[i]["_identity"].append(key[0])
 
     for i in order:
         rows[i]["_identity"] = []
-    def link_groups(kind_fn):
-        """Rows per key, then per track within the key: a known track keeps
-        its own rows; rows with an unknown track join the one track present,
-        or stay alone when the key is used in several tracks."""
-        keyed: dict[tuple[str, str], list[int]] = {}
-        for i in order:
-            for key in kind_fn(rows[i]["_rec"]):
-                keyed.setdefault(key, []).append(i)
-        for key, members in keyed.items():
-            if key[0] == "official":
-                yield key, members
+    # 1. official ids
+    keyed: dict[tuple[str, str], list[int]] = {}
+    for i in order:
+        key = official_id(rows[i]["_rec"])
+        if key:
+            keyed.setdefault(key, []).append(i)
+    for key, members_ in keyed.items():
+        link(members_, key)
+    # 2. feed links: |sourceid| within the track and uid must both agree
+    by_sid: dict[str, list[int]] = {}
+    for i in order:
+        sid, uid = feed_keys(rows[i]["_rec"])
+        if sid is None or uid is None:
+            if sid is not None or uid is not None:
+                rows[i]["_missing_key"] = "uid" if uid is None else "sourceid"
+            continue
+        by_sid.setdefault(sid, []).append(i)
+    for sid, members_ in by_sid.items():
+        if len(members_) < 2:
+            continue
+        by_track: dict[str | None, list[int]] = {}
+        for i in members_:
+            by_track.setdefault(track_of(rows[i]["_rec"].get("sourceurl")), []).append(i)
+        unknown = by_track.pop(None, [])
+        if len(by_track) == 1:
+            track, tracked = next(iter(by_track.items()))
+            scoped = {track: tracked + unknown}
+        elif not by_track:
+            scoped = {"*": unknown}
+        else:
+            scoped = by_track               # an unknown-track row stays alone when the id is used in several tracks
+        for track, group in scoped.items():
+            if len(group) < 2:
                 continue
-            by_track: dict[str | None, list[int]] = {}
-            for i in members:
-                by_track.setdefault(track_of(rows[i]["_rec"].get("sourceurl")), []).append(i)
-            unknown = by_track.pop(None, [])
-            if len(by_track) == 1:
-                track, tracked = next(iter(by_track.items()))
-                yield (key[0], f"{track}|{key[1]}"), tracked + unknown
-            elif not by_track:                   # a feed that names no track at all (ICLR 2021, NeurIPS 2020)
-                yield (key[0], f"*|{key[1]}"), unknown
-            else:
-                for track, tracked in by_track.items():
-                    yield (key[0], f"{track}|{key[1]}"), tracked
-
-    def official_keys(r):
-        key = official_id(r)
-        return [("official", f"{key[0]}:{key[1]}")] if key else []
-
-    for kind_fn in (official_keys, feed_links):
-        for key, members in link_groups(kind_fn):
-            if len(members) < 2:
+            by_uid: dict[str, list[int]] = {}
+            for i in group:
+                by_uid.setdefault(feed_keys(rows[i]["_rec"])[1], []).append(i)
+            if len(by_uid) > 1:
+                conflict(group, ("feed", f"{track}|{sid}"), "feed keys disagree: one |sourceid|, several uids")
                 continue
-            if not compatible(members):
-                for i in members:
-                    rows[i].setdefault("_conflicts", []).append({"key": key[0], "value": key[1],
-                                                                 "rows": [rows[j]["event_id"] for j in members]})
-                continue
-            for i in members[1:]:
-                parent[find(i)] = find(members[0])
-            for i in members:
-                rows[i]["_identity"].append(key[0] if key[0] != "official" else key[1].split(":")[0])
+            link(group, ("feed", f"{track}|{sid}"))
+    # the same uid with different |sourceid| values is the mirror disagreement
+    by_uid_all: dict[str, list[int]] = {}
+    for i in order:
+        sid, uid = feed_keys(rows[i]["_rec"])
+        if sid is not None and uid is not None:
+            by_uid_all.setdefault(f"{track_of(rows[i]['_rec'].get('sourceurl'))}|{uid}", []).append(i)
+    for key, group in by_uid_all.items():
+        if len(group) > 1 and len({feed_keys(rows[i]["_rec"])[0] for i in group}) > 1:
+            conflict(group, ("feed", key), "feed keys disagree: one uid, several |sourceid|")
     groups: dict[int, list[dict]] = {}
     for i in order:
         groups.setdefault(find(i), []).append(rows[i])
@@ -315,7 +360,15 @@ def merge_duplicates(group: list[dict]) -> dict:
     evidence = sorted({e for r in group for e in r.get("_identity", [])})
     merged["identity_rule"] = "merged by " + "+".join(evidence) if len(group) > 1 else "single row"
     if any(r.get("_conflicts") for r in group):
-        merged["identity_conflict"] = [c for r in group for c in r.get("_conflicts", [])]
+        seen_conf, conflicts = set(), []
+        for c in (c for r in group for c in r.get("_conflicts", [])):
+            mark = (c["key"], c["value"], c["reason"])
+            if mark not in seen_conf:
+                seen_conf.add(mark)
+                conflicts.append(c)
+        merged["identity_conflict"] = conflicts
+    if any(r.get("_missing_key") for r in group):
+        merged["identity_missing_key"] = sorted({r["_missing_key"] for r in group if r.get("_missing_key")})
     if any(r.get("_candidates") for r in group):
         merged["identity_candidates"] = [c for r in group for c in r.get("_candidates", [])]
     return merged
@@ -413,11 +466,12 @@ def main() -> int:
     rows = [merge_duplicates(part) for part in parts]
     conflicts = sum(1 for r in rows if r.get("identity_conflict"))
     candidates = sum(1 for r in rows if r.get("identity_candidates"))
-    if conflicts or candidates:
+    missing = sum(1 for r in rows if r.get("identity_missing_key"))
+    if conflicts or candidates or missing:
         print(f"note: {candidates} paper(s) share a title with another paper without an id link (kept apart); "
-              f"{conflicts} with an id conflict (not merged)")
+              f"{conflicts} with an id conflict (not merged); {missing} with a missing feed key")
     for row in rows:
-        for k in ("_key", "_source_ids", "_rec", "_identity", "_conflicts", "_candidates"):
+        for k in ("_key", "_source_ids", "_rec", "_identity", "_conflicts", "_candidates", "_missing_key"):
             row.pop(k, None)
     rows.sort(key=lambda r: r["event_id"])
     collapsed = raw_rows - len(rows)
