@@ -39,8 +39,8 @@ from pathlib import Path
 SNAPSHOT = "benchmark_snapshot.json"      # data format v1 (legacy input only)
 DATABASE = "benchmark_snapshot.sqlite"
 SOURCE = "arxiv_html_stated_roles"
-DB_SCHEMA_VERSION = 1
-SUPPORTED_SCHEMAS = (1,)
+DB_SCHEMA_VERSION = 2          # 2 (2026-10-13): observation_labels, every label with its origin
+SUPPORTED_SCHEMAS = (1, 2)
 # The oldest Bench2Agent that reads a database written by this code. Bumped
 # only when the file layout or the manifest format changes.
 MIN_CLIENT_VERSION = "0.5.0"
@@ -49,7 +49,11 @@ ROLES = ("evaluates_on", "trains_on")
 # holds exactly these; anything operational lives in another file.
 RESEARCH_TABLES = ("meta", "editions", "benchmarks", "benchmark_aliases", "benchmark_merged_ids", "benchmark_homonyms",
                    "benchmark_developers", "claims", "observations", "observation_authors", "observation_fields",
-                   "uses", "use_surfaces", "use_roles", "evidence", "unattributed", "unattributed_candidates")
+                   "observation_labels", "uses", "use_surfaces", "use_roles", "evidence", "unattributed",
+                   "unattributed_candidates")
+# Where a label came from. `field` says whether it names a research field
+# (what a field filter matches); a venue's volume id never does.
+LABEL_ORIGINS = ("declared_area", "declared_subarea", "venue_track", "venue_track_mapped", "venue_volume", "derived_topic")
 # Meta keys that say when, by what or under which name the content was
 # written, not what it is: excluded from the logical content hash.
 VOLATILE_META = ("generated_at", "snapshot_id", "revision_id", "content_sha256", "content_hash_rule", "content_hashes",
@@ -92,6 +96,9 @@ CREATE TABLE observation_authors (obs_id INTEGER NOT NULL REFERENCES observation
     PRIMARY KEY (obs_id, ord));
 CREATE TABLE observation_fields (obs_id INTEGER NOT NULL REFERENCES observations(obs_id), ord INTEGER NOT NULL,
     label TEXT NOT NULL, label_cf TEXT NOT NULL, PRIMARY KEY (obs_id, ord));
+CREATE TABLE observation_labels (obs_id INTEGER NOT NULL REFERENCES observations(obs_id), ord INTEGER NOT NULL,
+    label TEXT NOT NULL, origin TEXT NOT NULL, field INTEGER NOT NULL, source TEXT, method TEXT, version TEXT,
+    PRIMARY KEY (obs_id, ord));
 CREATE TABLE uses (
     use_id INTEGER PRIMARY KEY, obs_id INTEGER NOT NULL REFERENCES observations(obs_id), ord INTEGER NOT NULL,
     benchmark_id TEXT NOT NULL REFERENCES benchmarks(id), keys TEXT NOT NULL, extra TEXT, UNIQUE (obs_id, benchmark_id));
@@ -112,6 +119,7 @@ INDEXES = """
 CREATE INDEX ix_observations_edition ON observations(edition, ord);
 CREATE INDEX ix_observations_paper ON observations(paper_id);
 CREATE INDEX ix_fields_label ON observation_fields(label_cf, obs_id);
+CREATE INDEX ix_labels_origin ON observation_labels(origin, obs_id);
 CREATE INDEX ix_uses_benchmark ON uses(benchmark_id, obs_id);
 CREATE INDEX ix_evidence_use ON evidence(use_id, role, ord);
 CREATE INDEX ix_claims_paper ON claims(arxiv_base);
@@ -236,10 +244,13 @@ def _fill(con: sqlite3.Connection, data: dict) -> None:
         obs_id += 1
         con.execute("INSERT INTO observations VALUES (?,?,?,?,?,?,?)",
                     (obs_id, ord_, p["paper_id"], p["edition"], p.get("title"), json.dumps(list(p.keys())),
-                     _residual(p, ("paper_id", "edition", "title", "authors", "fields", "uses", "unattributed"))))
+                     _residual(p, ("paper_id", "edition", "title", "authors", "fields", "labels", "uses", "unattributed"))))
         con.executemany("INSERT INTO observation_authors VALUES (?,?,?)", [(obs_id, i, a) for i, a in enumerate(p.get("authors") or [])])
         con.executemany("INSERT INTO observation_fields VALUES (?,?,?,?)",
                         [(obs_id, i, f, f.casefold()) for i, f in enumerate(p.get("fields") or [])])
+        con.executemany("INSERT INTO observation_labels VALUES (?,?,?,?,?,?,?,?)",
+                        [(obs_id, i, lb["label"], lb["origin"], int(bool(lb.get("field"))), lb.get("source"), lb.get("method"),
+                          lb.get("version")) for i, lb in enumerate(p.get("labels") or [])])
         for i, (bid, use) in enumerate(p.get("uses", {}).items()):
             use_id += 1
             con.execute("INSERT INTO uses VALUES (?,?,?,?,?,?)",
@@ -467,6 +478,7 @@ class SqliteRepository:
         self._benchmarks = None
         self._editions = None
         self._fields = None
+        self._has_labels = None
 
     @contextlib.contextmanager
     def session(self):
@@ -483,6 +495,7 @@ class SqliteRepository:
                 identity = (m.get("snapshot_id"), m.get("source_sha256"), m.get("db_schema_version"))
                 if identity != self._identity:
                     self._identity, self._meta, self._benchmarks, self._editions, self._fields = identity, None, None, None, None
+                    self._has_labels = None
                 yield self
             finally:
                 self._local.con = None
@@ -550,6 +563,30 @@ class SqliteRepository:
                 self._done(con)
         return self._fields
 
+    def _labels_table(self, con) -> bool:
+        if self._has_labels is None:
+            self._has_labels = bool(con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'observation_labels'").fetchone())
+        return self._has_labels
+
+    def label_origins(self) -> dict:
+        """origin -> papers carrying a label of that origin, and per field
+        label the origins it comes from (schema 2; empty on older files)."""
+        con = self._con()
+        try:
+            if not self._labels_table(con):
+                return {"origins": {}, "by_field": {}}
+            origins = {r[0]: r[1] for r in con.execute(
+                "SELECT origin, COUNT(DISTINCT obs_id) FROM observation_labels GROUP BY origin")}
+            by_field: dict[str, dict] = {}
+            for label_cf, origin, n in con.execute(
+                    "SELECT lower(label), origin, COUNT(DISTINCT obs_id) FROM observation_labels WHERE field = 1 "
+                    "GROUP BY lower(label), origin"):
+                by_field.setdefault(label_cf, {})[origin] = n
+            return {"origins": origins, "by_field": by_field}
+        finally:
+            self._done(con)
+
     def observations(self, editions, topic=None, paper_ids=None, *, authors=False, evidence=False) -> list[dict]:
         con = self._con()
         try:
@@ -607,6 +644,16 @@ class SqliteRepository:
                 by_obs[r[0]]["authors"].append(r[1])
         for r in con.execute("SELECT f.obs_id, f.label FROM observation_fields f JOIN sel USING (obs_id) ORDER BY f.obs_id, f.ord"):
             by_obs[r[0]]["fields"].append(r[1])
+        if self._labels_table(con):
+            for p in papers:
+                p["labels"] = []
+            for r in con.execute("SELECT l.obs_id, l.label, l.origin, l.field, l.source, l.method, l.version FROM observation_labels l "
+                                 "JOIN sel USING (obs_id) ORDER BY l.obs_id, l.ord"):
+                lb = {"label": r[1], "origin": r[2], "field": bool(r[3])}
+                for key, value in (("source", r[4]), ("method", r[5]), ("version", r[6])):
+                    if value is not None:
+                        lb[key] = value
+                by_obs[r[0]]["labels"].append(lb)
         uses = {}
         for r in con.execute("SELECT u.use_id, u.obs_id, u.benchmark_id, u.keys, u.extra FROM uses u JOIN sel USING (obs_id) "
                              "ORDER BY u.obs_id, u.ord"):

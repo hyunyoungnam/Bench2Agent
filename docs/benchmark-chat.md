@@ -50,10 +50,18 @@ retain their original meaning: inventories are not dataset observation exports.
 All successfully parsed papers, including those without a stated benchmark,
 enter each edition's denominator. Pooled usage counts are paper-edition
 observations; adoption deduplicates stable arXiv paper IDs across editions,
-merges roles and uses the earliest observed edition. Field filters cover only
-papers with matching declared topic/area/subarea labels. Some venues have no
-such labels; zero matches there do not establish absence of that field. The
-scope response gives accepted, arXiv-matched, parsed and field-labelled totals.
+merges roles and uses the earliest observed edition. Field filters match
+labels that name a research field, each carrying its origin:
+`declared_area` / `declared_subarea` (the primary area the authors chose on
+the submission form; ICML, ICLR, NeurIPS), `venue_track_mapped` (the topic an
+AAAI track name states; the raw track is kept as `venue_track`), and
+`derived_topic` (from the abstract pass under a fixed vocabulary; six
+editions). Proceedings volume ids (`venue_volume`, the ACL Anthology) are
+kept as labels but are not fields. Venue tracks are the venue's
+classification, not an author declaration. Some venues carry no field
+labels at all; zero matches there do not establish absence of that field.
+The scope response gives accepted, arXiv-matched, parsed and field-labelled
+totals, the papers per label origin, and each field's origins.
 
 Trend states follow the repository rule: within-venue two-proportion z with
 absolute z at least 2.576; zero to at least eight papers is `appearing`.

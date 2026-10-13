@@ -75,7 +75,7 @@ and counting logic must not depend on a particular engine.
 
 | Record | Essential fields and relationships |
 |---|---|
-| `papers` and `paper_identifiers` | Stable paper ID; title; external ID namespace and value, including arXiv, DOI, OpenReview and Anthology IDs; source-backed identity resolution |
+| `papers` and `paper_identifiers` | Stable paper ID; title; external ID namespace and value, including arXiv, DOI, OpenReview and Anthology IDs; source-backed identity resolution. Since 2026-10-13 `normalize` merges schedule rows of one paper only when the title matches **and** the author lists overlap, and keeps every row's source ids (`source_ids`); `arxiv_match` refuses an arXiv record claimed by two papers with disjoint authors (`collision`) |
 | `paper_versions` | Paper ID, exact source version, URL, document hash, collection date, parser version and parsed artifact reference |
 | `editions` and `paper_editions` | Venue, year, track, proceedings URL, edition dates when known, paper membership and source record ID |
 | `paper_authors` | Original author spelling, order, normalization method; verified external identifiers when available; missing identity remains explicit |
@@ -83,7 +83,7 @@ and counting logic must not depend on a particular engine.
 | `benchmark_uses` | Paper-version and observation scope, benchmark ID, evaluation/training role, resolution status, extraction/review run and supporting evidence links |
 | `introduction_claims` and `reviews` | Claim ID, paper, benchmark, claim type, candidate/confirmed/excluded status, review method, rubric version and reason |
 | `evidence` and `use_evidence` | Verbatim text or assembled table record, section/table location, source version, source hash, attached references and source offsets when available |
-| `paper_labels` | Multiple domain/task labels, original label, declared or derived origin, vocabulary and classifier version |
+| `observation_labels` (since schema 2) | Every label with its origin (`declared_area`, `declared_subarea`, `venue_track`, `venue_track_mapped`, `venue_volume`, `derived_topic`), whether it names a research field, its source, method and vocabulary version; the raw venue track or volume id is kept beside any mapped field |
 | `resources` and `resource_checks` | Benchmark/paper owner, URL, host, artifact kind, paper-owned release versus maintained mapping, revision, check method, outcome and date |
 | `ingestion_runs` and `paper_processing` | Stage, source, software/rule version, time, per-paper status, failure reason and retry state |
 | `dataset_revisions` | Schema version, included extraction/review runs, creation date, content checksum and publication status |
@@ -336,10 +336,14 @@ reference-result tests per adapter. See the
    working database. Revisions installed by 0.4.0 keep serving; v1 bundles
    and legacy JSON install through a one-time import. Counting rules were
    not touched.
-3. Identification rules in separate commits: paper identity from source ids
-   with the title as a clue and raw rows preserved; benchmark identity from
-   explicit evidence, author overlap as a flag and for self-use only; name
-   corrections with an explicit reviewed target; label provenance recorded.
+3. **In progress (2026-10-13):** identification rules in separate commits:
+   paper identity = title plus author overlap with raw source ids kept, and
+   arXiv collisions refused; benchmark identity across papers = citation
+   evidence plus a shared author (author overlap alone is a
+   `possibly_same_as` flag, never a merge); name corrections onto a
+   registered name need a reviewed `target` (benchmark id, decision,
+   evidence, reviewer) or stay pending; label provenance in schema 2
+   (`observation_labels`), with volume ids kept but never counted as fields.
 4. Incremental processing with per-paper stage status, re-runs that reach the
    downstream stages, and a scheduled update with catch-up and a run lock.
 5. Revision retention: recent, active, referenced and in-use revisions are

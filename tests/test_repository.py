@@ -117,7 +117,11 @@ class Fixture(unittest.TestCase):
             ed = f"icml-{year}"
             self.write(f"data/processed/papers_{year}.jsonl", [
                 {"event_id": i, "title": "Paper " + pid, "authors": authors,
-                 **({"subarea": fields[0]} if fields else {})}
+                 # declared subarea for most; the last two papers of 2025 carry a venue track and a volume id
+                 **({"subarea": fields[0], "topic_origin": "declared"} if fields and pid not in ("2401.00005", "2501.00008") else {}),
+                 **({"area": "AAAI Technical Track on Computer Vision II", "topic_raw": "AAAI Technical Track on Computer Vision II",
+                     "topic_origin": "venue_track"} if pid == "2401.00005" else {}),
+                 **({"area": "2025.acl-long", "topic_raw": "2025.acl-long", "topic_origin": "venue_volume"} if pid == "2501.00008" else {})}
                 for i, (pid, authors, fields, _) in enumerate(records)], lines=True)
             self.write(f"data/processed/topics_{ed}.json", {"topics": [
                 {"label": f, "explicit": [i for i, (_, _, fs, _) in enumerate(records) if f in fs]}
@@ -165,6 +169,7 @@ class StorageTests(Fixture):
     def test_expected_figures(self):
         usage = self.store.usage({"latest": False, "limit": 50})
         self.assertEqual(usage["coverage"]["parsed_papers"], 14)          # two unlabelled no-use papers included
+        self.assertEqual(usage["coverage"]["field_labelled_papers"], 12)   # 2501.00008: its volume id is no field, its derived topic is
         rows = {r["id"]: r for r in usage["results"]}
         self.assertEqual(rows["toy"]["papers"], 4)                          # 2401.00005 counted in both editions
         self.assertEqual(rows["toy"]["locations"][0]["checked_at"], "2026-09-17")
@@ -183,7 +188,25 @@ class StorageTests(Fixture):
         self.assertEqual(self.store.verify("2501.00001", "We introduce Fresh for evaluating robotic policies.")["edition"], "icml-2025")
         self.assertEqual(self.store.data()["registry_checked"], "2026-09-17")
         scope = self.store.scope({})
-        self.assertEqual([f["name"] for f in scope["fields"]], ["robotics", "vision"])
+        self.assertEqual([f["name"] for f in scope["fields"]], ["robotics", "vision", "computer vision"])
+        self.assertEqual(scope["label_origins"], {"declared_subarea": 9, "derived_topic": 12, "venue_track": 2, "venue_track_mapped": 2,
+                                                  "venue_volume": 1})
+        by_name = {f["name"]: f for f in scope["fields"]}
+        self.assertEqual(by_name["computer vision"], {"name": "computer vision", "parsed_papers": 2,
+                                                      "origins": {"venue_track_mapped": 2}})
+        self.assertEqual(by_name["robotics"]["origins"], {"declared_subarea": 9, "derived_topic": 10})
+        self.assertNotIn("2025.acl-long", by_name)                           # kept as a label, never a field
+        papers = {p["paper_id"]: p for p in repository.export_snapshot(self.db_path)["papers"] if p["edition"] == "icml-2025"}
+        self.assertEqual(papers["2501.00008"]["fields"], ["robotics"])                     # the derived topic only
+        self.assertEqual(papers["2501.00008"]["labels"][0], {"label": "2025.acl-long", "origin": "venue_volume", "field": False,
+                                                              "source": "proceedings volume id"})
+        self.assertEqual([(lb["label"], lb["origin"]) for lb in papers["2501.00008"]["labels"][1:]], [("robotics", "derived_topic")])
+        self.assertEqual([lb["label"] for lb in papers["2401.00005"]["labels"]],
+                         ["AAAI Technical Track on Computer Vision II", "Computer Vision", "Vision"])
+        self.assertEqual(papers["2401.00005"]["labels"][1]["origin"], "venue_track_mapped")
+        self.assertEqual(papers["2401.00005"]["fields"], ["Computer Vision", "Vision"])
+        self.assertEqual(usage["coverage"]["editions"]["icml-2025"]["label_origins"],
+                         {"declared_subarea": 6, "derived_topic": 8, "venue_track": 1, "venue_track_mapped": 1, "venue_volume": 1})
         for name, args in CALLS:
             with self.subTest(tool=name, args=args):
                 out = self.call(self.store, name, args)
@@ -220,7 +243,7 @@ class StorageTests(Fixture):
         self.assertEqual(tables, set(repository.RESEARCH_TABLES))
         self.assertEqual((meta["revision_id"], meta["snapshot_id"], meta["content_sha256"]),
                          (self.rid, self.rid, self.built["content_sha256"]))
-        self.assertEqual((meta["db_schema_version"], meta["min_client_version"]), (repository.DB_SCHEMA_VERSION, repository.MIN_CLIENT_VERSION))
+        self.assertEqual((meta["db_schema_version"], meta["min_client_version"]), (2, repository.MIN_CLIENT_VERSION))
         self.assertNotIn("source_sha256", meta)                                  # built directly, not imported
         self.assertNotIn("imported_at", meta)                                    # no invented dates
         self.assertEqual(self.db_path.with_name(self.db_path.name + ".sha256").read_text().split()[0], repository.file_sha256(self.db_path))
@@ -531,6 +554,29 @@ class StorageTests(Fixture):
         self.assertEqual([(r["edition"], r["papers"], r["parsed_papers"]) for r in trend["results"]][-3:],
                          [("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)])
         self.assertEqual(BenchmarkStore(second).usage({"topic": "robotics"})["results"][0]["papers"], 80)
+
+    def test_schema_1_files_are_still_read_without_labels(self):
+        old = self.root / "schema1.sqlite"
+        old.write_bytes(self.db_path.read_bytes())
+        con = sqlite3.connect(old)
+        con.execute("DROP TABLE observation_labels")
+        con.execute("UPDATE meta SET value = '1' WHERE key = 'db_schema_version'")
+        con.execute("DELETE FROM meta WHERE key IN ('revision_id', 'content_sha256', 'content_hash_rule', 'min_client_version')")
+        con.commit()
+        con.execute("VACUUM")
+        con.close()
+        other = self.root / "other"
+        installed = data_module.install(other, file=str(old))
+        self.assertEqual(installed["db_schema_version"], 1)
+        store = BenchmarkStore(other)
+        usage = store.usage({"latest": False, "limit": 50})
+        self.assertEqual({r["id"]: r["papers"] for r in usage["results"]}["toy"], 4)
+        scope = store.scope({})
+        self.assertEqual(scope["label_origins"], {})                          # an older file records no origins
+        self.assertNotIn("origins", scope["fields"][0])
+        exported = repository.export_snapshot(other / "data/revisions" / installed["revision"] / "benchmark_snapshot.sqlite")
+        self.assertNotIn("labels", exported["papers"][0])
+        self.assertEqual(repository.export_snapshot(self.db_path)["papers"][0]["fields"], exported["papers"][0]["fields"])
 
     def test_status_reports_the_database(self):
         status = data_module.status(self.root)

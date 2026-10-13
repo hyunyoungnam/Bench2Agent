@@ -133,6 +133,54 @@ def catalogue(root: Path) -> list[dict]:
     return list(out.values())
 
 
+_AAAI_TRACK = re.compile(r"^(?:AAAI|IAAI|EAAI)\s+(?:Technical|Special)\s+Track(?:\s+Focus\s+Area)?(?:\s+on|:)\s*(.+?)(?:\s+[IVX]+)?$")
+
+
+def track_field(track: str) -> str | None:
+    """The topic a venue track name states, by rule: "AAAI Technical Track on
+    Computer Vision VI" -> "Computer Vision". The raw track is kept beside it;
+    a track whose name states no topic maps to nothing."""
+    m = _AAAI_TRACK.match(track or "")
+    if not m:
+        return None
+    topic = re.sub(r"\s+Track$", "", m.group(1).replace("&", "and")).strip()
+    return topic or None
+
+
+def paper_labels(p: dict, topics: list[str], topics_version: str | None) -> list[dict]:
+    """Every label a paper carries, each with its origin:
+    declared_area / declared_subarea — the primary area the authors chose on
+    the submission form (virtual-site feeds); venue_track — the venue's own
+    track (AAAI), kept raw, plus venue_track_mapped, the topic its name
+    states; venue_volume — a proceedings volume id (ACL Anthology), kept and
+    never a field; derived_topic — a label derived from the abstract pass
+    under a fixed vocabulary. `field` marks the labels a field filter
+    matches."""
+    out = []
+    origin = p.get("topic_origin") or ("declared" if p.get("area") or p.get("subarea") else None)
+    area, sub = p.get("area"), p.get("subarea")
+    if origin == "declared":
+        if area:
+            out.append({"label": area, "origin": "declared_area", "field": True, "source": "submission form primary area"})
+        if sub:
+            out.append({"label": sub, "origin": "declared_subarea", "field": True, "source": "submission form primary area"})
+    elif origin == "venue_track":
+        track = p.get("topic_raw") or area
+        out.append({"label": track, "origin": "venue_track", "field": False, "source": "venue track (proceedings section)"})
+        mapped = track_field(track)
+        if mapped:
+            out.append({"label": mapped, "origin": "venue_track_mapped", "field": True, "source": track,
+                        "method": "track name: strip the venue/track prefix and the part numeral"})
+    elif origin == "venue_volume":
+        out.append({"label": p.get("topic_raw") or area, "origin": "venue_volume", "field": False,
+                    "source": "proceedings volume id"})
+    for t in topics:
+        out.append({"label": t, "origin": "derived_topic", "field": True, "source": "abstract pass (icml.topics)",
+                    "method": "icml.topics over the fixed vocabulary config/taxonomy.json", "version": topics_version})
+    # a value the source never had is not written (and not read back) as null
+    return [{k: v for k, v in lb.items() if v is not None} for lb in out]
+
+
 def _files(root: Path, edition: str) -> tuple[Path, Path]:
     venue, year = edition.rsplit("-", 1)
     stem = "papers" if edition == "icml-2026" else (
@@ -178,9 +226,11 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
         remember([papers_file, resolved])
         papers = {p["event_id"]: p for p in rows(papers_file)}
         tp = root / f"data/processed/topics_{ed}.json"
+        topics_version = None
         if tp.exists():
             dependencies.append(tp)
             remember([tp])
+            topics_version = read_json(tp, {}).get("taxonomy_version")
         for t in read_json(tp, {}).get("topics", []):
             for eid in set(t.get("explicit", []) + t.get("via_child", [])):
                 topics.setdefault((ed, eid), []).append(t["label"])
@@ -190,9 +240,10 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
             p = papers.get(r.get("event_id"))
             if base and p:
                 matched.add(base)
+                labels = paper_labels(p, sorted(set(topics.get((ed, p["event_id"]), []))), topics_version)
                 metadata[(ed, base)] = {"title": p["title"], "authors": p.get("authors") or [],
-                    "fields": sorted(set(topics.get((ed, p["event_id"]), []) +
-                                         [s for s in (p.get("area"), p.get("subarea")) if s]))}
+                    # research fields only: what a field filter matches; the raw track or volume stays in `labels`
+                    "fields": sorted({lb["label"] for lb in labels if lb["field"]}), "labels": labels}
         editions[ed] = {"total_papers": len(papers), "arxiv_matched": len(matched)}
     # Read source stamps before the expensive scan; reject a changing source
     # rather than publishing a mixture of two extraction revisions.
@@ -256,6 +307,12 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
                            "unattributed": unresolved})
         editions[ed]["parsed_papers"] = len(seen)
         editions[ed]["field_labelled_papers"] = sum(bool(p["fields"]) for p in result if p["edition"] == ed)
+        origins = collections.Counter()
+        for p in result:
+            if p["edition"] == ed:
+                for o in {lb["origin"] for lb in p.get("labels", [])}:
+                    origins[o] += 1
+        editions[ed]["label_origins"] = dict(sorted(origins.items()))
     for name, stamp in stamps.items():
         p = root / name
         if (p.stat().st_mtime_ns, p.stat().st_size) != stamp:
@@ -418,14 +475,20 @@ class BenchmarkStore:
     def scope(self, a: dict) -> dict:
         data = self.data()
         fields = self.repo().field_counts()
+        origins = self.repo().label_origins() if hasattr(self.repo(), "label_origins") else {"origins": {}, "by_field": {}}
         query = (a.get("query") or "").casefold()
         return {**self._base(data), "editions": data["editions"],
                 # ties ordered by name, so the listing is deterministic
-                "fields": [{"name": f, "parsed_papers": n} for f, n in sorted(fields.items(), key=lambda x: (-x[1], x[0]))
-                           if query in f.casefold()][:100],
+                "fields": [{"name": f, "parsed_papers": n, **({"origins": origins["by_field"][f]} if f in origins["by_field"] else {})}
+                           for f, n in sorted(fields.items(), key=lambda x: (-x[1], x[0])) if query in f.casefold()][:100],
+                "label_origins": origins["origins"],
                 "catalogue_entries": len(data["benchmarks"]),
-                "note": "Fields are exact declared topic/area/subarea labels; their coverage is incomplete. "
-                        "Usage needs an installed data revision; missing data is not zero usage."}
+                "note": "Fields are exact labels with a recorded origin: declared_area/declared_subarea (the primary area "
+                        "the authors chose on the submission form), venue_track_mapped (the topic an AAAI track name states; "
+                        "the raw track is kept as venue_track), derived_topic (from the abstract pass, fixed vocabulary). "
+                        "Proceedings volume ids (venue_volume) are not fields. Coverage is incomplete and differs by "
+                        "edition; a field filter excludes unlabelled papers. Usage needs an installed data revision; "
+                        "missing data is not zero usage."}
 
     def _select(self, data: dict, a: dict, *, latest: bool = False, authors: bool = False) -> tuple[list, dict]:
         eds = list(data["editions"])
