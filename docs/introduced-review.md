@@ -78,9 +78,21 @@ title and claim sentence, and say so.
 
 ## One name, several papers (2026-10-13)
 
-Claims on one name from different papers are one benchmark only with
-explicit evidence: the papers share an author **and** one cites the other
-(its reference list names the other's title). Shared authors without a
-citation link are a `possibly_same_as` flag on both entities, never a merge;
-no shared author is a homonym, as before. Each entity records its
-`identity_evidence` (`same-paper`, `cites+author-overlap`).
+Claims on one name from different papers are never merged by a rule.
+Shared authors, a citation between the papers (the later paper's reference
+list naming the earlier title in full) or a shared repository are relations,
+recorded on both entities as `identity_candidates` with their relation
+kinds. One product is confirmed only by a reviewed record in
+`config/introduced_review.json`:
+
+    "same_product": [{"fold": "relbench", "arxiv_bases": ["2312.04615", "2407.20060"],
+                      "evidence": "<the statement or official release that makes them one product>",
+                      "reviewed_by": "<who>", "reviewed": "<date>"}]
+
+Until then the entities stay apart with their own ids, developer sets and
+adoption counts (the earlier claim keeps the existing id; the later one gets
+a new id that is never reused). RelBench (position paper 2312.04615 and
+benchmark paper 2407.20060, same authors, mutual citation) and Sine
+(2405.16194 and 2410.05429, same lab, mutual citation) are candidates, not
+confirmed: in this corpus the two RelBench papers link different
+repositories and the Sine papers different project pages.

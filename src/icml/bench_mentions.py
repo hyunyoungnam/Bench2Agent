@@ -926,43 +926,44 @@ def introduced() -> Path:
                 break
         else:
             groups[c["fold"]].append([c])
-    # Two papers claiming one name are one product only with explicit
-    # evidence: one cites the other (its reference list names the other's
-    # title) and they share an author. Shared authors alone are a flag
-    # (`possibly_same_as`), never a merge; no shared author is a homonym.
-    needed = {c["arxiv_base"] for gs in groups.values() if len(gs) > 1 for g in gs for c in g}
-    refs = references_of(needed) if needed else {}
-    possibly = collections.defaultdict(set)      # group id(key) -> keys of author-overlapping groups
+    # Two papers claiming one name are one product only by a reviewed
+    # `same_product` record (introduced_review.json: {"same_product": [{"fold",
+    # "arxiv_bases", "evidence", "reviewed_by", "reviewed"}]}). Shared
+    # authors, a citation between them or a shared repository are relations
+    # recorded as `identity_candidates`, never a merge (Codex review, 2026-10-13).
+    same_product = {(x["fold"], frozenset(x["arxiv_bases"])): x for x in rev.get("same_product", [])}
     for fold_, gs in groups.items():
         if fold_.endswith("|reg") or len(gs) < 2:
             continue
-        merged = True
-        while merged:
-            merged = False
-            for i, a in enumerate(gs):
-                for b in gs[i + 1:]:
-                    pa = {_person(x) for c in a for x in c["authors"]}
-                    pb = {_person(x) for c in b for x in c["authors"]}
-                    if not (pa & pb):
-                        continue
-                    cites = any(_cites_paper(refs.get(ca["arxiv_base"], []), cb["title"]) or
-                                _cites_paper(refs.get(cb["arxiv_base"], []), ca["title"]) for ca in a for cb in b)
-                    if cites:
-                        for c in b:
-                            c["identity_evidence"] = "cites+author-overlap"
-                        a.extend(b)
-                        gs.remove(b)
-                        merged = True
-                        break
-                if merged:
-                    break
+        for record in [x for x in same_product.values() if x["fold"] == fold_]:
+            members = [g for g in gs if g[0]["arxiv_base"] in record["arxiv_bases"]]
+            if len(members) > 1 and record.get("evidence"):
+                head = members[0]
+                for g in members[1:]:
+                    for c in g:
+                        c["identity_evidence"] = "reviewed same_product"
+                    head.extend(g)
+                    gs.remove(g)
+    needed = {c["arxiv_base"] for gs in groups.values() if len(gs) > 1 for g in gs for c in g}
+    refs = references_of(needed) if needed else {}
+    candidates = collections.defaultdict(list)   # (fold, first paper) -> [{other, relations}]
+    for fold_, gs in groups.items():
+        if fold_.endswith("|reg") or len(gs) < 2:
+            continue
         for i, a in enumerate(gs):
             for b in gs[i + 1:]:
                 pa = {_person(x) for c in a for x in c["authors"]}
                 pb = {_person(x) for c in b for x in c["authors"]}
+                relations = []
                 if pa & pb:
-                    possibly[(fold_, a[0]["arxiv_base"])].add((fold_, b[0]["arxiv_base"]))
-                    possibly[(fold_, b[0]["arxiv_base"])].add((fold_, a[0]["arxiv_base"]))
+                    relations.append("shared author")
+                if any(_cites_paper(refs.get(cb["arxiv_base"], []), ca["title"]) for ca in a for cb in b):
+                    relations.append("cited by the later paper")
+                if any(_cites_paper(refs.get(ca["arxiv_base"], []), cb["title"]) for ca in a for cb in b):
+                    relations.append("cites the later paper")
+                if relations:
+                    candidates[(fold_, a[0]["arxiv_base"])].append({"other": (fold_, b[0]["arxiv_base"]), "relations": relations})
+                    candidates[(fold_, b[0]["arxiv_base"])].append({"other": (fold_, a[0]["arxiv_base"]), "relations": relations})
     entities = []
     for gkey, gs in groups.items():
         fold = gkey.split("|")[0]
@@ -989,10 +990,9 @@ def introduced() -> Path:
                 "homonym_of_registered": g[0].get("homonym_of_registered"),
                 "kind": "benchmark" if "E" in labels else "dataset",
                 "homonym_of": None,                         # filled below
-                "possibly_same_as": None,                   # filled below: author overlap without citation evidence
-                "_possibly": sorted(possibly.get((fold, g[0]["arxiv_base"]), ())),
-                "identity_evidence": sorted({c.get("identity_evidence") or ("same-paper" if len({x["arxiv_base"] for x in g}) == 1
-                                                                            else "cites+author-overlap") for c in g}),
+                "identity_candidates": None,                # filled below: related claims under this name, never merged
+                "_candidates": candidates.get((fold, g[0]["arxiv_base"]), []),
+                "identity_evidence": sorted({c.get("identity_evidence") or "same-paper" for c in g}),
                 "first_claim": g[0]["edition"],
                 "claims": [{k_: c[k_] for k_ in ("claim_id", "edition", "arxiv_base", "title", "noun",
                                                  "evidence")} | {"label": c["review"]["label"]} for c in g],
@@ -1004,7 +1004,8 @@ def introduced() -> Path:
         by_fold[e["fold"]].append(e["id"])
         by_first[(e["fold"], e["claims"][0]["arxiv_base"])] = e["id"]
     for e in entities:
-        e["possibly_same_as"] = sorted(by_first[k] for k in e.pop("_possibly") if k in by_first) or None
+        e["identity_candidates"] = sorted(({"id": by_first[c["other"]], "relations": c["relations"]} for c in e.pop("_candidates")
+                                           if c["other"] in by_first), key=lambda x: x["id"]) or None
         e["homonym_of"] = sorted(i for i in by_fold[e["fold"]] if i != e["id"]) or None
         if e["homonym_of_registered"] and e["homonym_of_registered"] not in (e["homonym_of"] or []):
             e["homonym_of"] = sorted((e["homonym_of"] or []) + [e["homonym_of_registered"]])
@@ -1045,8 +1046,11 @@ _POSITION = re.compile(r"^\s*position(?:\s+paper)?\s*:\s*", re.I)
 
 
 def _cites_paper(ref_texts: list[str], title: str) -> bool:
-    # ICML position papers carry a "Position:" prefix that citations omit
-    t = dataset_key(_POSITION.sub("", title))[:40]
+    """Does a reference list name this title? The whole normalized title must
+    occur in a reference entry (ICML position papers' "Position:" prefix is
+    dropped, as citations omit it). A reference that abbreviates or varies
+    the title is not a confirmed citation: it stays unverified."""
+    t = dataset_key(_POSITION.sub("", title))
     return len(t) >= 12 and any(t in dataset_key(r) for r in ref_texts)
 
 
