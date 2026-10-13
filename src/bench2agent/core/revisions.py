@@ -91,17 +91,27 @@ def json_sha256(manifest: dict) -> str | None:
 
 def hashes_of(manifest: dict) -> dict[str, str]:
     """rule -> content hash the manifest records. A v1 manifest recorded one
-    hash under the v1-json rule; a v2 manifest records `content_hashes`.
-    An unknown rule is refused."""
+    hash under the v1-json rule; a v2 manifest records `content_hashes` and,
+    for readability, `content_sha256` under `content_hash_rule`. Every field
+    counts: the same rule recorded twice must agree, or the manifest is
+    refused as contradictory; an unknown rule is refused."""
+    recorded: list[tuple[str, str, str]] = []          # (rule, hash, field it came from)
     if manifest.get("format") == FORMAT_V2 or "content_hashes" in manifest:
-        out = {r: h for r, h in (manifest.get("content_hashes") or {}).items() if h}
+        for rule, value in (manifest.get("content_hashes") or {}).items():
+            if value:
+                recorded.append((rule, value, "content_hashes"))
         if manifest.get("content_sha256"):
-            out.setdefault(manifest.get("content_hash_rule") or CONTENT_HASH_RULE, manifest["content_sha256"])
-    else:
-        out = {"v1-json": manifest["content_sha256"]} if manifest.get("content_sha256") else {}
-    unknown = sorted(r for r in out if r not in HASH_RULES)
-    if unknown:
-        raise RevisionError(f"Unknown content hash rule {unknown[0]!r} in a manifest; upgrade bench2agent to read this data.")
+            recorded.append((manifest.get("content_hash_rule") or CONTENT_HASH_RULE, manifest["content_sha256"], "content_sha256"))
+    elif manifest.get("content_sha256"):
+        recorded.append(("v1-json", manifest["content_sha256"], "content_sha256"))
+    out: dict[str, str] = {}
+    for rule, value, field in recorded:
+        if rule not in HASH_RULES:
+            raise RevisionError(f"Unknown content hash rule {rule!r} in a manifest; upgrade bench2agent to read this data.")
+        if out.get(rule, value) != value:
+            raise RevisionError(f"Manifest records contradictory content hashes under rule {rule} ({field} disagrees); "
+                                "nothing is served or installed from it.")
+        out[rule] = value
     return out
 
 

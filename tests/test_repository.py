@@ -450,10 +450,19 @@ class StorageTests(Fixture):
         unknown = rewritten({"content_hashes": {**manifest["content_hashes"], "v9-future": "3" * 64}}, "unknown.tar.gz")
         with self.assertRaisesRegex(ValueError, "Unknown content hash rule 'v9-future'"):
             data_module.install(self.root / "b", file=str(unknown))
+        # the same rule recorded twice in one manifest must agree: a wrong single
+        # field beside a correct dict entry is a contradiction, not a tie-break
+        contradictory = rewritten({"content_sha256": "5" * 64}, "contradictory.tar.gz")
+        with self.assertRaisesRegex(ValueError, "contradictory content hashes under rule v2-logical"):
+            data_module.install(self.root / "b", file=str(contradictory))
+        contradictory_v1 = rewritten({"content_sha256": manifest["content_hashes"]["v1-json"], "content_hash_rule": "v1-json",
+                                      "content_hashes": {**manifest["content_hashes"], "v1-json": "6" * 64}}, "contradictory-v1.tar.gz")
+        with self.assertRaisesRegex(ValueError, "contradictory content hashes under rule v1-json"):
+            data_module.install(self.root / "b", file=str(contradictory_v1))
         self.assertFalse((self.root / "b/data/revisions").exists() and any((self.root / "b/data/revisions").iterdir()))
         # the same offers against the active home: nothing installed, the active revision untouched
         before = {p.name: p.read_bytes() for p in revisions.revision_dir(self.root, self.rid).iterdir()}
-        for source in (forged, bad_v1, bad_v2, unknown):
+        for source in (forged, bad_v1, bad_v2, unknown, contradictory, contradictory_v1):
             with self.assertRaises(ValueError):
                 data_module.install(self.root, file=str(source))
             self.assertEqual(revisions.active_revision(self.root), self.rid)
@@ -465,6 +474,12 @@ class StorageTests(Fixture):
         original = (d / "manifest.json").read_bytes()
         (d / "manifest.json").write_text(json.dumps({**json.loads(original), "content_hashes": {"v9-future": "4" * 64}}))
         self.assertIn("Unknown content hash rule", BenchmarkStore(self.root).usage({})["error"])
+        (d / "manifest.json").write_text(json.dumps({**json.loads(original), "content_sha256": "7" * 64}))   # contradicts content_hashes
+        self.assertIn("contradictory content hashes", BenchmarkStore(self.root).usage({})["error"])
+        self.assertIn("contradictory", data_module.status(self.root)["verification"])
+        with self.assertRaisesRegex(ValueError, "contradictory"):
+            data_module.bundle(self.root, self.root / "never.tar.gz")
+        self.assertFalse((self.root / "never.tar.gz").exists())
         (d / "manifest.json").write_bytes(original)
         self.assertTrue(BenchmarkStore(self.root).usage({})["available"])
 
