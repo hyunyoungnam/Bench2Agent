@@ -358,16 +358,23 @@ def t_search(a: dict) -> dict:
         return {"total_estimate": res.get("estimatedTotalHits"),
                 "results": [S.brief(h["id"]) for h in res.get("hits", [])],
                 "engine": "meilisearch (typo-tolerant, relevance-ranked)"}
-    # engine down: word-AND over titles+abstracts, exact words only
+    # engine down: word-AND over titles+abstracts, exact words only. The
+    # browser's unit is the union entry (gid), so the walk is over the union:
+    # a paper's representative row may sit outside it while an earlier row
+    # of the same paper is in it, and a paper is never listed twice.
     words = [w.lower() for w in a["query"].split() if w]
-    out = []
-    for key in S.union["corpora"]:
-        for eid, r in S.papers(key).items():
-            hay = (r["title"] + " " + (r.get("abstract") or "")).lower()
-            if all(w in hay for w in words):
-                out.append(S.gid_by[(key, eid)])
-                if len(out) >= limit * 3:
-                    break
+    out, seen = [], set()
+    u = S.union
+    for gid, (key, eid) in enumerate(zip(u["keys"], u["eids"])):
+        r = S.papers(key).get(eid)
+        if r is None or (key, r["event_id"]) in seen:
+            continue
+        seen.add((key, r["event_id"]))
+        hay = (r["title"] + " " + " ".join(r.get("titles") or []) + " " + (r.get("abstract") or "")).lower()
+        if all(w in hay for w in words):
+            out.append(gid)
+            if len(out) >= limit * 3:
+                break
     return {"total_estimate": len(out), "results": [S.brief(g) for g in out[:limit]],
             "engine": "fallback word-AND (search engine is down — no typo "
                       "tolerance, no relevance ranking)"}
