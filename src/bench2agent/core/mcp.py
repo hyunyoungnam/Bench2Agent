@@ -120,6 +120,12 @@ class Store:
                 for line in fh:
                     r = json.loads(line)
                     recs[r["event_id"]] = r
+            # a schedule row merged into a paper (its Oral listing, a retitled
+            # listing) resolves to that paper, so an index built on an earlier
+            # representative row still finds it
+            for r in list(recs.values()):
+                for eid in r.get("duplicate_event_ids") or []:
+                    recs.setdefault(eid, r)
             self._c[ck] = recs
         return self._c[ck]
 

@@ -75,7 +75,7 @@ and counting logic must not depend on a particular engine.
 
 | Record | Essential fields and relationships |
 |---|---|
-| `papers` and `paper_identifiers` | Stable paper ID; title; external ID namespace and value, including arXiv, DOI, OpenReview and Anthology IDs; source-backed identity resolution. Since 2026-10-13 `normalize` merges schedule rows of one paper only when the title matches **and** the author lists overlap, and keeps every row's source ids (`source_ids`); `arxiv_match` refuses an arXiv record claimed by two papers with disjoint authors (`collision`) |
+| `papers` and `paper_identifiers` | Stable paper ID; title; external ID namespace and value, including arXiv, DOI, OpenReview and Anthology IDs; source-backed identity resolution. Since 2026-10-13 `normalize` merges schedule rows only on an official id (a real OpenReview forum, Anthology, PMLR or OJS id, a proceedings URL) or the feed's own link (`sourceid`/`uid`, scoped to the track) when the author lists do not conflict; a title only proposes `identity_candidates`; every row's source ids, titles and schedule rows are kept; `arxiv_match` refuses an arXiv record claimed by two papers with disjoint authors (`collision`) |
 | `paper_versions` | Paper ID, exact source version, URL, document hash, collection date, parser version and parsed artifact reference |
 | `editions` and `paper_editions` | Venue, year, track, proceedings URL, edition dates when known, paper membership and source record ID |
 | `paper_authors` | Original author spelling, order, normalization method; verified external identifiers when available; missing identity remains explicit |
@@ -336,14 +336,17 @@ reference-result tests per adapter. See the
    working database. Revisions installed by 0.4.0 keep serving; v1 bundles
    and legacy JSON install through a one-time import. Counting rules were
    not touched.
-3. **In progress (2026-10-13):** identification rules in separate commits:
-   paper identity = title plus author overlap with raw source ids kept, and
-   arXiv collisions refused; benchmark identity across papers = citation
-   evidence plus a shared author (author overlap alone is a
-   `possibly_same_as` flag, never a merge); name corrections onto a
-   registered name need a reviewed `target` (benchmark id, decision,
-   evidence, reviewer) or stay pending; label provenance in schema 2
-   (`observation_labels`), with volume ids kept but never counted as fields.
+3. **Done (2026-10-13):** identification rules in separate commits: paper
+   identity from official ids and the feed's own schedule links (author
+   conflicts merge nothing, titles only propose candidates, raw rows kept),
+   arXiv collisions refused; benchmark identity across papers never merged
+   by a rule (candidates with their relations; a reviewed `same_product`
+   record confirms); name corrections onto a registered name need a
+   reviewed `target` or stay pending; label provenance in schema 2
+   (`observation_labels`), volume ids kept but never fields, unrecorded
+   origins `unknown`. A difference between revisions for one edition is a
+   data or rule change, reported per stage (papers, matched, parsed,
+   usage/adoption); trends compare editions inside one revision.
 4. Incremental processing with per-paper stage status, re-runs that reach the
    downstream stages, and a scheduled update with catch-up and a run lock.
 5. Revision retention: recent, active, referenced and in-use revisions are

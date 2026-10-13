@@ -128,38 +128,6 @@ def _person(name: str) -> str:
     return re.sub(r"[^a-z ]", "", n).strip()
 
 
-def split_by_authors(group: list[dict]) -> list[list[dict]]:
-    """Rows sharing a title are one paper only when their author lists
-    overlap. Two teams can publish under one title (reproducibility reports
-    of the same paper: four such pairs at NeurIPS 2022 and 2024 were merged
-    by the title alone); a row without authors joins the group it finds.
-    Returns the connected components by shared author name."""
-    comps: list[tuple[list[dict], set[str]]] = []
-    for r in group:
-        names = {_person(a) for a in r.get("authors") or [] if _person(a)}
-        if not names:                       # no author data: joins the first component, never bridges two
-            if comps:
-                comps[0][0].append(r)
-            else:
-                comps.append(([r], set()))
-            continue
-        joined = None
-        for comp in list(comps):
-            rows, seen = comp
-            if names & seen or not seen:    # an authorless component takes the first authored row
-                if joined is None:
-                    rows.append(r)
-                    seen |= names
-                    joined = comp
-                else:                       # this row bridges two components: merge them
-                    joined[0].extend(rows)
-                    joined[1].update(seen)
-                    comps.remove(comp)
-        if joined is None:
-            comps.append(([r], set(names)))
-    return [rows for rows, _ in comps]
-
-
 def openreview_id(paper_url: str | None) -> str | None:
     if not paper_url:
         return None
@@ -168,18 +136,146 @@ def openreview_id(paper_url: str | None) -> str | None:
 
 
 def dedupe_key(rec: dict) -> str:
-    """Stable identity for a paper across its multiple schedule entries.
-
-    Every feed lists an oral paper TWICE — once as its Oral slot and once as
-    its Poster slot. ICML gives both entries the same OpenReview id, but
-    NeurIPS and ICLR give the Oral entry a SYNTHETIC id ("2025-Oral--451-…"),
-    so keying on the id leaves every one of their orals double-counted
-    (measured: 210 surviving pairs at ICLR 2025). Identity is therefore the
-    normalised title — measured across all five feeds, no two distinct real
-    papers share one — with the id kept only for the record itself.
-    The feed's own `uid` is still never used: it collides across tracks.
-    """
+    """The normalized title: the clue that proposes identity candidates
+    (`identify`), never the key that merges rows."""
     return "title:" + re.sub(r"\W+", "", (rec.get("name") or "").lower())
+
+
+_SYNTHETIC_FORUM = re.compile(r"^\d{4}-(?:oral|spotlight|poster)--", re.I)
+
+
+def official_id(rec: dict) -> tuple[str, str] | None:
+    """The paper's own identifier in its source, with its kind: an OpenReview
+    forum id (the synthetic per-event ids the virtual sites give an Oral
+    listing, "2025-Oral--4871-…", are not one), an Anthology / PMLR / OJS
+    record id, or a proceedings URL. None when the row carries none."""
+    oid = openreview_id(rec.get("paper_url"))
+    if oid and not _SYNTHETIC_FORUM.match(oid):
+        return ("openreview", oid)
+    su = rec.get("sourceurl") or ""
+    for prefix in ("anthology:", "pmlr:", "aaai:"):
+        if su.startswith(prefix):
+            return (prefix[:-1], f"{su}#{rec['id']}")
+    pu = rec.get("paper_url") or ""
+    if pu.startswith("http") and "openreview.net" not in pu:
+        return ("url", pu)
+    return None
+
+
+def track_of(sourceurl: str | None) -> str | None:
+    """The feed track a row belongs to, normalized: the satellite listings
+    ("cdmx-…-cdmx" at NeurIPS 2025) name the same track; "None" or an empty
+    value is unknown (an Oral row at ECCV 2024) and matches any track."""
+    s = (sourceurl or "").strip()
+    if not s or s == "None":
+        return None
+    return re.sub(r"^cdmx-|-cdmx$", "", s)
+
+
+def feed_links(rec: dict) -> list[tuple[str, str]]:
+    """The feed's own statements that two schedule rows are one paper: the
+    virtual sites give an Oral row the Poster row's `sourceid` negated and
+    the same `uid`. Both are scoped to the track (`track_of`), because
+    NeurIPS 2025 reuses `sourceid` numbers across its Conference, Datasets
+    & Benchmarks and Position tracks; a row whose track is unknown links
+    only when its |sourceid| exists in exactly one track (see `identify`)."""
+    out = []
+    sid = rec.get("sourceid")
+    if sid not in (None, "", 0):
+        try:
+            out.append(("sourceid", str(abs(int(sid)))))
+        except (TypeError, ValueError):
+            pass
+    if rec.get("uid"):
+        out.append(("uid", str(rec["uid"])))
+    return out
+
+
+def identify(rows: list[dict]) -> list[list[dict]]:
+    """Group schedule rows into papers. Rows merge only on an official id or
+    a feed link, and only when their author lists do not conflict (overlap,
+    or one side has none); a key whose rows carry disjoint author lists is a
+    conflict and merges nothing (`identity_conflict`). Titles never merge:
+    rows left apart that share a title are recorded on each other as
+    `identity_candidates` ("same title"), kept as separate papers. Rows are
+    processed in a fixed order, so the result does not depend on input
+    order. Each row gets `_identity`: the evidence that placed it."""
+    order = sorted(range(len(rows)), key=lambda i: (str(rows[i].get("eventtype") or ""), str(rows[i]["event_id"])))
+    parent = list(range(len(rows)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def names(i):
+        return {_person(a) for a in rows[i].get("authors") or [] if _person(a)}
+
+    def compatible(group):
+        sets = [names(i) for i in group]
+        return all(not a or not b or (a & b) for x, a in enumerate(sets) for b in sets[x + 1:])
+
+    for i in order:
+        rows[i]["_identity"] = []
+    def link_groups(kind_fn):
+        """Rows per key, then per track within the key: a known track keeps
+        its own rows; rows with an unknown track join the one track present,
+        or stay alone when the key is used in several tracks."""
+        keyed: dict[tuple[str, str], list[int]] = {}
+        for i in order:
+            for key in kind_fn(rows[i]["_rec"]):
+                keyed.setdefault(key, []).append(i)
+        for key, members in keyed.items():
+            if key[0] == "official":
+                yield key, members
+                continue
+            by_track: dict[str | None, list[int]] = {}
+            for i in members:
+                by_track.setdefault(track_of(rows[i]["_rec"].get("sourceurl")), []).append(i)
+            unknown = by_track.pop(None, [])
+            if len(by_track) == 1:
+                track, tracked = next(iter(by_track.items()))
+                yield (key[0], f"{track}|{key[1]}"), tracked + unknown
+            elif not by_track:                   # a feed that names no track at all (ICLR 2021, NeurIPS 2020)
+                yield (key[0], f"*|{key[1]}"), unknown
+            else:
+                for track, tracked in by_track.items():
+                    yield (key[0], f"{track}|{key[1]}"), tracked
+
+    def official_keys(r):
+        key = official_id(r)
+        return [("official", f"{key[0]}:{key[1]}")] if key else []
+
+    for kind_fn in (official_keys, feed_links):
+        for key, members in link_groups(kind_fn):
+            if len(members) < 2:
+                continue
+            if not compatible(members):
+                for i in members:
+                    rows[i].setdefault("_conflicts", []).append({"key": key[0], "value": key[1],
+                                                                 "rows": [rows[j]["event_id"] for j in members]})
+                continue
+            for i in members[1:]:
+                parent[find(i)] = find(members[0])
+            for i in members:
+                rows[i]["_identity"].append(key[0] if key[0] != "official" else key[1].split(":")[0])
+    groups: dict[int, list[dict]] = {}
+    for i in order:
+        groups.setdefault(find(i), []).append(rows[i])
+    # same title, not merged: candidates, never a merge
+    by_title: dict[str, list[int]] = {}
+    for root, g in groups.items():
+        for r in g:
+            by_title.setdefault(r["_key"], []).append(root)
+    for title_key, roots in by_title.items():
+        distinct = sorted(set(roots))
+        if len(distinct) > 1:
+            for root in distinct:
+                others = [groups[o][0]["event_id"] for o in distinct if o != root]
+                for r in groups[root]:
+                    r["_candidates"] = [{"reason": "same title", "event_ids": others}]
+    return [groups[root] for root in sorted(groups, key=lambda root: (str(groups[root][0].get("eventtype") or ""), str(groups[root][0]["event_id"])))]
 
 
 def merge_duplicates(group: list[dict]) -> dict:
@@ -195,7 +291,7 @@ def merge_duplicates(group: list[dict]) -> dict:
     # carries no `topic`, so choosing it discarded the Poster entry's
     # area/subarea — measured: 96 papers, and orals are exactly what people
     # browse first. Take each field from whichever sibling actually has it.
-    for field in ("area", "subarea", "topic_raw", "decision", "abstract",
+    for field in ("area", "subarea", "topic_raw", "topic_origin", "decision", "abstract",
                   "paper_url", "openreview_id", "virtual_url"):
         if not merged.get(field):
             for r in group:
@@ -212,7 +308,16 @@ def merge_duplicates(group: list[dict]) -> dict:
     # every source identifier the merged rows carried, so the raw rows stay
     # traceable: the identity rule is title plus author overlap, not the title
     merged["source_ids"] = sorted({str(sid) for r in group for sid in r.get("_source_ids", [])})
-    merged["identity_rule"] = "title+author-overlap"
+    merged["titles"] = sorted({r["title"] for r in group if r.get("title")})
+    merged["schedule_rows"] = [{"event_id": r["event_id"], "presentation": r.get("presentation"), "title": r.get("title"),
+                                "official_id": (official_id(r["_rec"]) or [None, None])[1]}
+                               for r in sorted(group, key=lambda r: str(r["event_id"]))]
+    evidence = sorted({e for r in group for e in r.get("_identity", [])})
+    merged["identity_rule"] = "merged by " + "+".join(evidence) if len(group) > 1 else "single row"
+    if any(r.get("_conflicts") for r in group):
+        merged["identity_conflict"] = [c for r in group for c in r.get("_conflicts", [])]
+    if any(r.get("_candidates") for r in group):
+        merged["identity_candidates"] = [c for r in group for c in r.get("_candidates", [])]
     return merged
 
 
@@ -269,6 +374,7 @@ def main() -> int:
         decision = rec.get("decision") or ""
         rows.append({
             "_key": dedupe_key(rec),
+            "_rec": rec,
             "_source_ids": [x for x in (rec.get("sourceid"), openreview_id(rec.get("paper_url")),
                                         rec.get("paper_url"), f"{rec.get('sourceurl')}#{rec['id']}") if x],
             "venue": venue,
@@ -299,24 +405,20 @@ def main() -> int:
                            if rec.get("virtualsite_url") and venue in VENUE_DOMAIN else None,
         })
 
-    # Collapse the oral/poster double-listing before anything is counted: one
-    # title, and the author lists overlap (two teams under one title stay two).
-    groups: dict[str, list[dict]] = {}
-    for row in rows:
-        groups.setdefault(row["_key"], []).append(row)
+    # Collapse the oral/poster double-listing before anything is counted:
+    # official ids and the feed's own schedule links merge; titles only
+    # propose candidates (two teams under one title stay two papers).
     raw_rows = len(rows)
-    split_titles = 0
-    merged_rows = []
-    for g in groups.values():
-        parts = split_by_authors(g)
-        split_titles += len(parts) > 1
-        merged_rows.extend(merge_duplicates(part) for part in parts)
-    rows = merged_rows
-    if split_titles:
-        print(f"note: {split_titles} title(s) shared by papers with disjoint authors kept as separate papers")
+    parts = identify(rows)
+    rows = [merge_duplicates(part) for part in parts]
+    conflicts = sum(1 for r in rows if r.get("identity_conflict"))
+    candidates = sum(1 for r in rows if r.get("identity_candidates"))
+    if conflicts or candidates:
+        print(f"note: {candidates} paper(s) share a title with another paper without an id link (kept apart); "
+              f"{conflicts} with an id conflict (not merged)")
     for row in rows:
-        row.pop("_key", None)
-        row.pop("_source_ids", None)
+        for k in ("_key", "_source_ids", "_rec", "_identity", "_conflicts", "_candidates"):
+            row.pop(k, None)
     rows.sort(key=lambda r: r["event_id"])
     collapsed = raw_rows - len(rows)
     if collapsed:
