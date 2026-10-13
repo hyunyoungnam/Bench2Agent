@@ -133,11 +133,14 @@ Revision: `e41da62f2fb3616f`.
 
 Counts come from explicitly stated evaluation or training use in parsed arXiv
 HTML, with the analysed editions and denominator reported for each query.
-Missing or unparsed papers remain unknown. Field filters exclude papers without
-matching labels; several added editions still lack labels. New introduction
-claims in the expanded editions are not yet reviewed, so introduction discovery
-is less complete than usage coverage. “New” means a reviewed claim in this
-corpus, not the first public release worldwide.
+Missing or unparsed papers remain unknown. Field filters match labels that
+name a research field, each with its origin (the primary area the authors
+declared at submission, the topic an AAAI track states, or a derived topic);
+proceedings volume ids are kept but are not fields, and many editions carry
+no field labels at all, so a field filter excludes those papers. New
+introduction claims in the expanded editions are not yet reviewed, so
+introduction discovery is less complete than usage coverage. “New” means a
+reviewed claim in this corpus, not the first public release worldwide.
 
 A data revision is one SQLite database, identified by a hash of its content;
 the released 2026-10-13 bundle still carries the JSON it was built from, which

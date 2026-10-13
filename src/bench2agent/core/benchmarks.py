@@ -268,6 +268,7 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
     for file in files:
         ed = file.stem.removeprefix("mentions_")
         seen = set()
+        unmatched = 0
         for r in rows(file):
             base = r["arxiv_base"]
             if base in seen:
@@ -275,7 +276,12 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
             seen.add(base)
             meta = metadata.get((ed, base))
             if meta is None:
-                raise ValueError(f"Missing paper metadata: {ed}/{base}")
+                # parsed text whose conference paper is no longer identified
+                # (an arXiv record two papers claimed, refused as a collision):
+                # it belongs to no observation and is counted, not dropped silently
+                unmatched += 1
+                seen.discard(base)
+                continue
             uses, unresolved = {}, []
             for key, m in r.get("mentions", {}).items():
                 candidates = list(by_key.get(key, {}).values())
@@ -306,6 +312,8 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
             result.append({"paper_id": base, "edition": ed, **meta, "uses": uses,
                            "unattributed": unresolved})
         editions[ed]["parsed_papers"] = len(seen)
+        if unmatched:
+            editions[ed]["parsed_unidentified"] = unmatched
         editions[ed]["field_labelled_papers"] = sum(bool(p["fields"]) for p in result if p["edition"] == ed)
         origins = collections.Counter()
         for p in result:

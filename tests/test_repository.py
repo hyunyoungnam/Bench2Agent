@@ -131,7 +131,11 @@ class Fixture(unittest.TestCase):
             self.write(f"data/interim/mentions/mentions_{ed}.jsonl", [
                 {"arxiv_base": pid, "mentions": {**uses, "nobody": {"as_written": "Nobody", "roles": {"evaluates_on": [
                     {"where": "experiments", "text": "We also test on Nobody."}]}}} if pid == "2501.00008" else uses}
-                for pid, _, _, uses in records], lines=True)
+                for pid, _, _, uses in records] + ([
+                # parsed text whose conference paper is no longer identified (an arXiv collision): no observation
+                {"arxiv_base": "2501.99999", "mentions": {"toy": {"roles": {"evaluates_on": [
+                    {"where": "experiments", "text": "We evaluate on the toy benchmark."}]}, "surfaces": {"Toy": 1}}}}]
+                if year == 2025 else []), lines=True)
 
     def write(self, name, obj, lines=False):
         p = self.root / name
@@ -169,6 +173,8 @@ class StorageTests(Fixture):
     def test_expected_figures(self):
         usage = self.store.usage({"latest": False, "limit": 50})
         self.assertEqual(usage["coverage"]["parsed_papers"], 14)          # two unlabelled no-use papers included
+        self.assertEqual(usage["coverage"]["editions"]["icml-2025"]["parsed_unidentified"], 1)   # the collision row: counted, not an observation
+        self.assertNotIn("parsed_unidentified", usage["coverage"]["editions"]["icml-2024"])
         self.assertEqual(usage["coverage"]["field_labelled_papers"], 12)   # 2501.00008: its volume id is no field, its derived topic is
         rows = {r["id"]: r for r in usage["results"]}
         self.assertEqual(rows["toy"]["papers"], 4)                          # 2401.00005 counted in both editions

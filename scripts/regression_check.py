@@ -48,6 +48,11 @@ FIGURES = {
 # The same extraction built directly as a database (2026-10-13) hashes to this
 # content id; its figures are, by construction, those of e41da62f2fb3616f.
 FIGURES["79b1b3c4d4de9d9c"] = FIGURES["e41da62f2fb3616f"]
+# 2026-10-13, identity rules and label provenance (schema 2): the headline
+# figures did not move (robotics has no venue-track or volume labels among
+# the latest editions); computer vision/latest grew with the AAAI tracks.
+FIGURES["16b704077d97298a"] = {**FIGURES["e41da62f2fb3616f"],
+                               "computer_vision_latest": {"parsed": 2816, "COCO": 163, "POPE": 75, "Video-MME": 69}}
 
 
 def call(store, name, args):
@@ -106,6 +111,12 @@ def main() -> int:
             ok = got == want["latest_all"]
             bad += not ok
             print(f"  all venues/latest {got} {'ok' if ok else 'EXPECTED ' + str(want['latest_all'])}")
+        if "computer_vision_latest" in want:
+            u = store.usage({"topic": "computer vision"})
+            got = {"parsed": u["coverage"]["parsed_papers"], **{r["name"]: r["papers"] for r in u["results"][:3]}}
+            ok = got == want["computer_vision_latest"]
+            bad += not ok
+            print(f"  computer vision/latest {got} {'ok' if ok else 'EXPECTED ' + str(want['computer_vision_latest'])}")
         if "libero_adoption" in want:
             ad = store.adoption({"benchmark": "libero"})
             got = {**ad["evaluates_on"], "before_claim": ad["before_claim"]}
