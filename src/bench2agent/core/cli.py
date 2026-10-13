@@ -430,10 +430,10 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--out", default=".", help="directory for the CSV files (default: cwd)")
     d.add_argument("--gid", type=int, help="export one paper by gid")
     d.set_defaults(fn=cmd_datasets)
-    k = sub.add_parser("benchmarks", help="export reviewed full-text benchmark usage into the portable data bundle")
+    k = sub.add_parser("benchmarks", help="build the benchmark revision database from reviewed full-text extraction")
     k.add_argument("--publish", action="store_true",
-                   help="also install the export as a new active data revision (JSON + SQLite) under data/revisions/")
-    k.add_argument("--out", help="snapshot file (default: data/processed/benchmark_snapshot.json)")
+                   help="also install the built database as the new active data revision under data/revisions/")
+    k.add_argument("--out", help="database file (default: data/processed/benchmark_snapshot.sqlite)")
     k.set_defaults(fn=cmd_benchmarks)
     m = sub.add_parser("mcp", help="MCP server on stdio — connect a coding agent")
     m.set_defaults(fn=cmd_mcp)
@@ -442,9 +442,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def cmd_benchmarks(args) -> int:
-    from .benchmarks import build_snapshot
+    from .benchmarks import build_revision
     try:
-        result = build_snapshot(ROOT, Path(args.out) if args.out else None)
+        result = build_revision(ROOT, Path(args.out) if args.out else None)
         if getattr(args, "publish", False):
             from bench2agent.data import install
             result["published"] = install(ROOT, file=result["path"])

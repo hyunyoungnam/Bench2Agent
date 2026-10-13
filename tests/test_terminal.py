@@ -164,9 +164,10 @@ class TerminalTests(unittest.TestCase):
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(cli.main(["data", "install"]), 0)
         fetch.assert_called_once()
-        # installed as a revision, both files, and served instead of the legacy path
+        # installed as a revision: the database is served; the legacy JSON is kept beside it, unread
         from bench2agent.core import revisions
-        served_json, served_db, rid = revisions.paths_for(self.root)
+        served_db, rid = revisions.paths_for(self.root)
+        served_json = served_db.with_name("benchmark_snapshot.json")
         self.assertEqual((rid, served_json.read_bytes(), served_db.is_file()), ("fixture-1", original, True))
         self.assertEqual(data.status(self.root)["snapshot_id"], "fixture-1")
         with patch("bench2agent.core.cli._download", side_effect=download), \

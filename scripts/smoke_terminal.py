@@ -60,14 +60,18 @@ def main():
         usage = json.loads(response[2]["result"]["content"][0]["text"])
         assert usage["results"][0]["papers"] == 1
         assert usage["coverage"]["parsed_papers"] == 1
-        # the revision carries its SQLite import; the build utility writes elsewhere
+        # the revision is a database; a legacy JSON installs through the one-time
+        # conversion, which the utility also offers (never into a revision)
+        status = json.loads(run(["data", "status"]))
+        assert status["format"] == "bench2agent-data-v2" and status["database"]["available"]
+        assert status["files"] == ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"]
         built = json.loads(run(["data", "sqlite", str(snapshot), "--out", str(root / "built.sqlite")]))
         assert built["paper_observations"] == 1 and built["db_schema_version"] == 1
-        assert json.loads(run(["data", "status"]))["sqlite"]["matches_json"] is True
-        env["BENCH2AGENT_STORE"] = "sqlite"
-        response = [json.loads(line) for line in run(["mcp"], request).splitlines()]
-        del env["BENCH2AGENT_STORE"]
-        assert json.loads(response[2]["result"]["content"][0]["text"]) == usage
+        bundled = json.loads(run(["data", "bundle", "--out", str(root / "bundle.tar.gz")]))
+        assert bundled["format"] == "bench2agent-data-v2"
+        reinstalled = json.loads(run(["--home", str(root / "second"), "data", "install", "--file", str(root / "bundle.tar.gz")]))
+        assert reinstalled["revision"] == "installed-wheel-fixture" and reinstalled["files"] == ["benchmark_snapshot.sqlite"]
+        assert json.loads(run(["--home", str(root / "second"), "data", "status"]))["available"]
         previous = root / "previous/data/benchtrend/chats"
         previous.mkdir(parents=True)
         (previous / "012345abcdef.json").write_text(json.dumps({

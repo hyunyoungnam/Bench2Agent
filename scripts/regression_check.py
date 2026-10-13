@@ -1,0 +1,122 @@
+"""Run the six tools on the installed revision and check pinned figures.
+
+    PYTHONPATH=src python3 scripts/regression_check.py [--home DIR] [--revision ID]
+
+Prints, per call, the time taken and whether the call returned a result (or
+the expected error); then the revision-specific regression figures for the
+installed revision when they are known. A wrong figure fails the run even
+though every call succeeded, so a counting bug cannot pass as "it runs".
+Exit status 1 on any failure.
+"""
+import argparse
+import json
+import os
+import sys
+import time
+
+CALLS = [
+    ("scope", {}), ("scope", {"query": "robot"}),
+    ("usage", {}), ("usage", {"latest": False}), ("usage", {"topic": "robotics"}),
+    ("usage", {"topic": "robotics", "role": "trains_on"}), ("usage", {"venue": "iclr", "latest": False, "limit": 50}),
+    ("usage", {"edition": "corl-2024"}), ("usage", {"years": [2023], "limit": 25}),
+    ("trend", {"benchmark": "cifar-10", "venue": "iclr"}), ("trend", {"benchmark": "libero"}),
+    ("trend", {"benchmark": "imagenet-1k", "role": "trains_on"}), ("trend", {"benchmark": "mmlu", "topic": "robotics"}),
+    ("evidence", {"benchmark": "libero", "topic": "robotics", "limit": 5}), ("evidence", {"benchmark": "gsm8k", "offset": 40, "limit": 20}),
+    ("evidence", {"benchmark": "air-bench-2"}),
+    ("adoption", {"benchmark": "libero"}), ("adoption", {"benchmark": "mt-bench"}), ("adoption", {"benchmark": "air-bench"}),
+    ("adoption", {"benchmark": "gaia"}), ("adoption", {"benchmark": "mmmu", "venue": "cvpr"}),
+    ("new", {}), ("new", {"sort": "adoption", "limit": 20}), ("new", {"kind": "dataset", "include_adoption": True, "limit": 20}),
+    ("new", {"topic": "robotics", "include_adoption": True}), ("new", {"venue": "corl", "years": [2024]}),
+]
+ERRORS = [("trend", {"benchmark": "Mirage"}), ("usage", {"topic": "nowhere"}), ("adoption", {"benchmark": "meta-world"})]
+
+# Pinned figures per revision: measured once on that revision, never a
+# prediction for the next one. Add a block for every published revision.
+FIGURES = {
+    "0dd4b9bbee4b54d2": {
+        "robotics_latest": {"parsed": 509, "LIBERO": 80, "SIMPLER": 41, "Meta-World": 29},
+        "iclr_cifar10": [("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)],
+    },
+    "e41da62f2fb3616f": {
+        "robotics_latest": {"parsed": 509, "LIBERO": 80, "SIMPLER": 41, "Meta-World": 29},
+        "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
+                         ("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)],
+        "latest_all": {"parsed": 27316, "GSM8K": 1111, "CIFAR-10": 840, "MMLU": 797},
+        "libero_adoption": {"others": 193, "self": 3, "undetermined": 0, "before_claim": 0},
+    },
+}
+# The same extraction built directly as a database (2026-10-13) hashes to this
+# content id; its figures are, by construction, those of e41da62f2fb3616f.
+FIGURES["79b1b3c4d4de9d9c"] = FIGURES["e41da62f2fb3616f"]
+
+
+def call(store, name, args):
+    t = time.perf_counter()
+    try:
+        out = getattr(store, name)(dict(args))
+    except ValueError as exc:
+        out = {"ValueError": str(exc)}
+    return out, time.perf_counter() - t
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--home")
+    ap.add_argument("--revision")
+    a = ap.parse_args()
+    if a.home:
+        os.environ["BENCH2AGENT_HOME"] = a.home
+    from bench2agent.core.benchmarks import BenchmarkStore
+    from bench2agent.core.paths import ROOT
+    store = BenchmarkStore(ROOT, revision=a.revision)
+    t = time.perf_counter()
+    data = store.data()
+    print(f"revision {store.revision}  snapshot {data.get('snapshot_id')}  open {time.perf_counter() - t:.2f}s  available {data['available']}")
+    if not data["available"]:
+        print(data.get("reason"))
+        return 1
+    bad = 0
+    print(f"{'tool':9} {'args':62} {'ok':4} {'time':>7}")
+    for name, args in CALLS:
+        out, dt = call(store, name, args)
+        ok = "ValueError" not in out and "error" not in out
+        bad += not ok
+        print(f"{name:9} {json.dumps(args)[:62]:62} {'yes' if ok else 'NO':4} {dt:6.2f}s")
+    for name, args in ERRORS:
+        out, dt = call(store, name, args)
+        ok = "ValueError" in out or "error" in out
+        bad += not ok
+        print(f"{name:9} {json.dumps(args)[:62]:62} {'err' if ok else 'NO':4} {dt:6.2f}s")
+    want = FIGURES.get(data.get("snapshot_id"))
+    if want:
+        print(f"regression figures on {data['snapshot_id']}:")
+        u = store.usage({"topic": "robotics"})
+        got = {"parsed": u["coverage"]["parsed_papers"], **{r["name"]: r["papers"] for r in u["results"][:3]}}
+        ok = got == want["robotics_latest"]
+        bad += not ok
+        print(f"  robotics/latest {got} {'ok' if ok else 'EXPECTED ' + str(want['robotics_latest'])}")
+        tr = store.trend({"benchmark": "cifar-10", "venue": "iclr"})
+        got_tr = [(r["edition"], r["papers"], r["parsed_papers"]) for r in tr["results"]]
+        ok = got_tr == want["iclr_cifar10"]
+        bad += not ok
+        print(f"  ICLR CIFAR-10 {got_tr} {'ok' if ok else 'EXPECTED ' + str(want['iclr_cifar10'])}")
+        if "latest_all" in want:
+            u = store.usage({})
+            got = {"parsed": u["coverage"]["parsed_papers"], **{r["name"]: r["papers"] for r in u["results"][:3]}}
+            ok = got == want["latest_all"]
+            bad += not ok
+            print(f"  all venues/latest {got} {'ok' if ok else 'EXPECTED ' + str(want['latest_all'])}")
+        if "libero_adoption" in want:
+            ad = store.adoption({"benchmark": "libero"})
+            got = {**ad["evaluates_on"], "before_claim": ad["before_claim"]}
+            ok = got == want["libero_adoption"]
+            bad += not ok
+            print(f"  LIBERO adoption {got} {'ok' if ok else 'EXPECTED ' + str(want['libero_adoption'])}")
+    else:
+        print(f"no pinned figures for {data.get('snapshot_id')}; add them to FIGURES after measuring once")
+    print("failures:", bad)
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

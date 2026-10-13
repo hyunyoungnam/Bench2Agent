@@ -47,7 +47,7 @@ class RevisionTests(unittest.TestCase):
         self.v1.write_text(json.dumps(snapshot("v1", QUOTE_V1)))
         self.v2.write_text(json.dumps(snapshot("v2", QUOTE_V2)))
         self.first = data_module.install(self.root, file=str(self.v1))
-        self.served = BenchmarkStore(self.root, backend="sqlite")   # pinned to v1, as a server process would be
+        self.served = BenchmarkStore(self.root)                     # pinned to v1, as a server process would be
         self.patch = patch.object(mcp, "B", self.served)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -58,8 +58,10 @@ class RevisionTests(unittest.TestCase):
         d = revisions.revision_dir(self.root, "v1")
         self.assertTrue((d / "benchmark_snapshot.json").is_file() and (d / "benchmark_snapshot.sqlite").is_file())
         manifest = json.loads((d / "manifest.json").read_text())
-        self.assertEqual(manifest["sqlite_sha256"], repository.file_sha256(d / "benchmark_snapshot.sqlite"))
-        self.assertTrue(manifest["sqlite_built_locally"])
+        self.assertEqual(manifest["files"], {"benchmark_snapshot.json": repository.file_sha256(d / "benchmark_snapshot.json"),
+                                             "benchmark_snapshot.sqlite": repository.file_sha256(d / "benchmark_snapshot.sqlite")})
+        self.assertTrue(manifest["sqlite_built_locally"] and manifest["legacy_json"])
+        self.assertEqual((manifest["format"], manifest["revision_id"]), ("bench2agent-data-v2", "v1"))
         self.assertEqual(manifest["content_sha256"], revisions.content_sha256(json.loads(self.v1.read_text())))
         second = data_module.install(self.root, file=str(self.v2))
         self.assertEqual((revisions.active_revision(self.root), second["revision"]), ("v2", "v2"))
@@ -123,8 +125,7 @@ class RevisionTests(unittest.TestCase):
         # the already pinned store notices the change on its next call
         self.assertIn("failed verification", healthy.usage({})["error"])
         self.assertFalse(healthy.scope({})["available"])
-        for backend in ("json", "sqlite", "auto"):                           # no backend serves a damaged revision
-            self.assertIn("not served until it is restored", BenchmarkStore(self.root, backend=backend).usage({})["error"])
+        self.assertIn("not served until it is restored", BenchmarkStore(self.root).usage({})["error"])   # nor a fresh store
         status = data_module.status(self.root)
         self.assertEqual((status["available"], "failed verification" in status["verification"]), (False, True))
         with self.assertRaisesRegex(ValueError, "failed verification"):
@@ -144,7 +145,7 @@ class RevisionTests(unittest.TestCase):
         self.assertTrue(store.usage({})["available"])
         manifest = json.loads((d / "manifest.json").read_text())
         original = (d / "manifest.json").read_bytes()
-        manifest["sha256"] = "0" * 64                                        # a manifest that no longer matches its files
+        manifest["files"]["benchmark_snapshot.sqlite"] = "0" * 64            # a manifest that no longer matches its files
         (d / "manifest.json").write_text(json.dumps(manifest))
         self.assertIn("failed verification", store.usage({})["error"])
         (d / "manifest.json").write_bytes(original)
@@ -216,7 +217,7 @@ class RevisionTests(unittest.TestCase):
             self.assertEqual(revisions.active_revision(self.root), "v1")
             self.assertEqual({p.name: p.read_bytes() for p in d.iterdir()}, before)
             status = data_module.status(self.root)
-            self.assertTrue(status["sqlite"]["matches_json"])
+            self.assertTrue(status["database"]["available"])
             self.assertEqual((status["snapshot_id"], BenchmarkStore(self.root).usage({})["snapshot_id"]), ("v1", "v1"))
             self.assertEqual([p.name for p in revisions.revisions_dir(self.root).glob(".staging-*")], [])
         # the crashed publish left v2 installed but inactive; activating it is explicit
@@ -246,22 +247,6 @@ class RevisionTests(unittest.TestCase):
         self.assertIn("not installed", BenchmarkStore(self.root, revision="v9").usage({})["error"])
         data_module.activate(self.root, "v1")
         self.assertEqual(data_module.status(self.root)["pointer"], "ok")
-
-    def test_checksum_cache_distinguishes_files_with_equal_size_and_mtime(self):
-        data_module.install(self.root, file=str(self.v2))
-        a, _, _ = revisions.paths_for(self.root, "v1")
-        b, _, _ = revisions.paths_for(self.root, "v2")
-        # pad v1's JSON copy so the two files share size, then share mtime
-        pad = self.root / "same-stamp.json"
-        text_b = b.read_text()
-        text_a = a.read_text()
-        longer, shorter = (text_a, text_b) if len(text_a) >= len(text_b) else (text_b, text_a)
-        pad.write_text(shorter + " " * (len(longer) - len(shorter)))
-        other = a if longer is text_a else b
-        os.utime(pad, ns=(other.stat().st_mtime_ns, other.stat().st_mtime_ns))
-        self.assertEqual((pad.stat().st_size, pad.stat().st_mtime_ns), (other.stat().st_size, other.stat().st_mtime_ns))
-        store = BenchmarkStore(self.root, backend="auto")
-        self.assertNotEqual(store._json_sha(other), store._json_sha(pad))
 
     # -- isolation --------------------------------------------------------
     def test_concurrent_calls_share_no_connection(self):
@@ -358,7 +343,6 @@ class RevisionTests(unittest.TestCase):
     # -- the local stdio MCP server -----------------------------------------
     def mcp_process(self, *extra):
         env = {**os.environ, "PYTHONPATH": SRC}
-        env.pop("BENCH2AGENT_STORE", None)
         return subprocess.Popen([sys.executable, "-m", "bench2agent", "--home", str(self.root), "mcp", *extra],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 

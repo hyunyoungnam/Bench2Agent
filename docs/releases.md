@@ -24,9 +24,13 @@ in expanded editions await review, and field-label coverage is partial.
 The release's `coverage.csv` reports listed, arXiv-matched, parsed and labelled
 paper counts per edition. These are observations, not unique-paper counts.
 
-The bundle carries its JSON reference and published SQLite bytes. Its SHA-256 is
+The bundle (data format v1) carries its JSON reference and published SQLite
+bytes. Its SHA-256 is
 `9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2`.
-The query backend remains JSON by default; SQLite is selectable.
+In 0.4.0 the query backend is JSON by default and SQLite selectable; code
+after 0.4.0 reads only the database and installs this bundle through a
+one-time conversion (the next data release is a database-only bundle, data
+format v2, which 0.4.0 cannot install).
 
 Code upgrades preserve installed data and chats. `bench2agent data install`
 installs the data URL/checksum pinned in that code version. Existing revisions

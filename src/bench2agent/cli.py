@@ -284,7 +284,7 @@ def require_data(root: Path, *, interactive: bool):
         return
     if current.get("pointer") != "none" or current.get("revisions"):
         # something is installed but cannot be served: a broken pointer, a
-        # damaged revision, or a backend without its file — never download over it
+        # damaged revision, or an unreadable database — never download over it
         raise ValueError(current.get("reason") or "Installed data cannot be served; run bench2agent data status.")
     if interactive:
         from .data import install
@@ -591,7 +591,7 @@ def main(argv=None) -> int:
     bundle = actions.add_parser("bundle")
     common_options(bundle, child=True)
     bundle.add_argument("--out", required=True)
-    sqlite = actions.add_parser("sqlite", help="build a SQLite file from a snapshot JSON (for bundling; never into a revision)")
+    sqlite = actions.add_parser("sqlite", help="convert a legacy snapshot JSON (data format v1) into a database file; never into a revision")
     common_options(sqlite, child=True)
     sqlite.add_argument("source", help="path of a benchmark_snapshot.json")
     sqlite.add_argument("--out", required=True)
@@ -669,11 +669,11 @@ def main(argv=None) -> int:
     attempts.add_argument("--user")
     attempts.add_argument("--limit", type=int, default=50)
     web.set_defaults(fn=cmd_web)
-    benchmarks = commands.add_parser("benchmarks", help="build the benchmark snapshot from reviewed extraction")
+    benchmarks = commands.add_parser("benchmarks", help="build the benchmark revision database from reviewed extraction")
     common_options(benchmarks, child=True)
     benchmarks.add_argument("--out")
     benchmarks.add_argument("--publish", action="store_true",
-                            help="also install the export as the new active data revision (JSON + SQLite)")
+                            help="also install the built database as the new active data revision")
     benchmarks.set_defaults(fn=cmd_service)
     args = parser.parse_args(argv)
     if args.home:

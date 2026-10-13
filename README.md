@@ -38,7 +38,7 @@ bench2agent
 
 Choose **one** installation method. On the first interactive launch,
 Bench2Agent automatically downloads the research-data bundle (about 63 MB),
-verifies its checksum and installs its JSON and SQLite files. Subsequent
+verifies its checksum and installs it as a data revision. Subsequent
 launches reuse the data. No GPU, database server, Bench2Agent account or API key
 is needed for the CLI-login route. Model usage follows your AI account's limits.
 
@@ -139,9 +139,10 @@ claims in the expanded editions are not yet reviewed, so introduction discovery
 is less complete than usage coverage. “New” means a reviewed claim in this
 corpus, not the first public release worldwide.
 
-The bundle includes the JSON reference and its normalized SQLite database;
-`BENCH2AGENT_STORE=sqlite` selects SQLite. Both backends share counting rules.
-Each conversation and its tools and checks stay on one immutable revision.
+A data revision is one SQLite database, identified by a hash of its content;
+the released 2026-10-13 bundle still carries the JSON it was built from, which
+installs through a one-time conversion. Each conversation and its tools and
+checks stay on one immutable revision.
 External benchmarks' actual questions, labels and images are separate downloads.
 [Data rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md) · [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md)
 

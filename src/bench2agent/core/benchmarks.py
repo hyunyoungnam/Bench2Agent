@@ -1,8 +1,11 @@
 """Portable full-text benchmark statistics and evidence; standard library only.
 
-Build a snapshot AFTER the mention pass and reviewed identities have settled.
-Every parsed paper is retained, including papers with no stated role. Runtime
-queries never substitute the abstract inventory for missing full-text data.
+Build a revision AFTER the mention pass and reviewed identities have settled:
+`build_revision` assembles the research content from the extraction outputs
+and writes it straight into a SQLite file whose id is derived from that
+content. Every parsed paper is retained, including papers with no stated
+role. Runtime queries never substitute the abstract inventory for missing
+full-text data.
 """
 from __future__ import annotations
 
@@ -10,10 +13,8 @@ import collections
 import contextlib
 import datetime as dt
 import functools
-import hashlib
 import json
 import math
-import os
 import re
 import threading
 import unicodedata
@@ -21,8 +22,8 @@ from pathlib import Path
 
 from .paths import ROOT
 from . import revisions
-from .repository import (BACKENDS, DATABASE, DB_SCHEMA_VERSION, SNAPSHOT, SOURCE, JsonRepository,
-                         SqliteRepository, file_sha256, validate_snapshot)
+from .repository import (DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SqliteRepository, Unavailable,
+                         build_database, content_sha256)
 ROLES = ("evaluates_on", "trains_on")
 # Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
 # a Hub dataset id or a GitHub repo, shown only when it answered the API at
@@ -147,7 +148,10 @@ def _cited(title: str, refs: list[str]) -> bool:
     return len(key) >= 12 and any(key in fold(r) for r in refs)
 
 
-def build_snapshot(root: Path = ROOT, out: Path | None = None) -> dict:
+def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
+    """Assemble the research content and write it as a revision database
+    (`data/processed/benchmark_snapshot.sqlite` by default). Install it with
+    `bench2agent benchmarks --publish` or `data install --file`."""
     files = sorted((root / "data/interim/mentions").glob("mentions_*.jsonl"))
     if not files:
         raise FileNotFoundError("No full-text mention outputs. Finish icml.bench_mentions --all first.")
@@ -256,20 +260,26 @@ def build_snapshot(root: Path = ROOT, out: Path | None = None) -> dict:
         p = root / name
         if (p.stat().st_mtime_ns, p.stat().st_size) != stamp:
             raise ValueError(f"Source changed during export: {name}; retry after extraction finishes")
-    source_id = hashlib.sha256(json.dumps(stamps, sort_keys=True).encode()).hexdigest()[:16]
-    data = {"schema_version": 1, "snapshot_id": source_id,
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "source": "arxiv_html_stated_roles", "editions": editions,
+    data = {"schema_version": 1, "source": SOURCE, "editions": editions,
             # the registry's own API-check date, never the export date
             "registry_checked": read_json(root / "config/benchmarks.json", {}).get("checked"),
-            "benchmarks": entries, "papers": result}
-    target = out or root / "data/processed" / SNAPSHOT
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temp = target.with_suffix(".tmp")
-    temp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    os.replace(temp, target)
-    return {"path": str(target), "snapshot_id": source_id, "editions": len(editions),
-            "parsed_papers": len(result), "benchmarks": len(entries)}
+            "benchmarks": entries, "papers": result,
+            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    # The revision id is the content: the same extraction and review, built
+    # again on another day or another machine, is the same revision.
+    content = content_sha256(data)
+    rid = content[:16]
+    data["snapshot_id"] = rid
+    import sqlite3
+    from bench2agent import __version__
+    target = out or root / "data/processed" / DATABASE
+    report = build_database(data, target, {"revision_id": rid, "content_sha256": content,
+                                           "min_client_version": MIN_CLIENT_VERSION,
+                                           "built_with": f"bench2agent {__version__}",
+                                           "sqlite_library": sqlite3.sqlite_version})
+    return {"path": str(target), "revision_id": rid, "snapshot_id": rid, "content_sha256": content,
+            "sha256": report["sha256"], "editions": len(editions), "parsed_papers": len(result),
+            "benchmarks": len(entries)}
 
 
 def _pinned(method):
@@ -282,12 +292,10 @@ def _pinned(method):
 
 
 class BenchmarkStore:
-    """The six tools. Every rule lives here, once; storage is a repository
-    (`core.repository`) chosen by `backend`: "json" (the reference snapshot),
-    "sqlite" (the imported file), or "auto" (sqlite when it exists). The
-    default comes from BENCH2AGENT_STORE and is json until parity is shown."""
+    """The six tools. Every rule lives here, once; storage is the revision's
+    SQLite file, read through `core.repository.SqliteRepository`."""
 
-    def __init__(self, root: Path = ROOT, backend: str | None = None, revision: str | None = None):
+    def __init__(self, root: Path = ROOT, revision: str | None = None):
         """Pinned to one data revision for its whole life: the one given, else
         the one active when it was constructed. Nothing it reads changes when
         a new revision is published; callers wanting new data construct a new
@@ -302,25 +310,21 @@ class BenchmarkStore:
                                               + revisions.recovery_hint(root, self.revision))
         except ValueError as exc:   # a broken pointer or a missing explicit revision
             self.revision, self.unavailable = revision, str(exc)
-        self.backend = backend or os.environ.get("BENCH2AGENT_STORE", "json")
-        if self.backend not in BACKENDS:
-            raise ValueError("BENCH2AGENT_STORE must be json, sqlite or auto")
         self._stamp = None
         self._repo = None
-        self._json_sha_cache = (None, None)
         self._local = threading.local()
 
     # -- storage selection and pinning ------------------------------------
     def _verification(self) -> str | None:
         """The pinned revision checked against its manifest: in full when the
-        store is built and again whenever the JSON, the database or the
-        manifest changes on disk (identity, size, mtime, ctime); a cached
-        verdict otherwise. Returns the error, or None when the revision is
-        sound. Integrity rests on the checksums; the stamps only decide when
-        to recompute them."""
+        store is built and again whenever a listed file or the manifest
+        changes on disk (identity, size, mtime, ctime); a cached verdict
+        otherwise. Returns the error, or None when the revision is sound.
+        Integrity rests on the checksums; the stamps only decide when to
+        recompute them."""
         d = revisions.revision_dir(self.root, self.revision)
         stamps = {}
-        for name in (SNAPSHOT, DATABASE, "manifest.json"):
+        for name in (DATABASE, SNAPSHOT, "manifest.json"):
             try:
                 st = (d / name).stat()
                 stamps[name] = (st.st_ino, st.st_dev, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
@@ -335,75 +339,32 @@ class BenchmarkStore:
             self._verified = (stamps, error)
         return self._verified[1]
 
-    def _json_sha(self, path: Path) -> str:
-        # keyed by the path too: two revisions' files can share size and mtime
-        stamp = (str(path), path.stat().st_mtime_ns, path.stat().st_size)
-        if self._json_sha_cache[0] != stamp:
-            self._json_sha_cache = (stamp, file_sha256(path))
-        return self._json_sha_cache[1]
-
-    def _choose(self) -> tuple[Path | None, str, str | None]:
-        """(file to read, backend, reason it is unavailable). `auto` reads the
-        SQLite file only when it was built from the JSON snapshot beside it;
-        a stale or unreadable file falls back to JSON. An explicit `sqlite`
-        with a stale file is an error, so nobody answers from old data by
-        accident."""
+    def _choose(self) -> tuple[Path | None, str | None]:
+        """(database to read, reason it is unavailable)."""
         if self.unavailable:
-            return None, self.backend if self.backend != "auto" else "json", self.unavailable
+            return None, self.unavailable
         if self.revision is None:
-            return None, self.backend if self.backend != "auto" else "json", (
-                "No data revision is installed. Run bench2agent data install (or data install --file FILE).")
-        json_path, db_path, _ = revisions.paths_for(self.root, self.revision)
+            return None, "No data revision is installed. Run bench2agent data install (or data install --file FILE)."
+        db_path, _ = revisions.paths_for(self.root, self.revision)
         if error := self._verification():
-            return None, self.backend if self.backend != "auto" else "json", error
-        if self.backend == "json":
-            return (json_path if json_path.exists() else None), "json", (
-                None if json_path.exists() else f"Revision {self.revision} has no JSON snapshot; set BENCH2AGENT_STORE=sqlite.")
-        db_state = None  # None: no file; "ok"; or an error message
-        if db_path.exists():
-            try:
-                with SqliteRepository(db_path).session() as repo:
-                    ident = repo.identity()
-                if ident["db_schema_version"] != DB_SCHEMA_VERSION or ident["source"] != SOURCE:
-                    db_state = "Unsupported benchmark database; rebuild with bench2agent data sqlite"
-                elif json_path.exists() and ident["source_sha256"] != self._json_sha(json_path):
-                    db_state = ("SQLite database was built from a different snapshot than the installed JSON; "
-                                "run bench2agent data sqlite (or set BENCH2AGENT_STORE=json)")
-                else:
-                    db_state = "ok"
-            except ValueError as exc:
-                db_state = str(exc)
-        if db_state == "ok":
-            return db_path, "sqlite", None
-        if self.backend == "sqlite":
-            return None, "sqlite", db_state or (f"Revision {self.revision} has no SQLite file; reinstall it from a verified "
-                                                "bundle (published revisions are not rebuilt in place).")
-        # auto: fall back to the reference
-        return (json_path if json_path.exists() else None), "json", db_state
+            return None, error
+        return db_path, None
 
     def repo(self):
         active = getattr(self._local, "repo", None)
         if active is not None:
             return active
         try:
-            path, backend, reason = self._choose()
+            path, reason = self._choose()
         except revisions.RevisionError as exc:     # the revision vanished or broke after pinning
-            path, backend, reason = None, ("json" if self.backend == "auto" else self.backend), str(exc)
+            path, reason = None, str(exc)
         if path is None:
-            self._repo = JsonRepository({"source": SOURCE, "benchmarks": catalogue(self.root), "papers": [],
-                                         "editions": {}, "reason": reason, "backend": backend}, available=False)
+            self._repo = Unavailable(reason, catalogue(self.root))
             self._stamp = None
             return self._repo
         stamp = (path, path.stat().st_mtime_ns, path.stat().st_size)
         if stamp != self._stamp:
-            if backend == "sqlite":
-                repo = SqliteRepository(path)
-            else:
-                data = read_json(path)
-                if data.get("schema_version") != 1 or data.get("source") != SOURCE:
-                    raise ValueError("Unsupported benchmark snapshot; rebuild with bench2agent benchmarks")
-                repo = JsonRepository(data)
-            self._repo, self._stamp = repo, stamp
+            self._repo, self._stamp = SqliteRepository(path), stamp
         return self._repo
 
     @contextlib.contextmanager
@@ -432,10 +393,7 @@ class BenchmarkStore:
     def data(self) -> dict:
         """What the store is answering from: identity plus the catalogue."""
         with self.pinned() as repo:
-            meta = repo.meta()
-            if not meta["available"] and repo.d.get("backend"):
-                meta["backend"] = repo.d["backend"]
-            return {**meta, "revision": self.revision,
+            return {**repo.meta(), "revision": self.revision,
                     "benchmarks": repo.benchmarks(), "editions": repo.editions()}
 
     def _base(self, data: dict) -> dict:
@@ -462,12 +420,12 @@ class BenchmarkStore:
         fields = self.repo().field_counts()
         query = (a.get("query") or "").casefold()
         return {**self._base(data), "editions": data["editions"],
-                # ties ordered by name, so both backends list fields identically
+                # ties ordered by name, so the listing is deterministic
                 "fields": [{"name": f, "parsed_papers": n} for f, n in sorted(fields.items(), key=lambda x: (-x[1], x[0]))
                            if query in f.casefold()][:100],
                 "catalogue_entries": len(data["benchmarks"]),
                 "note": "Fields are exact declared topic/area/subarea labels; their coverage is incomplete. "
-                        "Usage needs benchmark_snapshot.json; missing data is not zero usage."}
+                        "Usage needs an installed data revision; missing data is not zero usage."}
 
     def _select(self, data: dict, a: dict, *, latest: bool = False, authors: bool = False) -> tuple[list, dict]:
         eds = list(data["editions"])

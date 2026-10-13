@@ -34,8 +34,9 @@ class MigrationTests(unittest.TestCase):
         self.assertTrue(result["settings_copied"])
         self.assertEqual(result["chats_copied"], 1)
         from bench2agent.core import revisions
-        served, _, rid = revisions.paths_for(self.new)       # registered as a revision, not copied beside the code
-        self.assertEqual((rid, served.read_bytes()), ("original-revision", (self.old / MEMBER).read_bytes()))
+        served, rid = revisions.paths_for(self.new)          # registered as a revision, not copied beside the code
+        self.assertEqual((rid, served.with_name("benchmark_snapshot.json").read_bytes()),
+                         ("original-revision", (self.old / MEMBER).read_bytes()))
         self.assertEqual(Session(self.new, "openai", "other-model", cid=self.cid).doc["snapshot_id"], "original-revision")
         self.assertEqual(conversations(self.new)[0]["title"], "Existing answer")
         self.assertNotIn("unrelated", json.loads((self.new / "data/bench2agent/settings.json").read_text()))

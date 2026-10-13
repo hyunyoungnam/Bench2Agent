@@ -157,23 +157,23 @@ bench2agent data install --file ./bench2agent-data.tar.gz
 bench2agent data status
 ```
 
-Every revision holds the snapshot JSON and its SQLite import. Queries read
-the JSON unless `BENCH2AGENT_STORE=sqlite` (or `auto`, which uses the SQLite
-file only when it was built from the installed JSON; an explicit `sqlite`
-with a stale or unreadable file reports why instead of answering). Each tool
-call reads one version of the file. A `.sqlite` file installs on its own
-with `data install --file`, and `data bundle` includes the database. Both
-backends return the same results and are checked against each other in the
-test suite and by `scripts/parity_check.py`.
+A revision is one SQLite database (`benchmark_snapshot.sqlite`) and its
+manifest. Queries read that file and nothing else; each tool call reads one
+version of it. A `.sqlite` written by `bench2agent benchmarks` installs on its
+own with `data install --file`, and `data bundle` packs the database and the
+manifest (data format v2). Bundles of data format v1 (JSON + database, as
+released up to data-20261013) and bare legacy `benchmark_snapshot.json`
+files still install: the JSON is converted once into a database and kept
+beside it, listed and checked like any file, never queried.
 
 ### Data revisions
 
-Every install is a revision. The snapshot and its SQLite import are staged
-together under `data/revisions/`, validated and checked against each other,
-moved into `data/revisions/<snapshot_id>/` with one rename, and only then
-named in `data/revisions/active`. A failed install, at any step, leaves the
-active revision serving with both of its files unchanged. Published
-revisions are never edited.
+Every install is a revision. The database (and a legacy JSON, when the
+source carried one) is staged under `data/revisions/`, validated, moved into
+`data/revisions/<revision_id>/` with one rename, and only then named in
+`data/revisions/active`. A failed install, at any step, leaves the active
+revision serving with its files unchanged. Published revisions are never
+edited.
 
 - **Pinning.** Everything reads an explicit revision. A terminal question
   fixes the revision when it starts (a saved conversation keeps the one its
@@ -182,47 +182,51 @@ revisions are never edited.
   (`bench2agent mcp`) reads the revision that was active when it started,
   for its whole life, and says so in its instructions and in every response
   (`revision`). Restart the server to serve the currently active revision;
-  `bench2agent mcp --revision <snapshot_id>` serves an installed earlier
+  `bench2agent mcp --revision <revision_id>` serves an installed earlier
   revision to reproduce earlier answers.
-- **Switching.** `bench2agent data activate <snapshot_id>` verifies that
-  revision (manifest, files, checksums, JSON and database from the same
-  snapshot) and makes it the one new conversations and new servers get.
-  A rollback is the same command. `data status` lists revisions, the pointer
-  state and the served revision's verification.
+- **Switching.** `bench2agent data activate <revision_id>` verifies that
+  revision (manifest, every listed file's checksum, the database's identity,
+  schema and minimum client version) and makes it the one new conversations
+  and new servers get. A rollback is the same command. `data status` lists
+  revisions, the pointer state and the served revision's verification.
 - **No fallback.** With no `active` pointer nothing is served and the
   commands say to install; a pointer whose target is missing or damaged is
   an error naming the recovery (`data activate` an installed revision, or
   reinstall a verified bundle). Data is never read from any other place.
-- **Same content, same revision.** `snapshot_id` identifies the extraction
-  inputs (it is derived from their file stamps). The manifest also records
-  `content_sha256`, the content without `generated_at`, so re-exporting the
-  same extraction and installing it again is recognised and the installed
-  copy is kept. Same id with different content is refused.
-- **Repair is a restore.** A damaged copy is repaired only from bytes that
-  match the manifest's recorded checksums (reinstall the original bundle);
+- **The id is the content.** A revision built by `bench2agent benchmarks`
+  is named by a hash of its research content (`content_sha256`, the first
+  16 hex digits are the id); the same extraction and review built again, on
+  another day or machine, is the same revision, and installing it again is
+  recognised and the installed copy kept. Same id with different content is
+  refused. Revisions installed from legacy JSON keep that snapshot's own id.
+- **Readable by.** The manifest records `db_schema_version` and
+  `min_client_version`; older code refuses a revision it cannot read, with
+  the version it needs, instead of misreading it. Revisions installed by
+  0.4.0 (manifest format v1) are still served by newer code.
+- **Repair is a restore.** A damaged file is repaired only from bytes that
+  match the manifest's recorded checksum (reinstall the original bundle);
   the manifest is never rewritten, and a database is never rebuilt inside a
-  revision. Databases built locally from a JSON-only source are marked
+  revision. Databases converted locally from a JSON-only source are marked
   `sqlite_built_locally` with the SQLite library version, since the bytes of
-  an import differ between SQLite builds even for identical content.
+  a conversion differ between SQLite builds even for identical content.
   Official bundles therefore carry the database.
 - **Previous installs.** A `data/processed/benchmark_snapshot.json` from
   before revisions is registered once, explicitly, with
   `bench2agent data install --file data/processed/benchmark_snapshot.json`;
   `bench2agent migrate --from DIR` does this for a previous installation.
-  The source checkout registers a build the same way, or with
-  `bench2agent benchmarks --publish`, which builds the snapshot from the
-  reviewed extraction and installs it as the new active revision in one
-  step. Adding a conference edition is therefore the per-edition `icml`
-  stages (collect, normalize, arXiv match, HTML parse, `bench_mentions
-  --all`) followed by publish.
+  The source checkout registers a build with `bench2agent benchmarks
+  --publish`, which builds the database from the reviewed extraction and
+  installs it as the new active revision in one step. Adding a conference
+  edition is therefore the per-edition `icml` stages (collect, normalize,
+  arXiv match, HTML parse, `bench_mentions`) followed by publish.
 
-`bench2agent data sqlite SNAPSHOT.json --out FILE.sqlite` builds a database
-for bundling; it refuses to write inside `data/revisions/`.
+`bench2agent data sqlite SNAPSHOT.json --out FILE.sqlite` converts a legacy
+JSON snapshot into a database file; it refuses to write inside
+`data/revisions/`.
 
-`--file` also accepts the exported `benchmark_snapshot.json` or a
-`benchmark_snapshot.sqlite`. The bundle
-manifest verifies its snapshot checksum; `--sha256` additionally verifies the
-entire download. Installation validates schema and stages an atomic replacement.
+`--file` accepts a bundle, a `benchmark_snapshot.sqlite` or a legacy
+`benchmark_snapshot.json`. The bundle manifest verifies each file's
+checksum; `--sha256` additionally verifies the entire download. Installation validates schema and stages an atomic replacement.
 Failed downloads, invalid snapshots and checksum failures retain existing data.
 Updating data uses the same install command. Conversations retain their original
 snapshot identity; continuing a conversation after a data update uses its original installed revision. If that revision was removed, reinstall it or start a new conversation.
@@ -240,8 +244,8 @@ PYTHONPATH=src python3 -m bench2agent benchmarks --publish
 PYTHONPATH=src python3 -m bench2agent data bundle --out dist/bench2agent-data.tar.gz
 ```
 
-The bundle contains the self-contained benchmark snapshot and a manifest,
-plus an adjacent `.sha256` file. No raw HTML, embeddings, browser assets or
+The bundle contains the revision's database and a manifest, plus an
+adjacent `.sha256` file. No raw HTML, embeddings, browser assets or
 Meilisearch database is required for either terminal conversations or MCP.
 The corpus and generated bundles remain Git-ignored.
 

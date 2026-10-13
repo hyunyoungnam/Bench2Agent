@@ -16,13 +16,16 @@ PYTHONPATH=src python3 -m bench2agent benchmarks
 PYTHONPATH=src python3 -m bench2agent serve --no-meili
 ```
 
-The exporter joins `mentions_<edition>.jsonl`, normalized paper metadata,
-arXiv mappings, available topic labels and the reviewed catalogue. It writes
-`data/processed/benchmark_snapshot.json` atomically and rejects source changes
-during export. The snapshot travels in `bench2agent bundle`; neither the corpus
-nor that artifact belongs in Git. `/benchmarks/status` exposes coverage.
+The builder joins `mentions_<edition>.jsonl`, normalized paper metadata,
+arXiv mappings, available topic labels and the reviewed catalogue, and writes
+the research tables straight into `data/processed/benchmark_snapshot.sqlite`
+(built beside the target and swapped in once checked); it rejects source
+changes during the build. The revision id is a hash of that content.
+`bench2agent benchmarks --publish` installs it; `bench2agent data bundle`
+packs it. Neither the corpus nor those artifacts belong in Git.
+`/benchmarks/status` exposes coverage.
 
-The snapshot is self-contained for benchmark queries. Unreviewed provisional
+The database is self-contained for benchmark queries. Unreviewed provisional
 names remain unresolved observations rather than ranked entities. Same-name
 claims from the same introducing paper are deduplicated in the snapshot with
 all evidence and former IDs retained; unrelated introducing papers remain

@@ -1,9 +1,8 @@
 """Immutable data revisions and the one pointer that says which is active.
 
-    <root>/data/revisions/<snapshot_id>/benchmark_snapshot.json
-    <root>/data/revisions/<snapshot_id>/benchmark_snapshot.sqlite  (+ .sha256)
-    <root>/data/revisions/<snapshot_id>/manifest.json
-    <root>/data/revisions/active        # the snapshot_id being served
+    <root>/data/revisions/<revision_id>/benchmark_snapshot.sqlite  (+ .sha256)
+    <root>/data/revisions/<revision_id>/manifest.json
+    <root>/data/revisions/active        # the revision id being served
 
 A revision directory is written completely into a staging directory, checked,
 moved into place with one rename, and only then named in `active` with one
@@ -15,18 +14,24 @@ There is no fallback to other files. No `active` pointer means nothing is
 installed yet; a pointer whose target is missing or damaged is an error that
 names the recovery, never a silent switch to older data.
 
-Identity, kept apart on purpose:
-- `snapshot_id` names the extraction *inputs* (it is derived from their file
-  stamps, not from the content) and is the revision id;
-- `content_sha256` is the content with `generated_at` removed, so a re-export
-  of the same extraction is recognised as the same revision;
-- `sha256` / `sqlite_sha256` are the bytes actually installed. A damaged copy
-  may only be restored from bytes that match them; the manifest is never
-  rewritten to fit a new file.
+Two manifest formats are read:
+
+- `bench2agent-data-v2` (from 2026-10-13): the database is the revision.
+  `files` lists every file with its sha256; `revision_id` (= `snapshot_id`)
+  is derived from the logical content (`content_sha256`,
+  `repository.content_sha256`); `db_schema_version` and `min_client_version`
+  say whether this code can read it. A revision installed from a legacy JSON
+  source keeps that file beside the database (`legacy_json`), listed and
+  checked like any other, never queried.
+- `bench2agent-data-v1` (installed by 0.4.0 and earlier): JSON + database,
+  `sha256` / `sqlite_sha256`, a stamp-derived `snapshot_id`. Still served;
+  never rewritten.
+
+Repair is a restore: a damaged file may only be replaced by bytes that match
+the manifest's recorded checksum; the manifest is never rewritten to fit.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -34,10 +39,13 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from .repository import DATABASE, SNAPSHOT, SqliteRepository, file_sha256
+from .repository import (DATABASE, SNAPSHOT, SUPPORTED_SCHEMAS, SqliteRepository, client_supports, file_sha256,
+                         content_sha256)  # noqa: F401  (content_sha256 re-exported for callers)
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 POINTER = "active"
+FORMAT_V1 = "bench2agent-data-v1"
+FORMAT_V2 = "bench2agent-data-v2"
 
 
 class RevisionError(ValueError):
@@ -58,10 +66,31 @@ def revision_dir(root: Path, rid: str) -> Path:
     return revisions_dir(root) / rid
 
 
-def content_sha256(data: dict) -> str:
-    """The snapshot's content, independent of when it was exported."""
-    body = {k: v for k, v in data.items() if k != "generated_at"}
-    return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+def files_of(manifest: dict) -> dict[str, str]:
+    """name -> recorded sha256 of every file the manifest vouches for."""
+    if manifest.get("format") == FORMAT_V2 or isinstance(manifest.get("files"), dict):
+        return {k: v for k, v in (manifest.get("files") or {}).items() if v}
+    out = {}
+    if manifest.get("sha256"):
+        out[SNAPSHOT] = manifest["sha256"]
+    if manifest.get("sqlite_sha256"):
+        out[DATABASE] = manifest["sqlite_sha256"]
+    return out
+
+
+def json_sha256(manifest: dict) -> str | None:
+    """The checksum of the legacy JSON the revision came from, when one is recorded."""
+    return files_of(manifest).get(SNAPSHOT) or manifest.get("source_json_sha256")
+
+
+def same_content(old: dict, new: dict) -> bool:
+    """Do two manifests describe the same research content? Same logical
+    hash under the same format; across formats, the same legacy JSON bytes
+    (a v1 revision and a v2 install of the same v1 bundle)."""
+    if old.get("format") == new.get("format") and old.get("content_sha256") and new.get("content_sha256"):
+        return old["content_sha256"] == new["content_sha256"]
+    a, b = json_sha256(old), json_sha256(new)
+    return bool(a) and a == b
 
 
 def pointer_state(root: Path) -> tuple[str, str | None]:
@@ -100,20 +129,20 @@ def manifest_of(root: Path, rid: str) -> dict:
 def verify_dir(path: Path, manifest: dict | None = None) -> dict:
     """Check a revision directory against its manifest: every listed file is
     present with the recorded checksum, the database identifies the same
-    snapshot and was built from the same JSON. Returns the manifest."""
+    revision, its schema is one this code reads and its minimum client
+    version is met. Returns the manifest."""
     manifest = manifest if manifest is not None else json.loads((path / "manifest.json").read_text(encoding="utf-8"))
     problems = []
-    json_path, db_path = path / SNAPSHOT, path / DATABASE
-    for name, p, key in ((SNAPSHOT, json_path, "sha256"), (DATABASE, db_path, "sqlite_sha256")):
-        expected = manifest.get(key)
-        if not expected:
-            continue
+    files = files_of(manifest)
+    if not files:
+        problems.append("manifest records no files")
+    for name, expected in files.items():
+        p = path / name
         if not p.is_file():
             problems.append(f"{name} is missing (expected sha256 {expected})")
         elif file_sha256(p) != expected:
             problems.append(f"{name} does not match its recorded sha256 {expected}")
-    if not manifest.get("sha256") and not manifest.get("sqlite_sha256"):
-        problems.append("manifest records no files")
+    db_path = path / DATABASE
     if not problems and db_path.is_file():
         try:
             with SqliteRepository(db_path).session() as repo:
@@ -121,12 +150,24 @@ def verify_dir(path: Path, manifest: dict | None = None) -> dict:
         except ValueError as exc:
             problems.append(str(exc))
         else:
-            if ident.get("snapshot_id") != manifest.get("snapshot_id"):
-                problems.append("database identifies a different snapshot")
-            if manifest.get("sha256") and ident.get("source_sha256") != manifest["sha256"]:
+            rid = manifest.get("revision_id") or manifest.get("snapshot_id")
+            if (ident.get("revision_id") or ident.get("snapshot_id")) != rid:
+                problems.append("database identifies a different revision")
+            if ident.get("db_schema_version") not in SUPPORTED_SCHEMAS:
+                problems.append(f"database schema {ident.get('db_schema_version')} is not readable by this Bench2Agent")
+            needs = manifest.get("min_client_version") or ident.get("min_client_version")
+            if needs and not client_supports(needs):
+                problems.append(f"revision needs bench2agent {needs} or newer")
+            if manifest.get("format") == FORMAT_V2:
+                if manifest.get("content_sha256") and ident.get("content_sha256") != manifest["content_sha256"]:
+                    problems.append("database records a different content hash than the manifest")
+            elif manifest.get("sha256") and ident.get("source_sha256") != manifest["sha256"]:
                 problems.append("database was built from a different JSON than the one installed")
+    elif not problems:
+        problems.append(f"{DATABASE} is missing")
     if problems:
-        raise RevisionError(f"Revision {manifest.get('snapshot_id', path.name)} failed verification: " + "; ".join(problems)
+        raise RevisionError(f"Revision {manifest.get('revision_id') or manifest.get('snapshot_id', path.name)} failed verification: "
+                            + "; ".join(problems)
                             + ". Restore the original files from a verified bundle or backup; the manifest is not rewritten.")
     return manifest
 
@@ -151,23 +192,25 @@ def list_revisions(root: Path) -> list[dict]:
         except (OSError, ValueError):
             pass
         out.append({"id": d.name, "active": d.name == active and state == "ok", "path": str(d),
+                    "format": manifest.get("format"),
                     "json": (d / SNAPSHOT).is_file(), "sqlite": (d / DATABASE).is_file(),
-                    **{k: manifest.get(k) for k in ("generated_at", "installed_at", "sha256", "sqlite_sha256", "content_sha256")}})
+                    **{k: manifest.get(k) for k in ("generated_at", "installed_at", "content_sha256", "min_client_version")},
+                    "sqlite_sha256": files_of(manifest).get(DATABASE)})
     return out
 
 
-def paths_for(root: Path, revision: str | None = None) -> tuple[Path | None, Path | None, str | None]:
-    """(json path, sqlite path, revision id) to read. An explicit revision
-    must be installed; otherwise the active one. (None, None, None) when
-    nothing is installed. A broken pointer or a missing explicit revision
-    raises RevisionError."""
+def paths_for(root: Path, revision: str | None = None) -> tuple[Path | None, str | None]:
+    """(database path, revision id) to read. An explicit revision must be
+    installed; otherwise the active one. (None, None) when nothing is
+    installed. A broken pointer or a missing explicit revision raises
+    RevisionError."""
     rid = revision or active_revision(root)
     if rid is None:
-        return None, None, None
+        return None, None
     d = revision_dir(root, rid)
     if not (d / "manifest.json").is_file():
         raise RevisionError(f"Data revision {rid} is not installed here. " + recovery_hint(root, rid))
-    return d / SNAPSHOT, d / DATABASE, rid
+    return d / DATABASE, rid
 
 
 def staging_dir(root: Path) -> Path:
@@ -208,7 +251,7 @@ def publish(root: Path, stage: Path, rid: str, *, activate: bool = True) -> tupl
         except (OSError, ValueError):
             raise RevisionError(f"Revision {rid} exists without a readable manifest; remove or restore that "
                                 f"directory from a verified bundle before installing.") from None
-        if old.get("content_sha256") != new.get("content_sha256"):
+        if not same_content(old, new):
             raise RevisionError(f"Revision {rid} is already installed with different content; nothing was replaced.")
         try:
             verify_dir(target, old)
@@ -231,12 +274,8 @@ def publish(root: Path, stage: Path, rid: str, *, activate: bool = True) -> tupl
 
 def damaged_files(target: Path, manifest: dict) -> list[str]:
     """The files of an installed revision that do not match its manifest."""
-    out = []
-    for name, key in ((SNAPSHOT, "sha256"), (DATABASE, "sqlite_sha256")):
-        expected = manifest.get(key)
-        if expected and (not (target / name).is_file() or file_sha256(target / name) != expected):
-            out.append(name)
-    return out
+    return [name for name, expected in files_of(manifest).items()
+            if not (target / name).is_file() or file_sha256(target / name) != expected]
 
 
 def restore_damaged(target: Path, manifest: dict, offered: Path) -> list[str]:
@@ -247,17 +286,17 @@ def restore_damaged(target: Path, manifest: dict, offered: Path) -> list[str]:
     file as it was and no temporary file behind. Healthy files are not
     touched; the manifest is never rewritten."""
     restored = []
+    expected_of = files_of(manifest)
     for name in damaged_files(target, manifest):
-        key = "sha256" if name == SNAPSHOT else "sqlite_sha256"
         source = offered / name
-        if not source.is_file() or file_sha256(source) != manifest[key]:
+        if not source.is_file() or file_sha256(source) != expected_of[name]:
             continue
         fd, tmp = tempfile.mkstemp(prefix=".restore-", dir=target)
         os.close(fd)
         tmp = Path(tmp)
         try:
             shutil.copyfile(source, tmp)
-            if file_sha256(tmp) != manifest[key]:
+            if file_sha256(tmp) != expected_of[name]:
                 raise RevisionError(f"Copy of {name} did not reproduce its checksum; nothing was replaced.")
             os.replace(tmp, target / name)
         finally:

@@ -46,7 +46,7 @@ def migrate(root: Path, source: Path) -> dict:
         src_dir = Path(rev["path"])
         if (revisions.revision_dir(root, rev["id"]) / "manifest.json").is_file():
             continue
-        file = src_dir / "benchmark_snapshot.json" if rev["json"] else src_dir / "benchmark_snapshot.sqlite"
+        file = src_dir / "benchmark_snapshot.sqlite" if rev["sqlite"] else src_dir / "benchmark_snapshot.json"
         install(root, file=str(file), activate=False)
         result["snapshot_copied"] = True
     active = next((r["id"] for r in previous_revisions if r["active"]), None)

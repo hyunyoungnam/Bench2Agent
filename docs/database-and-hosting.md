@@ -6,12 +6,13 @@ papers, benchmark identities, stated uses and their evidence. Collection runs
 will add or revise records; agents will query a published data revision.
 
 This is the implementation design, kept current. State as of 2026-10-13
-(Bench2Agent 0.4.0, data revision `e41da62f2fb3616f`): the application reads
-an installed, immutable data revision; each revision holds a JSON reference
-and its SQLite import, selected by `BENCH2AGENT_STORE` (default json); the
-terminal, the stdio MCP server and the optional HTTP MCP and web host all pin
-one revision per conversation. The next storage step (see *Next steps*)
-makes SQLite the only query backend and the revision a database file.
+(Bench2Agent 0.4.0 released; the checkout at 0.5.0.dev0): the application
+reads an installed, immutable data revision, which is one SQLite database
+identified by a hash of its research content (revisions installed by 0.4.0
+from the JSON + SQLite bundle keep serving); the terminal, the stdio MCP
+server and the optional HTTP MCP and web host all pin one revision per
+conversation. The working database that will hold processing state is kept
+apart from the published export (see *Next steps*).
 `bench2agent serve` starts the local browser prototype. This design supports a
 future Mac server and Linux deployment.
 
@@ -39,10 +40,11 @@ schemas. An agent chooses tools and explains returned results; Python and SQL
 compute the figures. The model does not receive unrestricted SQL access.
 
 The repository interface supplies scoped paper observations, benchmark facts,
-introduction claims and evidence. JSON and SQLite adapters first implement
-the same contract. A PostgreSQL adapter follows when server write concurrency
-requires it. Counts and statistical comparisons share one implementation;
-backend-specific retrieval and aggregation must pass the same reference cases.
+introduction claims and evidence; the SQLite repository implements it, and
+the builder writes the same schema directly. A PostgreSQL adapter follows
+when server write concurrency requires it. Counts and statistical comparisons
+share one implementation, checked against fixture expectations and pinned
+figures of published revisions (`scripts/regression_check.py`).
 
 Both local and hosted answers carry the dataset revision, complete tool
 arguments, analysed editions, denominators and evidence IDs. Every tool call
@@ -260,12 +262,12 @@ Collection and model-call logs remain distinct from user-visible evidence.
 2. Add the repository interface and SQLite adapter; compare every existing
    tool result against the JSON implementation, including homonyms, unknown
    authors, zero adoption and duplicate paper membership.
-   **Done (2026-10-12):** `BenchmarkStore` computes every rule once over
-   `JsonRepository` or `SqliteRepository`; `BENCH2AGENT_STORE` selects the
-   backend and JSON remains the default. Parity is checked on fixtures
-   (`tests/test_repository.py`) and on the released snapshot
-   (`scripts/parity_check.py`: all tool calls identical; robotics 509 /
-   LIBERO 80, SIMPLER 41, Meta-World 29; ICLR CIFAR-10 178, 197, 165).
+   **Done (2026-10-12), since superseded (see *Next steps* 2):** `BenchmarkStore`
+   computed every rule once over a JSON reference or the SQLite import,
+   selected by `BENCH2AGENT_STORE`; parity was checked on fixtures and on
+   the released snapshot (robotics 509 / LIBERO 80, SIMPLER 41, Meta-World
+   29; ICLR CIFAR-10 178, 197, 165). From 2026-10-13 the database is the only
+   backend and those figures are pinned in `scripts/regression_check.py`.
 3. Add incremental edition ingestion and immutable data revisions. Verify
    rollback, repeat imports and saved-answer reproducibility.
    **Revisions done (2026-10-12):** `core/revisions.py` — immutable revision
@@ -321,14 +323,16 @@ reference-result tests per adapter. See the
 ## Next steps (agreed 2026-10-13)
 
 1. Documentation aligned with the released state (this revision of the file).
-2. SQLite as the only query backend and the revision as a database file:
-   the builder writes the research tables directly, the revision manifest
-   (format v2) carries the schema version, the minimum client version and a
-   logical content hash; the working database that will hold processing
-   state is kept apart from the published export, which carries research
-   tables only, taken at one consistent read point. Earlier revisions keep
-   serving; v1 bundles install through a legacy import. Counting rules do not
-   change in this step.
+2. **Done (2026-10-13):** SQLite is the only query backend and the revision
+   is a database file. `build_revision` writes the research tables directly
+   (no JSON round trip); the manifest (format v2) carries `db_schema_version`,
+   `min_client_version`, the logical `content_sha256` and every file's
+   checksum; the revision id is the content hash. The published file holds
+   the research tables only (`repository.RESEARCH_TABLES`, checked at build);
+   processing state, leases and conversations will live in a separate
+   working database. Revisions installed by 0.4.0 keep serving; v1 bundles
+   and legacy JSON install through a one-time import. Counting rules were
+   not touched.
 3. Identification rules in separate commits: paper identity from source ids
    with the title as a clue and raw rows preserved; benchmark identity from
    explicit evidence, author overlap as a flag and for self-use only; name

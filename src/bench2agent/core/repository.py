@@ -1,21 +1,28 @@
-"""Storage behind the six benchmark tools: one contract, two backends.
+"""Storage behind the six benchmark tools: one SQLite file per revision.
 
-The JSON snapshot (`benchmark_snapshot.json`) stays the reference. The SQLite
-file (`benchmark_snapshot.sqlite`) is imported from it, exports back to an
-identical snapshot, and answers the same queries without loading the whole
-corpus into memory. Both implement the same small contract, so every count,
-ordering and evidence rule lives once, in `BenchmarkStore`.
+The builder (`core.benchmarks.build_revision`) writes the research tables
+straight into a database file; `BenchmarkStore` reads that file and nothing
+else. Every count, ordering and evidence rule lives once, in the store; this
+module owns the schema, the writer, the logical content hash and the
+read-only repository.
 
-What the import preserves, row for row: every parsed observation (including
-papers with no stated use), benchmark ids with aliases, merged ids and
-homonym relations, claims and developer lists, each evidence record in its
-order, unresolved attribution, field labels, resource locations with their
-check flags, edition coverage and the snapshot's own identity. Residual fields
-the schema does not model go to an `extra` JSON column, never dropped.
+What the file holds, row for row: every parsed observation (including papers
+with no stated use), benchmark ids with aliases, merged ids and homonym
+relations, claims and developer lists, each evidence record in its order,
+unresolved attribution, field labels, resource locations with their check
+flags, edition coverage and the revision's own identity. Residual fields the
+schema does not model go to an `extra` JSON column, never dropped. These are
+the RESEARCH_TABLES: a published file carries them and nothing else — no
+processing state, no leases, no conversations.
 
-Identity is kept apart on purpose: `snapshot_id` names the extraction the
-data came from; `db_schema_version` names this file layout; the artifact
+Identity is kept apart on purpose: `revision_id` (also stored as
+`snapshot_id`, the name every tool response uses) is derived from the
+logical content; `db_schema_version` names this file layout;
+`min_client_version` names the oldest code that reads it; the artifact
 checksum names these exact bytes. Dates are copied, never invented.
+
+The JSON snapshot of data format v1 is still read, once, by `import_snapshot`,
+so bundles and builds from before 2026-10-13 install; it is never queried.
 """
 from __future__ import annotations
 
@@ -29,12 +36,24 @@ import tempfile
 import threading
 from pathlib import Path
 
-SNAPSHOT = "benchmark_snapshot.json"
+SNAPSHOT = "benchmark_snapshot.json"      # data format v1 (legacy input only)
 DATABASE = "benchmark_snapshot.sqlite"
 SOURCE = "arxiv_html_stated_roles"
 DB_SCHEMA_VERSION = 1
+SUPPORTED_SCHEMAS = (1,)
+# The oldest Bench2Agent that reads a database written by this code. Bumped
+# only when the file layout or the manifest format changes.
+MIN_CLIENT_VERSION = "0.5.0"
 ROLES = ("evaluates_on", "trains_on")
-BACKENDS = ("json", "sqlite", "auto")
+# Every table of the research content, in write order. A published revision
+# holds exactly these; anything operational lives in another file.
+RESEARCH_TABLES = ("meta", "editions", "benchmarks", "benchmark_aliases", "benchmark_merged_ids", "benchmark_homonyms",
+                   "benchmark_developers", "claims", "observations", "observation_authors", "observation_fields",
+                   "uses", "use_surfaces", "use_roles", "evidence", "unattributed", "unattributed_candidates")
+# Meta keys that say when, by what or under which name the content was
+# written, not what it is: excluded from the logical content hash.
+VOLATILE_META = ("generated_at", "snapshot_id", "revision_id", "content_sha256", "source_sha256",
+                 "db_schema_version", "min_client_version", "built_with", "importer", "sqlite_library", "built_at")
 
 SCHEMA = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- value is JSON
@@ -92,6 +111,9 @@ CREATE INDEX ix_claims_paper ON claims(arxiv_base);
 CREATE INDEX ix_candidates_benchmark ON unattributed_candidates(benchmark_id);
 """
 
+# meta rows the writer adds; `export_snapshot` returns the content without them
+_DB_ONLY_META = ("db_schema_version", "source_sha256", "revision_id", "content_sha256", "min_client_version",
+                 "built_with", "importer", "sqlite_library", "built_at")
 _BENCH_COLUMNS = ("name", "kind", "fold", "registered", "homonym_of_registered", "first_claim", "hf", "gh", "url")
 _BENCH_CHILDREN = ("aliases", "merged_ids", "homonym_of", "developers", "claims")
 _CLAIM_COLUMNS = ("claim_id", "arxiv_base", "edition", "title", "noun", "evidence", "label")
@@ -134,6 +156,30 @@ def file_sha256(path: Path) -> str:
         for block in iter(lambda: fh.read(1 << 20), b""):
             sha.update(block)
     return sha.hexdigest()
+
+
+def content_sha256(data: dict) -> str:
+    """The logical content of a snapshot dict (as the builder assembles it or
+    `export_snapshot` reads it back): every research field, with the volatile
+    meta keys removed. The same extraction exported twice, by two SQLite
+    builds, under two ids, hashes the same; one changed use does not."""
+    body = {k: v for k, v in data.items() if k not in VOLATILE_META}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
+def version_tuple(version: str | None) -> tuple[int, ...]:
+    """The numeric dotted prefix of a version string ("0.5.0.dev0" -> (0, 5, 0))."""
+    out = []
+    for part in str(version or "0").split("."):
+        if not part.isdigit():
+            break
+        out.append(int(part))
+    return tuple(out) or (0,)
+
+
+def client_supports(min_client_version: str | None) -> bool:
+    from bench2agent import __version__
+    return version_tuple(__version__) >= version_tuple(min_client_version)
 
 
 # ---------------------------------------------------------------- import
@@ -189,14 +235,16 @@ def _fill(con: sqlite3.Connection, data: dict) -> None:
                             [(unatt_id, j, c) for j, c in enumerate(u.get("candidates") or [])])
 
 
-def import_snapshot(source: Path, target: Path) -> dict:
-    """Build `target` from the JSON snapshot. Builds beside the target and
-    replaces it in one step only after the export reads back identical, so a
-    failed or interrupted import leaves whatever was there untouched."""
-    data = json.loads(source.read_text(encoding="utf-8"))
+def build_database(data: dict, target: Path, meta: dict | None = None) -> dict:
+    """Write the research content of `data` into the SQLite file `target`:
+    built beside the target, checked (foreign keys, integrity, and the
+    content read back hashes like the content written), then swapped in with
+    one replace, so a failed or interrupted build leaves whatever was there
+    untouched. `meta` adds identity rows (revision_id, content_sha256,
+    min_client_version, source_sha256, ...) that the content hash ignores."""
     validate_snapshot(data)
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, pending = tempfile.mkstemp(prefix=".import-", suffix=".sqlite", dir=target.parent)
+    fd, pending = tempfile.mkstemp(prefix=".build-", suffix=".sqlite", dir=target.parent)
     os.close(fd)
     pending = Path(pending)
     try:
@@ -209,19 +257,22 @@ def import_snapshot(source: Path, target: Path) -> dict:
             con.executescript(SCHEMA)
             con.execute("BEGIN")
             _fill(con, data)
-            con.execute("INSERT INTO meta VALUES (?, ?)", ("source_sha256", json.dumps(file_sha256(source))))
+            con.executemany("INSERT OR REPLACE INTO meta VALUES (?, ?)",
+                            [(k, json.dumps(v, ensure_ascii=False)) for k, v in (meta or {}).items()])
             con.execute("COMMIT")
             con.executescript(INDEXES)
             if con.execute("PRAGMA foreign_key_check").fetchall():
-                raise ValueError("Import produced dangling references")
+                raise ValueError("Build produced dangling references")
             if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                raise ValueError("Import produced a corrupt database")
+                raise ValueError("Build produced a corrupt database")
+            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            if tables != set(RESEARCH_TABLES):
+                raise ValueError("Build wrote tables outside the research schema: " + ", ".join(sorted(tables ^ set(RESEARCH_TABLES))))
             con.execute("VACUUM")
         finally:
             con.close()
-        reread = export_snapshot(pending)
-        if reread != data:
-            raise ValueError("Imported database does not read back as the source snapshot; nothing was replaced")
+        if content_sha256(export_snapshot(pending)) != content_sha256(data):
+            raise ValueError("Database does not read back as the content written; nothing was replaced")
         os.replace(pending, target)
     finally:
         if pending.exists():
@@ -230,6 +281,21 @@ def import_snapshot(source: Path, target: Path) -> dict:
     target.with_name(target.name + ".sha256").write_text(f"{checksum}  {target.name}\n", encoding="utf-8")
     return {"path": str(target), "sha256": checksum, "db_schema_version": DB_SCHEMA_VERSION,
             "snapshot_id": data["snapshot_id"], **counts(target)}
+
+
+def import_snapshot(source: Path, target: Path) -> dict:
+    """Legacy input (data format v1): build `target` from a snapshot JSON.
+    The identity stays the snapshot's own (`snapshot_id`), the JSON's
+    checksum is recorded as `source_sha256`, and the file must read back as
+    exactly the source."""
+    data = json.loads(source.read_text(encoding="utf-8"))
+    validate_snapshot(data)
+    report = build_database(data, target, {"source_sha256": file_sha256(source), "content_sha256": content_sha256(data),
+                                           "revision_id": data["snapshot_id"], "min_client_version": MIN_CLIENT_VERSION})
+    if export_snapshot(target) != data:
+        target.unlink()
+        raise ValueError("Imported database does not read back as the source snapshot; nothing was kept")
+    return report
 
 
 def counts(path: Path) -> dict:
@@ -302,7 +368,7 @@ def export_snapshot(path: Path) -> dict:
     con = _connect(path)
     try:
         meta = _meta(con)
-        data = {k: v for k, v in meta.items() if k not in ("db_schema_version", "source_sha256")}
+        data = {k: v for k, v in meta.items() if k not in _DB_ONLY_META}
         data["editions"] = _editions(con)
         data["benchmarks"] = _benchmark_rows(con)
         repo = SqliteRepository(path, con=con)
@@ -314,71 +380,48 @@ def export_snapshot(path: Path) -> dict:
 
 # ---------------------------------------------------------------- contract
 
-class JsonRepository:
-    """The reference: the snapshot dict as loaded."""
-    backend = "json"
+class Unavailable:
+    """What a store answers from when its revision cannot be served: the
+    reason, and (in a checkout) the reviewed catalogue, so `new_benchmarks`
+    can still list introductions; no observations, so nothing is counted."""
+    backend = "none"
+    available = False
 
-    def __init__(self, data: dict, available: bool = True):
-        self.d = data
-        self.available = available
-        self._fields = None
+    def __init__(self, reason: str, benchmarks: list[dict] | None = None):
+        self.reason = reason
+        self._benchmarks = benchmarks or []
 
     def meta(self) -> dict:
-        return {"available": self.available, "backend": self.backend,
-                **{k: self.d.get(k) for k in ("source", "snapshot_id", "generated_at", "registry_checked")},
-                **({"reason": self.d["reason"]} if self.d.get("reason") else {})}
+        return {"available": False, "backend": self.backend, "source": SOURCE, "snapshot_id": None,
+                "generated_at": None, "registry_checked": None, "reason": self.reason}
 
     def editions(self) -> dict:
-        return self.d.get("editions") or {}
+        return {}
 
     def benchmarks(self) -> list[dict]:
-        return self.d["benchmarks"]
+        return self._benchmarks
 
     def field_counts(self) -> collections.Counter:
-        return collections.Counter(f for p in self.d.get("papers", []) for f in {s.casefold() for s in p.get("fields", [])})
+        return collections.Counter()
 
     def field_labels(self) -> set[str]:
-        if self._fields is None:
-            self._fields = {f.casefold() for p in self.d.get("papers", []) for f in p.get("fields", [])}
-        return self._fields
+        return set()
 
     def observations(self, editions, topic=None, paper_ids=None, *, authors=False, evidence=False) -> list[dict]:
-        papers = self.d.get("papers", [])
-        if editions is not None:
-            eds = set(editions)
-            papers = [p for p in papers if p["edition"] in eds]
-        if topic:
-            t = topic.casefold()
-            papers = [p for p in papers if t in {f.casefold() for f in p.get("fields", [])}]
-        if paper_ids is not None:
-            selected = set(paper_ids)
-            papers = [p for p in papers if p["paper_id"] in selected]
-        return papers
+        return []
 
     def using_papers(self, benchmark_ids) -> list[dict]:
-        wanted = set(benchmark_ids)
-        return [p for p in self.d.get("papers", [])
-                if wanted & set(p["uses"]) or any(wanted & set(u.get("candidates", [])) for u in p.get("unattributed", []))]
+        return []
 
     def evidence(self, paper: dict, benchmark_id: str, role: str) -> list[dict]:
-        return paper["uses"][benchmark_id]["roles"][role]
+        return []
 
     def verify_quote(self, paper_id: str, q: str) -> dict | None:
-        for p in self.d.get("papers", []):
-            if p["paper_id"] == paper_id:
-                for use in p["uses"].values():
-                    for evidence in use["roles"].values():
-                        if any(not ev.get("where", "").endswith(":cell") and q in " ".join(ev["text"].split()) for ev in evidence):
-                            return {"title": p["title"], "edition": p["edition"]}
-        for e in self.d["benchmarks"]:
-            for c in e.get("claims", []):
-                if c["arxiv_base"] == paper_id and q in " ".join(c["evidence"].split()):
-                    return {"title": c["title"], "edition": c["edition"]}
         return None
 
 
 class SqliteRepository:
-    """Same contract over the imported file.
+    """The read side of the database file.
 
     Reads happen inside a pinned session: one read-only connection and one
     read transaction, opened by `BenchmarkStore` around each tool call, so a
@@ -419,7 +462,7 @@ class SqliteRepository:
                 self._local.con = None
                 con.close()
         except sqlite3.DatabaseError as exc:
-            raise ValueError(f"SQLite database is unreadable ({exc}); rebuild with bench2agent data sqlite") from None
+            raise ValueError(f"SQLite database is unreadable ({exc}); reinstall the revision from a verified bundle") from None
 
     def _con(self):
         con = getattr(self._local, "con", None)
@@ -431,16 +474,18 @@ class SqliteRepository:
         pass
 
     def identity(self) -> dict:
-        """What this file holds, read once per session: enough to compare
-        with the JSON snapshot beside it without loading that snapshot."""
+        """What this file holds, read once per session: enough to check it
+        against a manifest without reading the content."""
         m = _meta(self._con())
-        return {k: m.get(k) for k in ("snapshot_id", "source_sha256", "db_schema_version", "source")}
+        return {k: m.get(k) for k in ("snapshot_id", "revision_id", "content_sha256", "source_sha256",
+                                      "db_schema_version", "min_client_version", "source", "generated_at")}
 
     def meta(self) -> dict:
         if self._meta is None:
             m = _meta(self._con())
             self._meta = {"available": True, "backend": self.backend,
                           **{k: m.get(k) for k in ("source", "snapshot_id", "generated_at", "registry_checked")},
+                          "revision_id": m.get("revision_id") or m.get("snapshot_id"),
                           "db_schema_version": m.get("db_schema_version")}
         return self._meta
 

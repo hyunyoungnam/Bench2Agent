@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from bench2agent.core import chat, figures, mcp
-from bench2agent.core.benchmarks import BenchmarkStore, build_snapshot
+from bench2agent.core.benchmarks import BenchmarkStore, build_revision
 
 
 class BenchmarkQuestions(unittest.TestCase):
@@ -56,24 +56,28 @@ class BenchmarkQuestions(unittest.TestCase):
                 {"arxiv_base": pid, "event_id": i} for i, (pid, _, _) in enumerate(records)], lines=True)
             self.write(f"data/interim/mentions/mentions_{ed}.jsonl", [
                 {"arxiv_base": pid, "mentions": uses} for pid, _, uses in records], lines=True)
-        build_snapshot(self.root)
+        build_revision(self.root)
         self.publish()
 
     def publish(self):
         """Register the build (or an edited export) as the served revision and
         read from it with a fresh store; stores are pinned to one revision."""
         from bench2agent import data as data_module
-        data_module.install(self.root, file=str(self.root / "data/processed/benchmark_snapshot.json"))
+        data_module.install(self.root, file=str(self.root / "data/processed/benchmark_snapshot.sqlite"))
         self.store = BenchmarkStore(self.root)
 
     def edit(self, change):
-        """Edit the exported JSON as a new snapshot and publish it."""
-        path = self.root / "data/processed/benchmark_snapshot.json"
-        data = json.loads(path.read_text())
+        """Edit the built content as a new snapshot and publish it (through
+        the legacy JSON import, the one way to install edited content)."""
+        from bench2agent.core import repository
+        data = repository.export_snapshot(self.root / "data/processed/benchmark_snapshot.sqlite")
         change(data)
         data["snapshot_id"] += "b"
+        path = self.root / "edited.json"
         path.write_text(json.dumps(data))
-        self.publish()
+        from bench2agent import data as data_module
+        data_module.install(self.root, file=str(path))
+        self.store = BenchmarkStore(self.root)
         return data
 
     def write(self, name, obj, lines=False):
@@ -135,7 +139,7 @@ class BenchmarkQuestions(unittest.TestCase):
         duplicate = {**first, "id": "fresh-2", "registered": None, "homonym_of": ["fresh"]}
         data["benchmarks"].append(duplicate)
         self.write("config/benchmarks_introduced.json", data)
-        build_snapshot(self.root)
+        build_revision(self.root)
         self.publish()
         matches = [e for e in self.store.data()["benchmarks"] if e["name"] == "Fresh"]
         self.assertEqual(len(matches), 1)
@@ -243,7 +247,7 @@ class BenchmarkQuestions(unittest.TestCase):
             return entries
         with patch.object(benchmarks, "catalogue", mutate):
             with self.assertRaisesRegex(ValueError, "Source changed"):
-                build_snapshot(self.root)
+                build_revision(self.root)
 
 
 class AccountStatus(unittest.TestCase):

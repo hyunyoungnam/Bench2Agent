@@ -1,6 +1,8 @@
-"""SQLite import and query parity: the same contract, the same answers.
+"""The revision database: built directly from the extraction, identified by
+its content, served by the one SQLite repository, installed from bundles,
+bare files and legacy JSON.
 
-The fixture is built to contain every case the migration must preserve:
+The fixture is built to contain every case the storage must preserve:
 homonyms (two Mirage products, attributed only by citation), aliases, an
 unknown author list, a zero-adoption introduction, unresolved use, a paper
 observed in two editions, unlabelled observations, pre-claim use, a registered
@@ -9,6 +11,7 @@ benchmark with a location and no claim, and a homepage-only location.
 import json
 import os
 import sqlite3
+import tarfile
 import tempfile
 import unittest
 import unittest.mock
@@ -16,7 +19,7 @@ from pathlib import Path
 
 from bench2agent import data as data_module
 from bench2agent.core import repository, revisions
-from bench2agent.core.benchmarks import BenchmarkStore, build_snapshot
+from bench2agent.core.benchmarks import BenchmarkStore, build_revision
 
 
 class Fixture(unittest.TestCase):
@@ -67,7 +70,16 @@ class Fixture(unittest.TestCase):
             ("2501.00007", ["Bob Lee"], [], {}),
             ("2401.00005", ["Carol Wu"], ["Vision"], use("toy")),             # same paper, second edition
             ("2501.00008", ["Dan Ito"], ["robotics"], use("bare"))]
-        for year, records in ((2024, old), (2025, new)):
+        self.records = {2024: old, 2025: new}
+        self.write_corpus()
+        self.built = build_revision(self.root)
+        self.db_built = Path(self.built["path"])
+        self.first = data_module.install(self.root, file=str(self.db_built))   # registers the build as the served revision
+        self.db_path, self.rid = revisions.paths_for(self.root)
+        self.store = BenchmarkStore(self.root)
+
+    def write_corpus(self):
+        for year, records in self.records.items():
             ed = f"icml-{year}"
             self.write(f"data/processed/papers_{year}.jsonl", [
                 {"event_id": i, "title": "Paper " + pid, "authors": authors,
@@ -82,18 +94,17 @@ class Fixture(unittest.TestCase):
                 {"arxiv_base": pid, "mentions": {**uses, "nobody": {"as_written": "Nobody", "roles": {"evaluates_on": [
                     {"where": "experiments", "text": "We also test on Nobody."}]}}} if pid == "2501.00008" else uses}
                 for pid, _, _, uses in records], lines=True)
-        build_snapshot(self.root)
-        self.built = self.root / "data/processed/benchmark_snapshot.json"
-        self.first = data_module.install(self.root, file=str(self.built))      # registers the build as the served revision
-        self.json_path, self.db_path, self.rid = revisions.paths_for(self.root)
-        self.report = {**repository.counts(self.db_path), "sha256": repository.file_sha256(self.db_path), "snapshot_id": self.rid}
-        self.json = BenchmarkStore(self.root, backend="json")
-        self.sqlite = BenchmarkStore(self.root, backend="sqlite")
 
     def write(self, name, obj, lines=False):
         p = self.root / name
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("\n".join(map(json.dumps, obj)) if lines else json.dumps(obj))
+
+    def call(self, store, name, args):
+        try:
+            return getattr(store, name)(dict(args))
+        except ValueError as exc:
+            return {"ValueError": str(exc)}
 
 
 CALLS = [
@@ -113,182 +124,266 @@ CALLS = [
 ]
 ERRORS = [("trend", {"benchmark": "Mirage"}), ("usage", {"topic": "nowhere"}), ("usage", {"role": "cites"}),
           ("usage", {"venue": "corl"}), ("evidence", {"benchmark": "missing"})]
+IDENTITY = ("snapshot_id", "revision", "generated_at")
 
 
-class ParityTests(Fixture):
-    def call(self, store, name, args):
-        try:
-            return getattr(store, name)(dict(args))
-        except ValueError as exc:
-            return {"ValueError": str(exc)}
-
-    def test_every_tool_matches_between_backends(self):
-        for name, args in CALLS + ERRORS:
-            with self.subTest(tool=name, args=args):
-                a, b = self.call(self.json, name, args), self.call(self.sqlite, name, args)
-                self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True))
-        for name, args in ERRORS:
-            self.assertIn("ValueError", self.call(self.sqlite, name, args))
-
-    def test_cases_are_present_and_computed_the_same(self):
-        usage = self.sqlite.usage({"latest": False, "limit": 50})
+class StorageTests(Fixture):
+    def test_expected_figures(self):
+        usage = self.store.usage({"latest": False, "limit": 50})
         self.assertEqual(usage["coverage"]["parsed_papers"], 14)          # two unlabelled no-use papers included
         rows = {r["id"]: r for r in usage["results"]}
         self.assertEqual(rows["toy"]["papers"], 4)                          # 2401.00005 counted in both editions
         self.assertEqual(rows["toy"]["locations"][0]["checked_at"], "2026-09-17")
         self.assertNotIn("mirage-old", rows)                                # unresolved homonym use is not a count
         self.assertEqual(usage["coverage"]["unattributed_papers"], 2)       # 2401.00002 (homonym) and 2501.00008 (Nobody)
-        adoption = self.sqlite.adoption({"benchmark": "fresh"})
+        adoption = self.store.adoption({"benchmark": "fresh"})
         self.assertEqual((adoption["evaluates_on"]["others"], adoption["evaluates_on"]["self"],
                           adoption["evaluates_on"]["undetermined"], adoption["before_claim"]), (1, 1, 1, 1))
-        self.assertEqual(self.sqlite.adoption({"benchmark": "unused"})["evaluates_on"]["others"], 0)
+        self.assertEqual(self.store.adoption({"benchmark": "unused"})["evaluates_on"]["others"], 0)
         # the cited homonym use is attributed to mirage-new (a usage row of its
         # own) but it is the introducing paper, so adoption excludes it
         self.assertEqual(rows["mirage-new"]["papers"], 1)
-        self.assertEqual(self.sqlite.adoption({"benchmark": "mirage-new"})["evaluates_on"], {"others": 0, "self": 0, "undetermined": 0})
-        self.assertEqual(self.sqlite.verify("2501.00002", "We evaluate our policies on the fresh benchmark."),
-                         self.json.verify("2501.00002", "We evaluate our policies on the fresh benchmark."))
-        self.assertIsNone(self.sqlite.verify("2401.00005", "Toy | 91.2 | 88.0"))   # table cells are not quotations
-        self.assertEqual(self.sqlite.verify("2501.00001", "We introduce Fresh for evaluating robotic policies.")["edition"], "icml-2025")
+        self.assertEqual(self.store.adoption({"benchmark": "mirage-new"})["evaluates_on"], {"others": 0, "self": 0, "undetermined": 0})
+        self.assertEqual(self.store.verify("2501.00002", "We evaluate our policies on the fresh benchmark.")["edition"], "icml-2025")
+        self.assertIsNone(self.store.verify("2401.00005", "Toy | 91.2 | 88.0"))   # table cells are not quotations
+        self.assertEqual(self.store.verify("2501.00001", "We introduce Fresh for evaluating robotic policies.")["edition"], "icml-2025")
+        self.assertEqual(self.store.data()["registry_checked"], "2026-09-17")
+        scope = self.store.scope({})
+        self.assertEqual([f["name"] for f in scope["fields"]], ["robotics", "vision"])
+        for name, args in CALLS:
+            with self.subTest(tool=name, args=args):
+                out = self.call(self.store, name, args)
+                self.assertNotIn("ValueError", out)
+                self.assertEqual(out.get("revision", self.rid), self.rid)
+        for name, args in ERRORS:
+            self.assertIn("ValueError", self.call(self.store, name, args))
 
-    def test_round_trip_is_exact_and_identity_is_kept_apart(self):
-        source = json.loads(self.json_path.read_text())
-        self.assertEqual(repository.export_snapshot(self.db_path), source)
-        con = sqlite3.connect(self.db_path)
+    def test_revision_id_is_the_content(self):
+        self.assertEqual(self.rid, self.built["content_sha256"][:16])
+        self.assertEqual((self.first["outcome"], self.first["format"], self.first["files"]),
+                         ("installed", "bench2agent-data-v2", ["benchmark_snapshot.sqlite"]))
+        again = build_revision(self.root)                                  # the same inputs, built again
+        self.assertEqual((again["revision_id"], again["content_sha256"]), (self.rid, self.built["content_sha256"]))
+        self.assertEqual(data_module.install(self.root, file=again["path"])["outcome"], "reused")
+        # one changed use is another revision; the first stays installed
+        self.records[2025] = [r for r in self.records[2025] if r[0] != "2501.00006"] + [
+            ("2501.00006", ["Bob Lee"], ["robotics", "Vision"], {})]
+        self.write_corpus()
+        changed = build_revision(self.root)
+        self.assertNotEqual(changed["revision_id"], self.rid)
+        installed = data_module.install(self.root, file=changed["path"])
+        self.assertEqual((installed["outcome"], revisions.active_revision(self.root)), ("installed", changed["revision_id"]))
+        self.assertEqual([r["id"] for r in revisions.list_revisions(self.root)], sorted([self.rid, changed["revision_id"]]))
+        self.assertEqual(self.store.usage({"latest": False, "limit": 50})["snapshot_id"], self.rid)   # pinned store unmoved
+        rows = {r["id"]: r["papers"] for r in BenchmarkStore(self.root).usage({"latest": False, "limit": 50})["results"]}
+        self.assertEqual(rows["toy"], 3)
+
+    def test_published_file_holds_research_tables_only_and_its_identity(self):
+        con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
+        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         meta = {k: json.loads(v) for k, v in con.execute("SELECT key, value FROM meta")}
         con.close()
-        self.assertEqual(meta["snapshot_id"], source["snapshot_id"])
-        self.assertEqual(meta["db_schema_version"], repository.DB_SCHEMA_VERSION)
-        self.assertEqual(meta["source_sha256"], repository.file_sha256(self.json_path))
-        self.assertEqual(self.report["sha256"], repository.file_sha256(self.db_path))
-        self.assertEqual((self.db_path.with_name(self.db_path.name + ".sha256")).read_text().split()[0], self.report["sha256"])
-        self.assertEqual(self.report["uses"], sum(len(p["uses"]) for p in source["papers"]))
-        self.assertEqual(self.report["evidence"], sum(len(evs) for p in source["papers"] for u in p["uses"].values() for evs in u["roles"].values()))
-        self.assertEqual(self.report["unattributed"], sum(len(p["unattributed"]) for p in source["papers"]))
-        self.assertNotIn("imported_at", meta)   # no invented dates
-        self.assertEqual(self.sqlite.data()["registry_checked"], "2026-09-17")
+        self.assertEqual(tables, set(repository.RESEARCH_TABLES))
+        self.assertEqual((meta["revision_id"], meta["snapshot_id"], meta["content_sha256"]),
+                         (self.rid, self.rid, self.built["content_sha256"]))
+        self.assertEqual((meta["db_schema_version"], meta["min_client_version"]), (repository.DB_SCHEMA_VERSION, repository.MIN_CLIENT_VERSION))
+        self.assertNotIn("source_sha256", meta)                                  # built directly, not imported
+        self.assertNotIn("imported_at", meta)                                    # no invented dates
+        self.assertEqual(self.db_path.with_name(self.db_path.name + ".sha256").read_text().split()[0], repository.file_sha256(self.db_path))
+        manifest = revisions.manifest_of(self.root, self.rid)
+        self.assertEqual(manifest["files"], {"benchmark_snapshot.sqlite": repository.file_sha256(self.db_path)})
+        self.assertFalse(manifest["legacy_json"])
+        # the logical hash ignores when and by what the content was written
+        data = repository.export_snapshot(self.db_path)
+        self.assertEqual(repository.content_sha256(data), self.built["content_sha256"])
+        self.assertEqual(repository.content_sha256({**data, "generated_at": "later", "snapshot_id": "other", "built_with": "x"}),
+                         self.built["content_sha256"])
+        data["papers"][0]["uses"] = {}
+        self.assertNotEqual(repository.content_sha256(data), self.built["content_sha256"])
 
-    def test_reimport_is_idempotent_here_and_failure_keeps_the_old_file(self):
-        # deterministic within one environment (the SQLite library version is
-        # written into the file, so other machines may produce other bytes)
-        out = self.root / "rebuild.sqlite"
-        again = repository.import_snapshot(self.json_path, out)
-        self.assertEqual(again["sha256"], self.report["sha256"])
-        before = out.read_bytes()
+    def test_legacy_json_import_matches_the_direct_build(self):
+        data = repository.export_snapshot(self.db_path)
+        data["snapshot_id"] = "legacy-1"
+        legacy = self.root / "legacy.json"
+        legacy.write_text(json.dumps(data))
+        other = self.root / "other"
+        installed = data_module.install(other, file=str(legacy))
+        self.assertEqual((installed["revision"], installed["files"]), ("legacy-1", ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"]))
+        manifest = revisions.manifest_of(other, "legacy-1")
+        self.assertTrue(manifest["legacy_json"] and manifest["sqlite_built_locally"])
+        self.assertEqual(manifest["source_json_sha256"], repository.file_sha256(legacy))
+        imported = BenchmarkStore(other)
+        for name, args in CALLS + ERRORS:
+            with self.subTest(tool=name, args=args):
+                a, b = self.call(self.store, name, args), self.call(imported, name, args)
+                strip = lambda d: {k: v for k, v in d.items() if k not in IDENTITY}   # noqa: E731
+                self.assertEqual(json.dumps(strip(a), sort_keys=True), json.dumps(strip(b), sort_keys=True))
+        self.assertEqual(imported.usage({})["snapshot_id"], "legacy-1")
+        # the import refuses a snapshot it cannot read back as itself
+        bad = {**data, "papers": [{**data["papers"][0], "uses": {"ghost": {"surfaces": {}, "roles": {}}}}] + data["papers"][1:]}
         broken = self.root / "broken.json"
-        broken.write_text(json.dumps({**json.loads(self.json_path.read_text()), "source": "abstracts"}))
-        with self.assertRaises(ValueError):
-            repository.import_snapshot(broken, out)
-        bad = json.loads(self.json_path.read_text())
-        bad["papers"][0]["uses"]["ghost"] = {"surfaces": {}, "roles": {}}   # a use of an unknown benchmark id
         broken.write_text(json.dumps(bad))
+        out = self.root / "broken.sqlite"
         with self.assertRaises((ValueError, sqlite3.IntegrityError)):
             repository.import_snapshot(broken, out)
-        self.assertEqual(out.read_bytes(), before)
-        self.assertEqual([p.name for p in out.parent.glob(".import-*")], [])
-        # the build utility never writes into a published revision
+        self.assertFalse(out.exists())
+        self.assertEqual([p.name for p in out.parent.glob(".build-*")], [])
+        # the conversion utility never writes into a published revision
         with self.assertRaisesRegex(ValueError, "immutable"):
-            data_module.build_sqlite(self.root, str(self.json_path), str(self.db_path))
+            data_module.build_sqlite(self.root, str(legacy), str(self.db_path))
 
-    def _second_version(self, name="v2.json"):
-        """A snapshot that differs in one use and in identity."""
-        data = json.loads(self.json_path.read_text())
-        data["snapshot_id"] = "second-version"
+    def _second_version(self, sid="second-version"):
+        """Another database: one use removed, another identity."""
+        data = repository.export_snapshot(self.db_path)
+        data["snapshot_id"] = sid
         del next(p for p in data["papers"] if p["paper_id"] == "2501.00006")["uses"]["toy"]
-        path = self.root / name
-        path.write_text(json.dumps(data))
-        return path
+        source = self.root / (sid + ".json")
+        source.write_text(json.dumps(data))
+        db = self.root / (sid + ".sqlite")
+        repository.import_snapshot(source, db)
+        return db
 
     def test_one_tool_call_reads_one_database_version(self):
-        v2 = self._second_version()
-        db2 = self.root / "v2.sqlite"
-        repository.import_snapshot(v2, db2)
+        db2 = self._second_version()
         original = repository.SqliteRepository.observations
         swapped = []
 
         def observations(repo, *args, **kwargs):
             out = original(repo, *args, **kwargs)
-            if not swapped:   # replace both files on disk in the middle of the call
-                os.replace(v2, self.json_path)
+            if not swapped:   # replace the file on disk in the middle of the call
                 os.replace(db2, self.db_path)
                 swapped.append(True)
             return out
         with unittest.mock.patch.object(repository.SqliteRepository, "observations", observations):
-            first = self.sqlite.usage({"latest": False, "limit": 50})
+            first = self.store.usage({"latest": False, "limit": 50})
         toy = {r["id"]: r["papers"] for r in first["results"]}["toy"]
         # identity and counts both come from the version the call opened
-        self.assertEqual((first["snapshot_id"], toy), (self.report["snapshot_id"], 4))
-        # files replaced underneath a published revision are damage: the next
-        # call finds the checksums wrong and refuses rather than serving them
-        second = self.sqlite.usage({"latest": False, "limit": 50})
+        self.assertEqual((first["snapshot_id"], toy), (self.rid, 4))
+        # a file replaced underneath a published revision is damage: the next
+        # call finds the checksum wrong and refuses rather than serving it
+        second = self.store.usage({"latest": False, "limit": 50})
         self.assertIn("failed verification", second["error"])
 
     def test_files_changed_underneath_make_the_revision_unavailable(self):
-        os.replace(self._second_version(), self.json_path)       # the revision's JSON is replaced, the database is not
-        for backend in ("json", "sqlite", "auto"):
-            store = BenchmarkStore(self.root, backend=backend)
-            self.assertFalse(store.data()["available"])
-            self.assertIn("does not match its recorded sha256", store.usage({})["error"])
+        original = self.db_path.read_bytes()
+        os.replace(self._second_version(), self.db_path)
+        store = BenchmarkStore(self.root)
+        self.assertFalse(store.data()["available"])
+        self.assertIn("does not match its recorded sha256", store.usage({})["error"])
         status = data_module.status(self.root)
         self.assertFalse(status["available"])
-        self.assertFalse(status["sqlite"]["matches_json"])
         self.assertIn("failed verification", status["verification"])
-        os.replace(self.built, self.json_path)                    # the original bytes back: served again
+        self.db_path.write_bytes(original)                        # the original bytes back: served again
         self.assertTrue(BenchmarkStore(self.root).usage({})["available"])
         self.db_path.write_bytes(b"SQLite format 3\x00" + b"garbage" * 100)
-        self.assertIn("failed verification", BenchmarkStore(self.root, backend="auto").usage({})["error"])
+        self.assertIn("failed verification", BenchmarkStore(self.root).usage({})["error"])
         self.assertFalse(data_module.status(self.root)["available"])
+        self.db_path.unlink()                                     # a listed file missing is damage too
+        missing = BenchmarkStore(self.root)
+        self.assertFalse(missing.data()["available"])
+        self.assertIn("not served until it is restored", missing.usage({})["error"])
+        self.assertFalse(data_module.status(self.root)["database"]["available"])
 
-    def test_sqlite_only_install_is_ready(self):
+    def test_bundle_is_database_only_and_installs_elsewhere(self):
         from bench2agent.cli import require_data
         bundle = self.root / "bundle.tar.gz"
         report = data_module.bundle(self.root, bundle)
-        self.assertTrue(report["includes_sqlite"])
-        # a bundle carrying the database installs both files; a bare .sqlite installs alone
+        self.assertEqual((report["format"], report["revision"]), ("bench2agent-data-v2", self.rid))
+        with tarfile.open(bundle) as archive:
+            self.assertEqual(sorted(m.name for m in archive.getmembers()), ["data/processed/benchmark_snapshot.sqlite", "manifest.json"])
+            manifest = json.load(archive.extractfile("manifest.json"))
+        self.assertEqual((manifest["format"], manifest["revision_id"], list(manifest["files"]), manifest["min_client_version"]),
+                         ("bench2agent-data-v2", self.rid, ["benchmark_snapshot.sqlite"], repository.MIN_CLIENT_VERSION))
+        other = self.root / "other"
+        installed = data_module.install(other, file=str(bundle), sha256=report["sha256"])
+        self.assertEqual((installed["revision"], installed["files"], installed["sqlite_built_locally"]),
+                         (self.rid, ["benchmark_snapshot.sqlite"], False))
+        status = data_module.status(other)
+        self.assertEqual((status["available"], status["format"], status["paper_observations"], status["verification"]),
+                         (True, "bench2agent-data-v2", 14, "ok"))
+        require_data(other, interactive=False)
+        self.assertEqual(BenchmarkStore(other).usage({"topic": "robotics"})["coverage"]["parsed_papers"], 7)
+        self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "reused")
+        # a bundle this code is too old for is refused before anything is staged into place
+        newer = self.root / "newer.tar.gz"
+        with tarfile.open(bundle) as src, tarfile.open(newer, "w:gz") as dst:
+            for m in src.getmembers():
+                if m.name == "manifest.json":
+                    payload = json.dumps({**manifest, "min_client_version": "99.0"}).encode()
+                    m.size = len(payload)
+                    dst.addfile(m, __import__("io").BytesIO(payload))
+                else:
+                    dst.addfile(m, src.extractfile(m))
+        with self.assertRaisesRegex(ValueError, "99.0 or newer"):
+            data_module.install(self.root / "third", file=str(newer))
+        self.assertFalse((self.root / "third/data/revisions").exists() and any((self.root / "third/data/revisions").iterdir()))
+        # a database whose content does not reproduce its recorded hash is refused
+        forged = self.root / "forged.sqlite"
+        forged.write_bytes(self.db_path.read_bytes())
+        con = sqlite3.connect(forged)
+        con.execute("DELETE FROM uses WHERE benchmark_id = 'toy'")
+        con.execute("DELETE FROM evidence WHERE use_id NOT IN (SELECT use_id FROM uses)")
+        con.execute("DELETE FROM use_roles WHERE use_id NOT IN (SELECT use_id FROM uses)")
+        con.execute("DELETE FROM use_surfaces WHERE use_id NOT IN (SELECT use_id FROM uses)")
+        con.commit()
+        con.close()
+        with self.assertRaisesRegex(ValueError, "content hash"):
+            data_module.install(self.root / "fourth", file=str(forged))
+        # an unsupported schema is refused with the reason
+        con = sqlite3.connect(forged)
+        con.execute("UPDATE meta SET value = '99' WHERE key = 'db_schema_version'")
+        con.commit()
+        con.close()
+        with self.assertRaisesRegex(ValueError, "Unsupported"):
+            data_module.install(self.root / "fifth", file=str(forged))
+
+    def test_legacy_v1_bundle_installs_and_a_v1_revision_keeps_serving(self):
+        data = repository.export_snapshot(self.db_path)
+        data["snapshot_id"] = "legacy-v1"
+        js = self.root / "v1" / "benchmark_snapshot.json"
+        js.parent.mkdir()
+        js.write_text(json.dumps(data))
+        db = js.with_name("benchmark_snapshot.sqlite")
+        repository.import_snapshot(js, db)
+        v1_manifest = {"format": "bench2agent-data-v1", "snapshot_id": "legacy-v1", "source": repository.SOURCE,
+                       "sha256": repository.file_sha256(js), "sqlite_sha256": repository.file_sha256(db),
+                       "db_schema_version": 1, "content_sha256": "old-definition", "generated_at": data["generated_at"]}
+        (js.parent / "manifest.json").write_text(json.dumps(v1_manifest))
+        bundle = self.root / "v1.tar.gz"
+        with tarfile.open(bundle, "w:gz") as archive:
+            archive.add(js, arcname=data_module.MEMBER)
+            archive.add(db, arcname=data_module.DB_MEMBER)
+            archive.add(js.parent / "manifest.json", arcname="manifest.json")
         other = self.root / "other"
         installed = data_module.install(other, file=str(bundle))
-        self.assertEqual(sorted(p.name for p in Path(installed["path"]).iterdir()),
-                         ["benchmark_snapshot.json", "benchmark_snapshot.sqlite", "benchmark_snapshot.sqlite.sha256", "manifest.json"])
-        alone = self.root / "alone"
-        installed = data_module.install(alone, file=str(self.db_path))
-        self.assertEqual(sorted(p.name for p in Path(installed["path"]).iterdir()),
-                         ["benchmark_snapshot.sqlite", "benchmark_snapshot.sqlite.sha256", "manifest.json"])
-        for backend in ("sqlite", "auto"):
-            os.environ["BENCH2AGENT_STORE"] = backend
-            try:
-                status = data_module.status(alone)
-                self.assertEqual((status["available"], status["backend"], status["paper_observations"]), (True, "sqlite", 14))
-                require_data(alone, interactive=False)
-                self.assertEqual(BenchmarkStore(alone).usage({"topic": "robotics"})["coverage"]["parsed_papers"], 7)
-            finally:
-                del os.environ["BENCH2AGENT_STORE"]
-        status = data_module.status(alone)                          # json backend: this revision has no JSON to read
-        self.assertFalse(status["available"])
-        self.assertIn("no JSON", status["reason"])
-        with self.assertRaisesRegex(ValueError, "no JSON"):
-            require_data(alone, interactive=False)
+        self.assertEqual((installed["revision"], installed["format"], installed["files"], installed["sqlite_built_locally"]),
+                         ("legacy-v1", "bench2agent-data-v2", ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"], False))
+        self.assertEqual(BenchmarkStore(other).usage({"latest": False, "limit": 50})["coverage"]["parsed_papers"], 14)
+        self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "reused")
+        # a revision directory installed by 0.4.0 (v1 manifest) is still served, and a
+        # reinstall of its bundle recognises the same content across formats
+        old = other / "data/revisions/legacy-v1/manifest.json"
+        old.write_text(json.dumps({**v1_manifest, "installed_at": "2026-10-12T00:00:00+00:00"}))
+        self.assertEqual(revisions.manifest_of(other, "legacy-v1")["format"], "bench2agent-data-v1")
+        self.assertEqual(data_module.status(other)["verification"], "ok")
+        self.assertEqual(BenchmarkStore(other).usage({})["snapshot_id"], "legacy-v1")
+        self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "reused")
+        self.assertEqual(json.loads(old.read_text())["format"], "bench2agent-data-v1")   # the old manifest is kept
+        # a legacy JSON kept beside the database is checked like any file
+        with (other / "data/revisions/legacy-v1/benchmark_snapshot.json").open("ab") as fh:
+            fh.write(b" ")
+        self.assertIn("failed verification", data_module.status(other)["verification"])
+        self.assertEqual(data_module.install(other, file=str(bundle))["outcome"], "restored")
+        self.assertEqual(data_module.status(other)["verification"], "ok")
 
-    def test_backend_selection_and_status(self):
-        self.assertEqual(self.sqlite.data()["backend"], "sqlite")
-        self.assertEqual(self.json.data()["backend"], "json")
-        auto = BenchmarkStore(self.root, backend="auto")
-        self.assertEqual(auto.data()["backend"], "sqlite")
+    def test_status_reports_the_database(self):
         status = data_module.status(self.root)
-        self.assertTrue(status["sqlite"]["matches_json"])
-        self.assertEqual(status["sqlite"]["paper_observations"], 14)
-        self.db_path.unlink()                                    # a listed file missing is damage, for every backend
-        for backend in ("auto", "sqlite", "json"):
-            missing = BenchmarkStore(self.root, backend=backend)
-            self.assertFalse(missing.data()["available"])
-            self.assertIn("not served until it is restored", missing.usage({})["error"])
-        self.assertFalse(data_module.status(self.root)["sqlite"]["available"])
-        with self.assertRaises(ValueError):
-            BenchmarkStore(self.root, backend="postgres")
-        os.environ["BENCH2AGENT_STORE"] = "auto"
-        try:
-            self.assertEqual(BenchmarkStore(self.root).backend, "auto")
-        finally:
-            del os.environ["BENCH2AGENT_STORE"]
+        self.assertEqual((status["available"], status["revision"], status["format"], status["files"], status["verification"]),
+                         (True, self.rid, "bench2agent-data-v2", ["benchmark_snapshot.sqlite"], "ok"))
+        self.assertEqual((status["database"]["paper_observations"], status["database"]["revision_id"]), (14, self.rid))
+        self.assertEqual(status["paper_observations"], 14)
+        self.assertEqual([(r["id"], r["active"], r["format"]) for r in status["revisions"]], [(self.rid, True, "bench2agent-data-v2")])
+        self.assertNotIn("requested_backend", status)
 
 
 if __name__ == "__main__":
