@@ -5,11 +5,15 @@ conversation through the same benchmark tools. A relational database will hold
 papers, benchmark identities, stated uses and their evidence. Collection runs
 will add or revise records; agents will query a published data revision.
 
-This is the implementation design. The application reads the JSON benchmark
-snapshot by default and, when selected, a SQLite file imported from it (see
-*Implementation sequence*, steps 1–2); `bench2agent serve` starts the local
-browser prototype. Revisioned publication and the hosted service are the next
-development stages. This design supports a future Mac server and Linux deployment.
+This is the implementation design, kept current. State as of 2026-10-13
+(Bench2Agent 0.4.0, data revision `e41da62f2fb3616f`): the application reads
+an installed, immutable data revision; each revision holds a JSON reference
+and its SQLite import, selected by `BENCH2AGENT_STORE` (default json); the
+terminal, the stdio MCP server and the optional HTTP MCP and web host all pin
+one revision per conversation. The next storage step (see *Next steps*)
+makes SQLite the only query backend and the revision a database file.
+`bench2agent serve` starts the local browser prototype. This design supports a
+future Mac server and Linux deployment.
 
 ## Shared tools and separate interfaces
 
@@ -146,24 +150,39 @@ saved conversations and regression checks.
 
 ## Hosted conversations
 
-Use a separate ASGI web API, initially FastAPI with Uvicorn, for authenticated
-conversations and streamed tool/answer events. It calls the same provider
-adapters, tools and verifier as the terminal. Server dependencies are optional;
-terminal users do not install the web stack. The existing local HTTP server
-remains the paper evidence prototype during this transition.
+Use a separate ASGI web API, initially FastAPI with Uvicorn, for conversations
+and streamed tool/answer events. It calls the same tools and the same
+verifier as the terminal. Server dependencies are optional; terminal users do
+not install the web stack. The existing local HTTP server remains the paper
+evidence prototype during this transition.
 
-The hosted application gives each user their own conversations, settings,
-request quotas and jobs. Model credentials are supplied to a request-scoped
-provider client rather than written to process-global environment variables.
-Provider access and billing can use per-user API credentials or a
-quota-controlled service account. Persisting user credentials requires an
-explicit product decision; request logs and conversation exports exclude them.
+**There is no Bench2Agent account** (owner decision, 2026-10-13): no sign-up,
+invite code, name or password on any surface. A visitor opens the page and,
+in Settings, connects their own Anthropic (Claude) or OpenAI account through
+the provider's official sign-in; that connection is the only identity and the
+only access control (read without it, ask with it). The visitor session cookie
+only ties conversations to a browser; it is not an account and never becomes
+one. The same AI account in another browser does not recover conversations,
+because the host never learns the account's identity. OpenAI is offered on the
+web only once OpenAI approves remote hosting; until then it stays a terminal
+connector. The API-key connector is an operator check option, not a visitor
+path. Earlier invite and bearer-token users exist in the code as remnants
+(`bench2agent web user|invite`) and are scheduled for removal.
 
-The public web route does not spawn the operator's signed-in coding CLI.
-Local CLI login shortcuts stay local. Administrative collection and mutation
-endpoints are separated from the read-only research tools. The first hosted
-beta needs authentication, ownership checks, cancellation and bounded model
-requests before public access.
+The hosted application keeps each visitor's conversations, limits and jobs
+apart. A visitor's Claude Code runs in a runtime of its own (its own HOME and
+config directory, an allowlisted environment); the official `claude auth
+login` runs under a PTY relayed to that visitor only, and the host records
+only the shape of the exchange, never its content. Today this is a
+directory-isolation prototype under one OS user, not OS-user or container
+isolation, and no real hosted sign-in has been performed yet. The operator's
+own logins are never used for visitors.
+
+Administrative collection and mutation endpoints are separated from the
+read-only research tools. Cancellation, bounded requests and ordered
+disconnect (stop jobs, official logout, remove the runtime) are implemented;
+public access additionally needs HTTPS, supervision, backups and the
+provider conditions in [account-connections.md](account-connections.md).
 
 A long-running ingestion worker runs independently of HTTP requests and model
 conversations. A database-backed job queue is enough initially; a separate
@@ -185,21 +204,21 @@ offer is in [account-connections.md](account-connections.md).
 ## Where to run the private test host
 
 The host is one FastAPI process plus a `/data` directory (installed data
-revisions, and the web store with users, invites, sessions, conversations
-and attempts). The `Dockerfile` packages exactly that, so any place that
+revisions, and the web store with visitor sessions, conversations and
+attempts). The `Dockerfile` packages exactly that, so any place that
 runs a container with a persistent volume will do, and the same image moves
 to the Mac later under Docker Desktop. What to check before choosing:
 
 | Option | Persistence | Notes |
 |---|---|---|
 | This PC or a small Linux VPS, Caddy in front | local disk; back up `/data` | simplest; the `bench2agent web serve` process under a supervisor, or the container |
-| Hugging Face Docker Space | the container disk is ephemeral; conversations and users vanish on restart unless the paid persistent storage is attached | fine for a short test if losing state is acceptable; sleeps when idle; the model key goes in as a Space secret (service mode) |
+| Hugging Face Docker Space | the container disk is ephemeral; conversations and users vanish on restart unless the paid persistent storage is attached | fine for a short test if losing state is acceptable; sleeps when idle; a visitor connects their own Claude account; the operator's API key is an operator check option only |
 | Mac server (later) | local volume | the same image; see below |
 
 Whichever runs it: HTTPS termination in front (`BENCH2AGENT_WEB_SECURE_COOKIES=1`
-then marks the session cookie Secure), the provider key as an environment
-secret for service mode, and `BENCH2AGENT_WEB_TURNS_PER_DAY` set to what the
-budget allows.
+then marks the session cookie Secure), the official Claude Code CLI installed
+on the host for the visitors' runtimes, and `BENCH2AGENT_WEB_TURNS_PER_DAY`
+and the runtime caps set to what the machine allows.
 
 ## Future Mac server
 
@@ -298,3 +317,27 @@ discovery across papers. Executing a selected benchmark's evaluation pipeline
 is a later extension, with source revisions, input/output contracts and
 reference-result tests per adapter. See the
 [Paper2Agent paper](https://arxiv.org/abs/2509.06917v2).
+
+## Next steps (agreed 2026-10-13)
+
+1. Documentation aligned with the released state (this revision of the file).
+2. SQLite as the only query backend and the revision as a database file:
+   the builder writes the research tables directly, the revision manifest
+   (format v2) carries the schema version, the minimum client version and a
+   logical content hash; the working database that will hold processing
+   state is kept apart from the published export, which carries research
+   tables only, taken at one consistent read point. Earlier revisions keep
+   serving; v1 bundles install through a legacy import. Counting rules do not
+   change in this step.
+3. Identification rules in separate commits: paper identity from source ids
+   with the title as a clue and raw rows preserved; benchmark identity from
+   explicit evidence, author overlap as a flag and for self-use only; name
+   corrections with an explicit reviewed target; label provenance recorded.
+4. Incremental processing with per-paper stage status, re-runs that reach the
+   downstream stages, and a scheduled update with catch-up and a run lock.
+5. Revision retention: recent, active, referenced and in-use revisions are
+   kept; leases live outside revision directories and share one lock with
+   the delete decision.
+6. The owner's private hosted sign-in check, in parallel.
+7. Benchmark metadata at three levels and the first record adapters (GSM8K,
+   MATH-500) with file-level verification and a retrieval manifest.
