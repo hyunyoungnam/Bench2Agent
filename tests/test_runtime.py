@@ -128,7 +128,16 @@ class RuntimeTests(unittest.TestCase):
         return run, events
 
     def test_status_reports_both_clis_and_the_api_key(self):
-        statuses = {c["name"]: c for c in available_connectors()}
+        # Login probes must use the synthetic runtime, never this machine's
+        # real Claude credentials (which are absent on a fresh CI runner).
+        config = self.root / "status-config"
+        config.mkdir()
+        marker = config / ".credentials.json"
+        marker.write_text("{}")
+        with patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(config)}), providers.using_credentials({}):
+            statuses = {c["name"]: c for c in available_connectors()}
+            marker.unlink()
+            self.assertFalse(connector("claude").status()["connected"])
         self.assertTrue(statuses["claude"]["connected"])
         self.assertEqual(statuses["claude"]["account"], "stub@example.org")
         self.assertTrue(statuses["codex"]["connected"])
