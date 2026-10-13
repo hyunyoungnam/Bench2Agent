@@ -38,6 +38,11 @@ remain installed; saved conversations keep their revision. Restart a stdio MCP
 server to pick up the active revision, or specify `--revision ID` explicitly.
 The original `data-20261007` remains available for historical reproduction.
 
+Differences between two revisions for the same edition (counts, field
+denominators, entity ids) come from data or rule changes and are reported
+with each data release; they are not usage trends, which compare editions
+inside one revision.
+
 ## Scope and limitations
 
 The terminal and MCP are validated outside the checkout. Linux/WSL is tested;

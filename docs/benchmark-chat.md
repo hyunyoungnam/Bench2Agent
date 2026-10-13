@@ -63,6 +63,12 @@ labels at all; zero matches there do not establish absence of that field.
 The scope response gives accepted, arXiv-matched, parsed and field-labelled
 totals, the papers per label origin, and each field's origins.
 
+A year-over-year trend is a comparison inside one data revision. The same
+edition can differ between revisions because the data or the rules changed
+(an identity fix, a field-label rule, a reparse); such a difference is a
+revision change, never a usage trend. A field filter's denominator depends
+on the revision's label coverage.
+
 Trend states follow the repository rule: within-venue two-proportion z with
 absolute z at least 2.576; zero to at least eight papers is `appearing`.
 These are descriptive flags, not causal claims or a guarantee of significance

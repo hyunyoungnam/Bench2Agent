@@ -53,6 +53,14 @@ FIGURES["79b1b3c4d4de9d9c"] = FIGURES["e41da62f2fb3616f"]
 # the latest editions); computer vision/latest grew with the AAAI tracks.
 FIGURES["16b704077d97298a"] = {**FIGURES["e41da62f2fb3616f"],
                                "computer_vision_latest": {"parsed": 2816, "COCO": 163, "POPE": 75, "Video-MME": 69}}
+# 2026-10-13, id-first paper identity and candidate-only benchmark identity:
+# 87,043 observations; the headline figures hold; RelBench's uses split into
+# citation-attributed (relbench-2) and unattributed ones.
+FIGURES["7607ce005c52fba5"] = {**FIGURES["16b704077d97298a"],
+                               # ICLR 2025: two retitled Oral/Poster pairs were two observations each; one used CIFAR-10
+                               "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
+                                                ("iclr-2024", 178, 1888), ("iclr-2025", 196, 3036), ("iclr-2026", 165, 4237)],
+                               "relbench_2_adoption": {"others": 3, "self": 1, "undetermined": 0, "unattributed": 8}}
 
 
 def call(store, name, args):
@@ -117,6 +125,12 @@ def main() -> int:
             ok = got == want["computer_vision_latest"]
             bad += not ok
             print(f"  computer vision/latest {got} {'ok' if ok else 'EXPECTED ' + str(want['computer_vision_latest'])}")
+        if "relbench_2_adoption" in want:
+            ad = store.adoption({"benchmark": "relbench-2"})
+            got = {**ad["evaluates_on"], "unattributed": ad["unattributed_using_papers"]}
+            ok = got == want["relbench_2_adoption"]
+            bad += not ok
+            print(f"  RelBench (benchmark paper) adoption {got} {'ok' if ok else 'EXPECTED ' + str(want['relbench_2_adoption'])}")
         if "libero_adoption" in want:
             ad = store.adoption({"benchmark": "libero"})
             got = {**ad["evaluates_on"], "before_claim": ad["before_claim"]}

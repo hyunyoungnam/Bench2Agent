@@ -147,7 +147,16 @@ def track_field(track: str) -> str | None:
     return topic or None
 
 
-def paper_labels(p: dict, topics: list[str], topics_version: str | None) -> list[dict]:
+# Normalized files written before `topic_origin` existed, whose topic source
+# was verified by hand: edition -> (origin, the raw file checked, the rule).
+# Any other file without `topic_origin` gets origin "unknown", not a field.
+LEGACY_TOPIC_ORIGIN = {
+    "icml-2026": {"origin": "declared", "source_file": "data/raw/virtual_feed_2026_2026-07-28.json",
+                  "rule": "the feed's `topic` is the OpenReview submission form's primary area (\"Area->Subarea\")"},
+}
+
+
+def paper_labels(p: dict, topics: list[str], topics_version: str | None, edition: str | None = None) -> list[dict]:
     """Every label a paper carries, each with its origin:
     declared_area / declared_subarea — the primary area the authors chose on
     the submission form (virtual-site feeds); venue_track — the venue's own
@@ -157,9 +166,16 @@ def paper_labels(p: dict, topics: list[str], topics_version: str | None) -> list
     under a fixed vocabulary. `field` marks the labels a field filter
     matches."""
     out = []
-    origin = p.get("topic_origin") or ("declared" if p.get("area") or p.get("subarea") else None)
     area, sub = p.get("area"), p.get("subarea")
-    if origin == "declared":
+    origin = p.get("topic_origin")
+    legacy = LEGACY_TOPIC_ORIGIN.get(edition or "")
+    if origin is None and (area or sub):
+        origin = legacy["origin"] if legacy else "unknown"
+    if origin == "unknown":
+        for label in (area, sub):
+            if label:
+                out.append({"label": label, "origin": "unknown", "field": False, "source": "topic of unrecorded origin"})
+    elif origin == "declared":
         if area:
             out.append({"label": area, "origin": "declared_area", "field": True, "source": "submission form primary area"})
         if sub:
@@ -234,13 +250,17 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
         for t in read_json(tp, {}).get("topics", []):
             for eid in set(t.get("explicit", []) + t.get("via_child", [])):
                 topics.setdefault((ed, eid), []).append(t["label"])
+        # a topic file keyed by an earlier representative row of a paper (its
+        # Oral listing) still reaches the paper through its merged rows
+        schedule = {p["event_id"]: [p["event_id"], *(p.get("duplicate_event_ids") or [])] for p in papers.values()}
         matched = set()
         for r in rows(resolved):
             base = r.get("arxiv_base")
             p = papers.get(r.get("event_id"))
             if base and p:
                 matched.add(base)
-                labels = paper_labels(p, sorted(set(topics.get((ed, p["event_id"]), []))), topics_version)
+                derived = {t for eid in schedule[p["event_id"]] for t in topics.get((ed, eid), [])}
+                labels = paper_labels(p, sorted(derived), topics_version, ed)
                 metadata[(ed, base)] = {"title": p["title"], "authors": p.get("authors") or [],
                     # research fields only: what a field filter matches; the raw track or volume stays in `labels`
                     "fields": sorted({lb["label"] for lb in labels if lb["field"]}), "labels": labels}
@@ -259,7 +279,11 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
         for old_id in e.get("merged_ids", []):
             by_key[old_id][e["id"]] = e
     # Registered products and their homonyms must both be candidates even if
-    # only one has an introducing paper inside the observation window.
+    # only one has an introducing paper inside the observation window; and a
+    # mention keyed by one entity's id (the vocabulary of an earlier mention
+    # pass, before a same-name entity existed) offers every same-name entity.
+    for e in entries:
+        by_key.setdefault(e["id"], {})[e["id"]] = e
     for key, candidates in by_key.items():
         for e in list(candidates.values()):
             for other in by_fold[fold(e["name"])].values():

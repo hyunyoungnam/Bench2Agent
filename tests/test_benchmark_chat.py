@@ -50,7 +50,7 @@ class BenchmarkQuestions(unittest.TestCase):
         for year, records in ((2024, old), (2025, new)):
             ed = f"icml-{year}"
             self.write(f"data/processed/papers_{year}.jsonl", [
-                {"event_id": i, "title": "Paper " + pid, "authors": authors, "subarea": "robotics"}
+                {"event_id": i, "title": "Paper " + pid, "authors": authors, "subarea": "robotics", "topic_origin": "declared"}
                 for i, (pid, authors, _) in enumerate(records)], lines=True)
             self.write(f"data/raw/arxiv/resolved_{ed}.jsonl", [
                 {"arxiv_base": pid, "event_id": i} for i, (pid, _, _) in enumerate(records)], lines=True)

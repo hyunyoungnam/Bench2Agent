@@ -74,10 +74,13 @@ class Fixture(unittest.TestCase):
                                 "evidence": "We introduce " + name + " for evaluating robotic policies."}], **extra}
         self.write("config/benchmarks_introduced.json", {"benchmarks": [
             intro("fresh", "Fresh", "2501.00001", "A fresh evaluation protocol"),
-            intro("unused", "Unused", "2501.00001", "A fresh evaluation protocol"),
             intro("mirage-new", "Mirage", "2501.00005", "Mirage: evaluating robotic policies",
                   homonym_of_registered="mirage-old"),
-            {**intro("traindata", "TrainData", "2501.00006", "TrainData: a corpus"), "kind": "dataset"}]})
+            {**intro("traindata", "TrainData", "2501.00006", "TrainData: a corpus"), "kind": "dataset"},
+            {**intro("unused", "Unused", "2501.00001", "A fresh evaluation protocol"), "homonym_of": ["unused-2"]},
+            # a second product under the name Unused, by another paper: an identity candidate, never merged
+            {**intro("unused-2", "Unused", "2501.00010", "Unused again: a second product under the name"), "homonym_of": ["unused"],
+             "identity_candidates": [{"id": "unused", "relations": ["shared author"]}]}]})
 
         def use(key, role="evaluates_on", text=None, **extra):
             return {key: {"roles": {role: [{"where": "experiments", "text": text or
@@ -101,7 +104,7 @@ class Fixture(unittest.TestCase):
             ("2501.00005", ["Alice Smith"], ["robotics"], use("mirage-old", role_cites=[
                 "Mirage: evaluating robotic policies. Alice Smith et al."])),  # homonym, attributed by citation
             ("2501.00006", ["Bob Lee"], ["robotics", "Vision"], use("toy")),
-            ("2501.00007", ["Bob Lee"], [], {}),
+            ("2501.00007", ["Bob Lee"], [], use("unused")),                   # a name two products carry: unattributed
             ("2401.00005", ["Carol Wu"], ["Vision"], use("toy")),             # same paper, second edition
             ("2501.00008", ["Dan Ito"], ["robotics"], use("bare"))]
         self.records = {2024: old, 2025: new}
@@ -117,15 +120,19 @@ class Fixture(unittest.TestCase):
             ed = f"icml-{year}"
             self.write(f"data/processed/papers_{year}.jsonl", [
                 {"event_id": i, "title": "Paper " + pid, "authors": authors,
+                 # 2501.00007's topic file entry is keyed by its merged Oral row 700, not its representative
+                 **({"duplicate_event_ids": [700]} if pid == "2501.00007" else {}),
                  # declared subarea for most; the last two papers of 2025 carry a venue track and a volume id
                  **({"subarea": fields[0], "topic_origin": "declared"} if fields and pid not in ("2401.00005", "2501.00008") else {}),
+                 # a topic whose origin was never recorded (a file older than topic_origin, not in the verified table)
+                 **({"area": "Mystery Area"} if pid == "2401.00003" else {}),
                  **({"area": "AAAI Technical Track on Computer Vision II", "topic_raw": "AAAI Technical Track on Computer Vision II",
                      "topic_origin": "venue_track"} if pid == "2401.00005" else {}),
                  **({"area": "2025.acl-long", "topic_raw": "2025.acl-long", "topic_origin": "venue_volume"} if pid == "2501.00008" else {})}
                 for i, (pid, authors, fields, _) in enumerate(records)], lines=True)
             self.write(f"data/processed/topics_{ed}.json", {"topics": [
                 {"label": f, "explicit": [i for i, (_, _, fs, _) in enumerate(records) if f in fs]}
-                for f in ("robotics", "Vision")]})
+                for f in ("robotics", "Vision")] + ([{"label": "merged-row topic", "explicit": [700]}] if year == 2025 else [])})
             self.write(f"data/raw/arxiv/resolved_{ed}.jsonl", [
                 {"arxiv_base": pid, "event_id": i} for i, (pid, _, _, _) in enumerate(records)], lines=True)
             self.write(f"data/interim/mentions/mentions_{ed}.jsonl", [
@@ -175,16 +182,19 @@ class StorageTests(Fixture):
         self.assertEqual(usage["coverage"]["parsed_papers"], 14)          # two unlabelled no-use papers included
         self.assertEqual(usage["coverage"]["editions"]["icml-2025"]["parsed_unidentified"], 1)   # the collision row: counted, not an observation
         self.assertNotIn("parsed_unidentified", usage["coverage"]["editions"]["icml-2024"])
-        self.assertEqual(usage["coverage"]["field_labelled_papers"], 12)   # 2501.00008: its volume id is no field, its derived topic is
+        self.assertEqual(usage["coverage"]["field_labelled_papers"], 13)   # 2501.00008: its volume id is no field, its derived topic is
         rows = {r["id"]: r for r in usage["results"]}
         self.assertEqual(rows["toy"]["papers"], 4)                          # 2401.00005 counted in both editions
         self.assertEqual(rows["toy"]["locations"][0]["checked_at"], "2026-09-17")
         self.assertNotIn("mirage-old", rows)                                # unresolved homonym use is not a count
-        self.assertEqual(usage["coverage"]["unattributed_papers"], 2)       # 2401.00002 (homonym) and 2501.00008 (Nobody)
+        self.assertNotIn("unused", rows)                                    # a mention keyed "unused" offers both products: unresolved
+        self.assertEqual(self.store.adoption({"benchmark": "unused"})["unattributed_using_papers"], 1)
+        self.assertEqual(self.store.adoption({"benchmark": "unused-2"})["unattributed_using_papers"], 1)
+        self.assertEqual(usage["coverage"]["unattributed_papers"], 3)       # 2401.00002 (homonym), 2501.00007 (Unused), 2501.00008 (Nobody)
         adoption = self.store.adoption({"benchmark": "fresh"})
         self.assertEqual((adoption["evaluates_on"]["others"], adoption["evaluates_on"]["self"],
                           adoption["evaluates_on"]["undetermined"], adoption["before_claim"]), (1, 1, 1, 1))
-        self.assertEqual(self.store.adoption({"benchmark": "unused"})["evaluates_on"]["others"], 0)
+        self.assertEqual(self.store.adoption({"benchmark": "unused"})["evaluates_on"], {"others": 0, "self": 0, "undetermined": 0})
         # the cited homonym use is attributed to mirage-new (a usage row of its
         # own) but it is the introducing paper, so adoption excludes it
         self.assertEqual(rows["mirage-new"]["papers"], 1)
@@ -194,14 +204,20 @@ class StorageTests(Fixture):
         self.assertEqual(self.store.verify("2501.00001", "We introduce Fresh for evaluating robotic policies.")["edition"], "icml-2025")
         self.assertEqual(self.store.data()["registry_checked"], "2026-09-17")
         scope = self.store.scope({})
-        self.assertEqual([f["name"] for f in scope["fields"]], ["robotics", "vision", "computer vision"])
-        self.assertEqual(scope["label_origins"], {"declared_subarea": 9, "derived_topic": 12, "venue_track": 2, "venue_track_mapped": 2,
-                                                  "venue_volume": 1})
+        self.assertEqual([f["name"] for f in scope["fields"]], ["robotics", "vision", "computer vision", "merged-row topic"])
+        self.assertEqual(scope["label_origins"], {"declared_subarea": 9, "derived_topic": 13, "unknown": 1, "venue_track": 2,
+                                                  "venue_track_mapped": 2, "venue_volume": 1})
+        merged_row = next(p for p in repository.export_snapshot(self.db_path)["papers"] if p["paper_id"] == "2501.00007")
+        self.assertEqual(merged_row["fields"], ["merged-row topic"])        # the topic keyed by its Oral row reached it
         by_name = {f["name"]: f for f in scope["fields"]}
         self.assertEqual(by_name["computer vision"], {"name": "computer vision", "parsed_papers": 2,
                                                       "origins": {"venue_track_mapped": 2}})
         self.assertEqual(by_name["robotics"]["origins"], {"declared_subarea": 9, "derived_topic": 10})
         self.assertNotIn("2025.acl-long", by_name)                           # kept as a label, never a field
+        self.assertNotIn("mystery area", by_name)                            # unrecorded origin: kept as a label, never a field
+        unknown = next(p for p in repository.export_snapshot(self.db_path)["papers"] if p["paper_id"] == "2401.00003")
+        self.assertEqual((unknown["fields"], unknown["labels"]), ([], [{"label": "Mystery Area", "origin": "unknown", "field": False,
+                                                                       "source": "topic of unrecorded origin"}]))
         papers = {p["paper_id"]: p for p in repository.export_snapshot(self.db_path)["papers"] if p["edition"] == "icml-2025"}
         self.assertEqual(papers["2501.00008"]["fields"], ["robotics"])                     # the derived topic only
         self.assertEqual(papers["2501.00008"]["labels"][0], {"label": "2025.acl-long", "origin": "venue_volume", "field": False,
@@ -212,7 +228,7 @@ class StorageTests(Fixture):
         self.assertEqual(papers["2401.00005"]["labels"][1]["origin"], "venue_track_mapped")
         self.assertEqual(papers["2401.00005"]["fields"], ["Computer Vision", "Vision"])
         self.assertEqual(usage["coverage"]["editions"]["icml-2025"]["label_origins"],
-                         {"declared_subarea": 6, "derived_topic": 8, "venue_track": 1, "venue_track_mapped": 1, "venue_volume": 1})
+                         {"declared_subarea": 6, "derived_topic": 9, "venue_track": 1, "venue_track_mapped": 1, "venue_volume": 1})
         for name, args in CALLS:
             with self.subTest(tool=name, args=args):
                 out = self.call(self.store, name, args)
