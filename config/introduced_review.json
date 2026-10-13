@@ -7593,7 +7593,16 @@
       "label": "X",
       "status": "excluded",
       "note": "real name LIBERO",
-      "reviewed": "2026-10-06"
+      "reviewed": "2026-10-06",
+      "target": {
+        "benchmark_id": "libero",
+        "decision": "same",
+        "evidence": "The claiming paper is 'LIBERO: Benchmarking Knowledge Transfer for Lifelong Robot Learning' (arXiv 2306.03310), the benchmark's own paper; the claim sentence introduces the benchmark under its long name.",
+        "claim_sentence": "To bridge this research gap, this paper introduces a new simulation benchmark, LIfelong learning BEchmark on RObot manipulation tasks, LIBERO, to facilitate the systematic study of lifelong learning in decision making (LLDM).",
+        "paper_title": "LIBERO: Benchmarking Knowledge Transfer for Lifelong Robot Learning",
+        "reviewed_by": "Claude Code (AI reviewer), from the paper title and claim sentence; not a human review",
+        "reviewed": "2026-10-13"
+      }
     },
     "2310.08348#lightzero": {
       "label": "E",
@@ -27257,7 +27266,16 @@
       "label": "X",
       "status": "excluded",
       "note": "real name Bench2Drive; E",
-      "reviewed": "2026-10-06"
+      "reviewed": "2026-10-06",
+      "target": {
+        "benchmark_id": "bench2drive",
+        "decision": "same",
+        "evidence": "The claiming paper is 'Bench2Drive: Towards Multi-Ability Benchmarking of Closed-Loop End-To-End Autonomous Driving' (arXiv 2406.03877), the benchmark's own paper; 'FSD' is a component it introduces as part of Bench2Drive.",
+        "claim_sentence": "We build the benchmark to fulfill the need of comprehensive and realistic testing environments for Full Self-Driving (FSD).",
+        "paper_title": "Bench2Drive: Towards Multi-Ability Benchmarking of Closed-Loop End-To-End Autonomous Driving",
+        "reviewed_by": "Claude Code (AI reviewer), from the paper title and claim sentence; not a human review",
+        "reviewed": "2026-10-13"
+      }
     },
     "2602.10687#fsfr": {
       "label": "E",
@@ -39618,7 +39636,16 @@
       "label": "X",
       "status": "excluded",
       "note": "real name SMACv2; E",
-      "reviewed": "2026-10-06"
+      "reviewed": "2026-10-06",
+      "target": {
+        "benchmark_id": "smacv2",
+        "decision": "same",
+        "evidence": "The claiming paper is 'SMACv2: An Improved Benchmark for Cooperative Multi-Agent Reinforcement Learning' (arXiv 2212.07489), the benchmark's own paper; the claim sentence introduces procedural content generation as part of SMACv2.",
+        "claim_sentence": "To address these shortcomings, we propose SMACv2, a new benchmark that uses procedural content generation (PCG) [36] to address SMAC’s lack of stochasticity.",
+        "paper_title": "SMACv2: An Improved Benchmark for Cooperative Multi-Agent Reinforcement Learning",
+        "reviewed_by": "Claude Code (AI reviewer), from the paper title and claim sentence; not a human review",
+        "reviewed": "2026-10-13"
+      }
     },
     "2406.17255#pcisparse": {
       "label": "T",
@@ -51285,7 +51312,16 @@
       "label": "X",
       "status": "excluded",
       "note": "real name Wikipedia; T",
-      "reviewed": "2026-10-06"
+      "reviewed": "2026-10-06",
+      "target": {
+        "benchmark_id": "wikipedia",
+        "decision": "excluded",
+        "evidence": "The claiming paper ('Writing Like the Best: Exemplar-Based Expository Text Generation', arXiv 2505.18859) uses Wikipedia articles as data; it does not introduce Wikipedia.",
+        "claim_sentence": "To this end, we collect three diverse datasets Wikipedia The Wikipedia dataset is domain-agnostic.",
+        "paper_title": "Writing Like the Best: Exemplar-Based Expository Text Generation",
+        "reviewed_by": "Claude Code (AI reviewer), from the paper title and claim sentence; not a human review",
+        "reviewed": "2026-10-13"
+      }
     },
     "2305.03668#wikipediawebpage": {
       "label": "E",
@@ -60694,6 +60730,7 @@
     "otib@2605.03413": "otib",
     "cute@2311.00750": "cute-2",
     "cute@2409.15452": "cute-3",
-    "videoniah@2504.02438": "videoniah"
+    "videoniah@2504.02438": "videoniah",
+    "relbench@2407.20060": "relbench-2"
   }
 }

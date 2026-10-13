@@ -887,15 +887,24 @@ def introduced() -> Path:
             if c["review"]["label"] == "X":
                 kind = m.group(2) or ("E" if re.search(r"bench|suite|test|evaluat", c["noun"]) else "T")
                 c["review"] = {**c["review"], "status": "confirmed", "label": kind, "renamed_from_X": True}
-            # renamed onto a registered name: that benchmark's own paper only if
-            # its title names it ("FSD" in the Bench2Drive paper); otherwise the
-            # correction points at data the paper used, and nothing was introduced
+            # renamed onto a registered name: whether this paper is that
+            # benchmark's own is a review decision recorded as `target`
+            # (benchmark_id, decision, evidence, reviewer); a correction without
+            # one waits for review and is counted nowhere. The paper's title is
+            # not a rule here (Codex review, 2026-10-13).
             c["registered"] = reg_fold.get(c["fold"])
             if c["registered"]:
-                if _title_names(c["name"], c["title"]):
-                    c["review"] = {**c["review"], "note": "same"}
-                else:
+                target = (c["review"] or {}).get("target") or {}
+                decision = target.get("decision") if target.get("benchmark_id") == c["registered"] and target.get("evidence") else None
+                if decision == "same":
+                    c["review"] = {**c["review"], "note": "same", "identity_evidence": "reviewed:" + target["evidence"]}
+                elif decision == "homonym":
+                    c["review"] = {**c["review"], "note": "homonym"}
+                elif decision == "excluded":
                     c["review"] = {**c["review"], "status": "excluded", "label": "U"}
+                else:
+                    c["review"] = {**c["review"], "status": "pending", "pending": "correction onto a registered name needs a "
+                                   "reviewed target (benchmark_id, decision, evidence)"}
     confirmed = [c for c in claims if c["review"] and c["review"]["status"] == "confirmed"]
     confirmed.sort(key=lambda c: (c["year"] or 9999, c["edition"]))
     groups: dict[str, list[list[dict]]] = collections.defaultdict(list)
@@ -909,13 +918,51 @@ def introduced() -> Path:
             groups[c["fold"] + "|reg"] = groups.get(c["fold"] + "|reg") or [[]]
             groups[c["fold"] + "|reg"][0].append(c)
             continue
-        people = {_person(a) for a in c["authors"]}
+        # the same paper (arXiv versions, a second claim sentence) is one
+        # product; anything else waits for the evidence pass below
         for g in groups[c["fold"]]:
-            if people & {_person(a) for x in g for a in x["authors"]}:
+            if c["arxiv_base"] == g[0]["arxiv_base"]:
                 g.append(c)
                 break
         else:
             groups[c["fold"]].append([c])
+    # Two papers claiming one name are one product only with explicit
+    # evidence: one cites the other (its reference list names the other's
+    # title) and they share an author. Shared authors alone are a flag
+    # (`possibly_same_as`), never a merge; no shared author is a homonym.
+    needed = {c["arxiv_base"] for gs in groups.values() if len(gs) > 1 for g in gs for c in g}
+    refs = references_of(needed) if needed else {}
+    possibly = collections.defaultdict(set)      # group id(key) -> keys of author-overlapping groups
+    for fold_, gs in groups.items():
+        if fold_.endswith("|reg") or len(gs) < 2:
+            continue
+        merged = True
+        while merged:
+            merged = False
+            for i, a in enumerate(gs):
+                for b in gs[i + 1:]:
+                    pa = {_person(x) for c in a for x in c["authors"]}
+                    pb = {_person(x) for c in b for x in c["authors"]}
+                    if not (pa & pb):
+                        continue
+                    cites = any(_cites_paper(refs.get(ca["arxiv_base"], []), cb["title"]) or
+                                _cites_paper(refs.get(cb["arxiv_base"], []), ca["title"]) for ca in a for cb in b)
+                    if cites:
+                        for c in b:
+                            c["identity_evidence"] = "cites+author-overlap"
+                        a.extend(b)
+                        gs.remove(b)
+                        merged = True
+                        break
+                if merged:
+                    break
+        for i, a in enumerate(gs):
+            for b in gs[i + 1:]:
+                pa = {_person(x) for c in a for x in c["authors"]}
+                pb = {_person(x) for c in b for x in c["authors"]}
+                if pa & pb:
+                    possibly[(fold_, a[0]["arxiv_base"])].add((fold_, b[0]["arxiv_base"]))
+                    possibly[(fold_, b[0]["arxiv_base"])].add((fold_, a[0]["arxiv_base"]))
     entities = []
     for gkey, gs in groups.items():
         fold = gkey.split("|")[0]
@@ -942,19 +989,27 @@ def introduced() -> Path:
                 "homonym_of_registered": g[0].get("homonym_of_registered"),
                 "kind": "benchmark" if "E" in labels else "dataset",
                 "homonym_of": None,                         # filled below
+                "possibly_same_as": None,                   # filled below: author overlap without citation evidence
+                "_possibly": sorted(possibly.get((fold, g[0]["arxiv_base"]), ())),
+                "identity_evidence": sorted({c.get("identity_evidence") or ("same-paper" if len({x["arxiv_base"] for x in g}) == 1
+                                                                            else "cites+author-overlap") for c in g}),
                 "first_claim": g[0]["edition"],
                 "claims": [{k_: c[k_] for k_ in ("claim_id", "edition", "arxiv_base", "title", "noun",
                                                  "evidence")} | {"label": c["review"]["label"]} for c in g],
                 "developers": sorted({a for c in g for a in c["authors"]})})
     # homonym ids exist only after every group got one; fill the cross-links
     by_fold = collections.defaultdict(list)
+    by_first = {}
     for e in entities:
         by_fold[e["fold"]].append(e["id"])
+        by_first[(e["fold"], e["claims"][0]["arxiv_base"])] = e["id"]
     for e in entities:
+        e["possibly_same_as"] = sorted(by_first[k] for k in e.pop("_possibly") if k in by_first) or None
         e["homonym_of"] = sorted(i for i in by_fold[e["fold"]] if i != e["id"]) or None
         if e["homonym_of_registered"] and e["homonym_of_registered"] not in (e["homonym_of"] or []):
             e["homonym_of"] = sorted((e["homonym_of"] or []) + [e["homonym_of_registered"]])
     status = collections.Counter((c["review"] or {}).get("status", "candidate") for c in claims)
+    print(f"introduced: claim status {dict(status)}")
     dump_json(REVIEW, rev)
     dump_json(INTRODUCED, {
         "_note": ("Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark "
@@ -970,8 +1025,28 @@ def introduced() -> Path:
     return INTRODUCED
 
 
+def references_of(bases: set[str]) -> dict[str, list[str]]:
+    """arxiv_base -> reference strings, read from the parsed full text of the
+    editions those papers belong to (only those files are opened)."""
+    idx = paper_index()
+    editions = {idx[b]["edition"] for b in bases if b in idx}
+    out: dict[str, list[str]] = {}
+    for ed in sorted(editions):
+        f = HTML_DIR / f"fulltext_{ed}.jsonl"
+        if not f.exists():
+            continue
+        for row in read_jsonl(f):
+            if row.get("arxiv_base") in bases:
+                out[row["arxiv_base"]] = [x if isinstance(x, str) else json.dumps(x) for x in (row.get("references") or [])]
+    return out
+
+
+_POSITION = re.compile(r"^\s*position(?:\s+paper)?\s*:\s*", re.I)
+
+
 def _cites_paper(ref_texts: list[str], title: str) -> bool:
-    t = dataset_key(title)[:40]
+    # ICML position papers carry a "Position:" prefix that citations omit
+    t = dataset_key(_POSITION.sub("", title))[:40]
     return len(t) >= 12 and any(t in dataset_key(r) for r in ref_texts)
 
 

@@ -59,3 +59,28 @@ RAG" for *CRAG*): label it as the claim deserves (`E`/`T`) and note
 
 A title is a reason to look first, never a reason to skip: four in five
 body-only claims are real.
+
+## Corrections onto a registered name (2026-10-13)
+
+A claim whose corrected name folds onto a registered benchmark (an `X` with
+`real name LIBERO` in the LIBERO paper, or an `E`/`T` with `name …`) is that
+benchmark's own introduction only by a recorded decision, never by the
+paper's title. The claim's review entry carries a `target`:
+
+    "target": {"benchmark_id": "libero", "decision": "same" | "homonym" | "excluded",
+               "evidence": "<why this paper introduces (or does not introduce) that benchmark>",
+               "reviewed_by": "<who>", "reviewed": "<date>"}
+
+Without a `target` the claim is `pending`: listed for review, counted
+nowhere. The four corrections decided so far (LIBERO, Bench2Drive, SMACv2:
+`same`; Wikipedia: `excluded`) were recorded by Claude Code from the paper
+title and claim sentence, and say so.
+
+## One name, several papers (2026-10-13)
+
+Claims on one name from different papers are one benchmark only with
+explicit evidence: the papers share an author **and** one cites the other
+(its reference list names the other's title). Shared authors without a
+citation link are a `possibly_same_as` flag on both entities, never a merge;
+no shared author is a homonym, as before. Each entity records its
+`identity_evidence` (`same-paper`, `cites+author-overlap`).
