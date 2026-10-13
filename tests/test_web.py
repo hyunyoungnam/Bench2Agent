@@ -402,25 +402,28 @@ class WebHostTests(unittest.TestCase):
         self.assertNotIn("key", json.dumps(row))
 
     def test_visitor_session_needs_no_sign_up(self):
-        browser = httpx.Client(base_url=self.base, timeout=60)
-        self.addCleanup(browser.close)
-        self.assertEqual(browser.get("/api/me").status_code, 401)
-        self.assertEqual(browser.post("/api/session").status_code, 403)                      # the header a form cannot send
-        opened = browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"})
-        self.assertEqual((opened.status_code, opened.json()["new"]), (200, True))
-        cookie = opened.headers["set-cookie"].lower()
-        self.assertIn("httponly", cookie)
-        self.assertIn("samesite=lax", cookie)
-        me = browser.get("/api/me").json()
-        self.assertTrue(me["name"].startswith("visitor-"))
-        self.assertFalse(browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"}).json()["new"])
-        self.assertEqual(browser.post("/api/login", json={}).status_code, 404)              # no sign-in, no invites
-        listed = browser.get("/api/connectors").json()["connectors"]
-        self.assertEqual([c["name"] for c in listed], ["claude", "api"])
-        self.assertFalse(listed[0]["connected"])                                                 # nothing connected yet
-        r = browser.post("/api/conversations", json={"connector": "claude"}, headers={"X-Requested-With": "Bench2Agent"})
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("Connect your Claude account", r.json()["detail"])
+        # A fresh machine need not have the official CLI installed.
+        # This scenario explicitly provides the test CLI before testing login guidance.
+        with self._with_stub_claude():
+            browser = httpx.Client(base_url=self.base, timeout=60)
+            self.addCleanup(browser.close)
+            self.assertEqual(browser.get("/api/me").status_code, 401)
+            self.assertEqual(browser.post("/api/session").status_code, 403)                      # the header a form cannot send
+            opened = browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"})
+            self.assertEqual((opened.status_code, opened.json()["new"]), (200, True))
+            cookie = opened.headers["set-cookie"].lower()
+            self.assertIn("httponly", cookie)
+            self.assertIn("samesite=lax", cookie)
+            me = browser.get("/api/me").json()
+            self.assertTrue(me["name"].startswith("visitor-"))
+            self.assertFalse(browser.post("/api/session", headers={"X-Requested-With": "Bench2Agent"}).json()["new"])
+            self.assertEqual(browser.post("/api/login", json={}).status_code, 404)              # no sign-in, no invites
+            listed = browser.get("/api/connectors").json()["connectors"]
+            self.assertEqual([c["name"] for c in listed], ["claude", "api"])
+            self.assertFalse(listed[0]["connected"])                                                 # nothing connected yet
+            r = browser.post("/api/conversations", json={"connector": "claude"}, headers={"X-Requested-With": "Bench2Agent"})
+            self.assertEqual(r.status_code, 400)
+            self.assertIn("Connect your Claude account", r.json()["detail"])
 
     def _with_stub_claude(self):
         bindir = self.root / "bin"
