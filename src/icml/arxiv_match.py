@@ -35,6 +35,12 @@ def norm(s: str) -> str:
     return _NORM.sub(" ", (s or "").lower()).strip()
 
 
+def _person(name: str) -> str:
+    import unicodedata
+    n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z ]", "", n).strip()
+
+
 def toks(s: str) -> frozenset[str]:
     return frozenset(t for t in norm(s).split() if len(t) > 2 and t not in STOP)
 
@@ -135,6 +141,29 @@ def main() -> int:
             n_none += 1
         results.append(row)
 
+    # Two different papers (disjoint authors) matched to one arXiv record is
+    # a collision: the title alone cannot say which is which, so neither is
+    # matched. Schedule duplicates that normalize left apart (authors overlap)
+    # keep the match; they are one paper.
+    by_base: dict[str, list[dict]] = defaultdict(list)
+    for r in results:
+        if r.get("arxiv_base"):
+            by_base[r["arxiv_base"]].append(r)
+    authors = {p["event_id"]: {_person(a) for a in p.get("authors") or [] if _person(a)} for p in papers}
+    n_collision = 0
+    for base, rs in by_base.items():
+        if len(rs) < 2:
+            continue
+        disjoint = any(authors[a["event_id"]] and authors[b["event_id"]] and not (authors[a["event_id"]] & authors[b["event_id"]])
+                       for i, a in enumerate(rs) for b in rs[i + 1:])
+        if disjoint:
+            for r in rs:
+                r.update({"arxiv_id": None, "match": "collision", "collision_with": sorted(x["event_id"] for x in rs if x is not r),
+                          "rejected_arxiv_base": r.pop("arxiv_base")})
+                n_collision += 1
+    n_exact -= sum(1 for r in results if r.get("match") == "collision" and r.get("score") == 1.0)
+    n_fuzzy -= sum(1 for r in results if r.get("match") == "collision" and r.get("score") != 1.0)
+
     with out_path.open("w", encoding="utf-8") as fh:
         for r in results:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -145,6 +174,7 @@ def main() -> int:
     print(f"  exact     {n_exact:,}")
     print(f"  fuzzy     {n_fuzzy:,}  (>= {args.threshold})")
     print(f"  ambiguous {n_ambig:,}  (rejected: runner-up within {args.margin})")
+    print(f"  collision {n_collision:,}  (two papers with disjoint authors, one arXiv record: neither matched)")
     print(f"  no match  {n_none:,}")
     if args.report and samples:
         print("\nsample fuzzy matches:")

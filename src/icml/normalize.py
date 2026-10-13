@@ -81,14 +81,83 @@ def normalize_institution(raw: str | None) -> str | None:
     return _aliases().get(s.lower(), s)
 
 
+# Top-level primary areas of the OpenReview submission forms (ICML, ICLR,
+# NeurIPS). NeurIPS 2023 wrote "Area/Subarea" with a slash; only a slash
+# after one of these names is a separator ("Health / Medicine" and
+# "Batch/Offline" are subarea names, never split).
+PRIMARY_AREAS = {"Applications", "Computer Vision", "Data-centric AI", "Deep Learning", "General Machine Learning",
+                 "Miscellaneous Aspects of Machine Learning", "Optimization", "Probabilistic Methods",
+                 "Reinforcement Learning", "Social Aspects", "Theory"}
+
+
 def split_topic(topic: str | None) -> tuple[str | None, str | None]:
-    """'Deep Learning->Attention Mechanisms' -> ('Deep Learning', 'Attention Mechanisms')."""
+    """'Deep Learning->Attention Mechanisms' -> ('Deep Learning', 'Attention Mechanisms');
+    NeurIPS 2023's 'Applications/Computer Vision' the same way."""
     if not topic:
         return None, None
     parts = [p.strip() for p in topic.split("->") if p.strip()]
     if not parts:
         return None, None
+    if len(parts) == 1 and parts[0].count("/") == 1 and " / " not in parts[0]:
+        left, right = (x.strip() for x in parts[0].split("/"))
+        if left in PRIMARY_AREAS and right:
+            return left, right
     return parts[0], (parts[1] if len(parts) > 1 else None)
+
+
+def topic_origin(sourceurl: str | None, topic: str | None) -> str | None:
+    """Where a row's `topic` comes from. `declared`: the primary area the
+    authors chose on the submission form (virtual-site feeds, OpenReview);
+    `venue_track`: the venue's own track the paper was published in (AAAI
+    OJS sections); `venue_volume`: the proceedings volume (ACL Anthology
+    ids such as 2021.acl-long), which is publication information, not a
+    field. None when the row carries no topic."""
+    if not topic:
+        return None
+    s = sourceurl or ""
+    if s.startswith("aaai:"):
+        return "venue_track"
+    if s.startswith("anthology:"):
+        return "venue_volume"
+    return "declared"
+
+
+def _person(name: str) -> str:
+    import unicodedata
+    n = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z ]", "", n).strip()
+
+
+def split_by_authors(group: list[dict]) -> list[list[dict]]:
+    """Rows sharing a title are one paper only when their author lists
+    overlap. Two teams can publish under one title (reproducibility reports
+    of the same paper: four such pairs at NeurIPS 2022 and 2024 were merged
+    by the title alone); a row without authors joins the group it finds.
+    Returns the connected components by shared author name."""
+    comps: list[tuple[list[dict], set[str]]] = []
+    for r in group:
+        names = {_person(a) for a in r.get("authors") or [] if _person(a)}
+        if not names:                       # no author data: joins the first component, never bridges two
+            if comps:
+                comps[0][0].append(r)
+            else:
+                comps.append(([r], set()))
+            continue
+        joined = None
+        for comp in list(comps):
+            rows, seen = comp
+            if names & seen or not seen:    # an authorless component takes the first authored row
+                if joined is None:
+                    rows.append(r)
+                    seen |= names
+                    joined = comp
+                else:                       # this row bridges two components: merge them
+                    joined[0].extend(rows)
+                    joined[1].update(seen)
+                    comps.remove(comp)
+        if joined is None:
+            comps.append(([r], set(names)))
+    return [rows for rows, _ in comps]
 
 
 def openreview_id(paper_url: str | None) -> str | None:
@@ -140,6 +209,10 @@ def merge_duplicates(group: list[dict]) -> dict:
         merged["presentation"] = "Oral"
     merged["duplicate_event_ids"] = sorted(
         r["event_id"] for r in group if r["event_id"] != best["event_id"])
+    # every source identifier the merged rows carried, so the raw rows stay
+    # traceable: the identity rule is title plus author overlap, not the title
+    merged["source_ids"] = sorted({str(sid) for r in group for sid in r.get("_source_ids", [])})
+    merged["identity_rule"] = "title+author-overlap"
     return merged
 
 
@@ -196,6 +269,8 @@ def main() -> int:
         decision = rec.get("decision") or ""
         rows.append({
             "_key": dedupe_key(rec),
+            "_source_ids": [x for x in (rec.get("sourceid"), openreview_id(rec.get("paper_url")),
+                                        rec.get("paper_url"), f"{rec.get('sourceurl')}#{rec['id']}") if x],
             "venue": venue,
             "year": args.year,
             "event_id": rec["id"],
@@ -212,6 +287,7 @@ def main() -> int:
             "area": area,
             "subarea": subarea,
             "topic_raw": rec.get("topic") or None,
+            "topic_origin": topic_origin(rec.get("sourceurl"), rec.get("topic")),
             "presentation": rec.get("eventtype"),
             "decision": decision or None,
             "is_spotlight": "spotlight" in decision.lower(),
@@ -223,14 +299,24 @@ def main() -> int:
                            if rec.get("virtualsite_url") and venue in VENUE_DOMAIN else None,
         })
 
-    # Collapse the oral/poster double-listing before anything is counted.
+    # Collapse the oral/poster double-listing before anything is counted: one
+    # title, and the author lists overlap (two teams under one title stay two).
     groups: dict[str, list[dict]] = {}
     for row in rows:
         groups.setdefault(row["_key"], []).append(row)
     raw_rows = len(rows)
-    rows = [merge_duplicates(g) for g in groups.values()]
+    split_titles = 0
+    merged_rows = []
+    for g in groups.values():
+        parts = split_by_authors(g)
+        split_titles += len(parts) > 1
+        merged_rows.extend(merge_duplicates(part) for part in parts)
+    rows = merged_rows
+    if split_titles:
+        print(f"note: {split_titles} title(s) shared by papers with disjoint authors kept as separate papers")
     for row in rows:
         row.pop("_key", None)
+        row.pop("_source_ids", None)
     rows.sort(key=lambda r: r["event_id"])
     collapsed = raw_rows - len(rows)
     if collapsed:
