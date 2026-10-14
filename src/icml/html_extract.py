@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import re
 import threading
@@ -287,13 +288,17 @@ def main() -> int:
                 time.sleep(args.delay)
 
     def parsed_row(row: dict, text: str) -> dict:
+        # the exact text this parse read: its hash identifies the version
+        # (the archive holds the same bytes), the page's own version tag when it shows one
+        identity = {"html_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                    "arxiv_version": (re.search(r"arxiv\.org/abs/" + re.escape(row["arxiv_base"]) + r"v(\d+)", text) or [None, None])[1]}
         parsed = parse_html(text)
         if args.authors_only:
             return {**row, "ok": True, "authors": parsed["authors"]}
         kept = sum(len(s["text"]) for s in parsed["sections"])
         if kept < 500:
-            return {**row, "ok": False, "error": f"thin ({kept} chars)"}
-        return {**row, "ok": True, **parsed, "chars": kept}
+            return {**row, "ok": False, "error": f"thin ({kept} chars)", **identity}
+        return {**row, "ok": True, **parsed, "chars": kept, **identity}
 
     import concurrent.futures as cf
     with out.open("a", encoding="utf-8") as fh, \

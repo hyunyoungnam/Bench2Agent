@@ -75,7 +75,7 @@ def main() -> int:
     newest: dict[str, int] = {}
     for row in read_jsonl(INDEX):
         prev = newest.get(row["arxiv_base"])
-        if prev is not None and (index[prev].get("date") or "") >= (row.get("date") or ""):
+        if prev is not None and (index[prev].get("datestamp") or index[prev].get("date") or "") >= (row.get("datestamp") or row.get("date") or ""):
             continue
         if prev is not None:
             index[prev] = row

@@ -83,30 +83,43 @@ def parse_records(root: ET.Element) -> tuple[list[dict], str | None]:
         rows.append({
             "arxiv_base": aid,
             "title": title,
+            # dc:date is the paper's own date; the header datestamp is when
+            # the OAI record was created or last modified — the signal that
+            # the record (metadata, possibly the text) changed
             "date": rec.findtext(f".//{DC}date"),
+            "datestamp": (header.findtext(f"{OAI}datestamp") if header is not None else None),
         })
     tok_el = root.find(f".//{OAI}resumptionToken")
     tok = (tok_el.text or "").strip() if tok_el is not None else ""
     return rows, (tok or None)
 
 
+def stamp(r: dict) -> str:
+    """The record's modification stamp: the OAI header datestamp, else (for
+    rows harvested before it was kept) the dc:date."""
+    return r.get("datestamp") or r.get("date") or ""
+
+
 def harvest_set(name: str, since: str, state: dict, delay: float,
-                until: str | None = None) -> int:
+                until: str | None = None, redo: bool = False) -> int:
     key = name if until is None else f"{name}@{since}..{until}"
+    if redo:
+        state.pop(key, None)
     token = state.get(key, {}).get("token")
     done = state.get(key, {}).get("complete", False)
     if done:
-        print(f"[{key}] already complete")
+        print(f"[{key}] already complete (use --redo to harvest it again)")
         return 0
-    # base -> newest datestamp on file: a record seen again with a newer
-    # datestamp is a new version of the paper and is appended (readers keep
-    # the newest row per base); the same datestamp is a duplicate listing
+    # base -> newest stamp on file: a record seen again with a newer stamp
+    # is a changed record and is appended (readers keep the newest row per
+    # base); the same stamp is a duplicate listing and is skipped, so a
+    # window harvested twice adds nothing
     seen: dict[str, str] = {}
     if OUT.exists():
         for l in OUT.open():
             r = json.loads(l)
-            if (r.get("date") or "") >= seen.get(r["arxiv_base"], ""):
-                seen[r["arxiv_base"]] = r.get("date") or ""
+            if stamp(r) >= seen.get(r["arxiv_base"], ""):
+                seen[r["arxiv_base"]] = stamp(r)
 
     n = 0
     start = time.time()
@@ -118,9 +131,9 @@ def harvest_set(name: str, since: str, state: dict, delay: float,
                             **({"until": until} if until else {})})
             root = request(params)
             rows, token = parse_records(root)
-            rows = [r for r in rows if r["arxiv_base"] not in seen or (r.get("date") or "") > seen[r["arxiv_base"]]]
+            rows = [r for r in rows if r["arxiv_base"] not in seen or stamp(r) > seen[r["arxiv_base"]]]
             for r in rows:
-                seen[r["arxiv_base"]] = r.get("date") or ""
+                seen[r["arxiv_base"]] = stamp(r)
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
             fh.flush()
             n += len(rows)
@@ -144,6 +157,7 @@ def main() -> int:
                     help="end of a backfill window (YYYY-MM-DD); omit for open-ended")
     ap.add_argument("--sets", nargs="+", default=["cs", "stat"])
     ap.add_argument("--delay", type=float, default=3.0)
+    ap.add_argument("--redo", action="store_true", help="harvest a window again even if it was recorded complete")
     args = ap.parse_args()
 
     ensure_dirs()
@@ -152,7 +166,7 @@ def main() -> int:
 
     total = 0
     for s in args.sets:
-        total += harvest_set(s, args.since, state, args.delay, args.until)
+        total += harvest_set(s, args.since, state, args.delay, args.until, args.redo)
 
     have = sum(1 for _ in OUT.open()) if OUT.exists() else 0
     print(f"\nharvested +{total} records this run; index now {have:,} rows")

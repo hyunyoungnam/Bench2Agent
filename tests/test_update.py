@@ -32,6 +32,36 @@ class FakePipeline(update.Pipeline):
     def index_dates(self):
         return dict(self.s.get("dates", {}))
 
+    def index_state(self):
+        import hashlib
+        stamps = dict(self.s.get("dates", {}))
+        return {"stamps": stamps, "hash": hashlib.sha256(json.dumps(sorted(stamps.items())).encode()).hexdigest()[:16]}
+
+    def _text(self, base):
+        version = self.s.get("text_version", {}).get(base, "v1")
+        return f"We evaluate on Toy ({base}, {version})."
+
+    def _row(self, base):
+        import hashlib
+        text = self._text(base)
+        return {"arxiv_base": base, "ok": True, "sections": [{"bucket": "experiments", "text": text}],
+                "html_sha256": hashlib.sha256(text.encode()).hexdigest()}
+
+    def recheck(self, paths, bases):
+        self.calls.append(("recheck", paths["key"], tuple(bases)))
+        rows, transient = [], []
+        scratch = self.work.root / "data/work/recheck/archive"
+        scratch.mkdir(parents=True, exist_ok=True)
+        for base in bases:
+            if self.s.get("recheck_fails", {}).get(base):
+                transient.append((base, "HTTP 503"))
+                continue
+            row = self._row(base)
+            rows.append(row)
+            import gzip
+            (scratch / f"{base}.html.gz").write_bytes(gzip.compress(self._text(base).encode()))
+        return rows, transient
+
     def normalize(self, paths):
         self.calls.append(("normalize", paths["key"]))
         paths["papers"].parent.mkdir(parents=True, exist_ok=True)
@@ -43,7 +73,7 @@ class FakePipeline(update.Pipeline):
         paths["resolved"].write_text("\n".join(json.dumps({"event_id": e, "arxiv_base": f"25{e:02d}.00001"})
                                                 for e in self.s["papers"][paths["key"]]) + "\n")
 
-    def parse(self, paths, *, reparse, limit=0, drop=frozenset()):
+    def parse(self, paths, *, reparse, limit=0):
         self.calls.append(("reparse" if reparse else "parse", paths["key"]))
         ft = paths["fulltext"]
         ft.parent.mkdir(parents=True, exist_ok=True)
@@ -52,7 +82,7 @@ class FakePipeline(update.Pipeline):
         if ft.exists() and not reparse:
             for line in ft.read_text().splitlines():
                 r = json.loads(line)
-                if r["arxiv_base"] not in drop and (r.get("ok") or not r.get("transient")):
+                if r.get("ok") or not r.get("transient"):
                     rows.append(r)
                     done.add(r["arxiv_base"])
         transient = []
@@ -66,8 +96,11 @@ class FakePipeline(update.Pipeline):
             elif fail == "permanent":
                 rows.append({"arxiv_base": base, "ok": False, "error": "no-html"})
             else:
-                version = self.s.get("dates", {}).get(base, "v1")
-                rows.append({"arxiv_base": base, "ok": True, "sections": [{"bucket": "experiments", "text": f"We evaluate on Toy ({base}, {version})."}]})
+                row = self._row(base)
+                rows.append(row)
+                paths["archive"].mkdir(parents=True, exist_ok=True)
+                import gzip
+                (paths["archive"] / f"{base}.html.gz").write_bytes(gzip.compress(self._text(base).encode()))
         ft.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
         return f"done — {len(rows)} parsed, 0 unavailable/thin, {len(transient)} transient (not recorded)", transient
 
@@ -142,7 +175,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(f["parse_report"], "done — 2 parsed, 0 unavailable/thin, 1 transient (not recorded)")   # the final line
         status = {r[0]: (r[1], r[2], r[3]) for r in self.work.con.execute("SELECT event_id, status, transient, error FROM paper_stages WHERE edition = 'iclr-2025'")}
         self.assertEqual(status, {"1": ("ok", 0, None), "2": ("transient", 1, "HTTP 429"), "3": ("failed", 0, "no-html")})
-        self.assertIn("retry 1 transient", update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"][0])
+        self.assertIn("retry 1 transient", update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"][0])
         self.assertEqual(out["pending_retries"], 1)
         # a daily timer retries the leftover work after a day, not after the weekly period
         self.assertFalse(update.due(self.work, 7, retry_days=1))
@@ -154,7 +187,7 @@ class UpdateTests(unittest.TestCase):
         f = out["editions"]["iclr-2025"]
         self.assertEqual((f["parsed_ok"], f["parsed_failed"], f["transient_now"]), (2, 1, 0))
         self.assertEqual(self.work.con.execute("SELECT attempts FROM paper_stages WHERE event_id = '3'").fetchone()[0], 2)   # recorded, not refetched
-        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
         self.assertEqual(out["pending_retries"], 0)
         self.assertFalse(update.due(self.work, 7, retry_days=1))
 
@@ -162,21 +195,21 @@ class UpdateTests(unittest.TestCase):
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.pipe.calls.clear()
         self.bump("bench_mentions.py")                                        # the rules changed: mentions over every parsed paper
-        plan = update.status(self.work, self.EDS)["editions"]
+        plan = update.status(self.work, self.EDS, self.pipe)["editions"]
         self.assertEqual(plan["iclr-2025"]["need"], ["mentions (rules changed)"])
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] in ("parse", "reparse", "mentions", "match")],
                          [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
         self.pipe.calls.clear()
         self.bump("html_extract.py")                                          # the parser changed: re-parse the archive, then everything after
-        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2026"]["need"], ["reparse (parser changed)", "mentions"])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], ["reparse (parser changed)", "mentions"])
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2026",)], [("reparse", "iclr-2026"), ("mentions", "iclr-2026")])
         self.pipe.calls.clear()
         self.scenario["papers"]["iclr-2026"] = [4, 5, 6]                      # a new paper in a feed: normalize changed the file
         self.pipe.normalize(update.edition_paths("ICLR", 2026, self.root))
         self.pipe.calls.clear()
-        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2026"]["need"], ["match"])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], ["match"])
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2026",)],
                          [("match", "iclr-2026"), ("parse", "iclr-2026"), ("mentions", "iclr-2026")])
@@ -195,16 +228,17 @@ class UpdateTests(unittest.TestCase):
             paths = update.edition_paths(disp, year, self.root)
             self.pipe.normalize(paths); self.pipe.match(paths); self.pipe.parse(paths, reparse=False); self.pipe.mentions(paths)
         self.pipe.calls.clear()
-        adopted = update.adopt(self.work, self.EDS)
+        with unittest.mock.patch.object(update, "index_state", return_value=self.pipe.index_state()):
+            adopted = update.adopt(self.work, self.EDS)
         self.assertEqual(adopted["iclr-2025"], ["normalized", "matched", "parsed", "mentions"])
-        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
         self.assertEqual(self.work.con.execute("SELECT COUNT(*) FROM paper_stages WHERE status = 'ok'").fetchone()[0], 5)
         self.assertIsNone(self.work.last_success())                           # adopting is not a successful update
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] not in ("build", "claims")], [])   # nothing redone
         self.assertEqual(out["claims"]["total"], 2)                           # claims compared on the first real run
 
-    def test_discovery_refreshes_sources_and_a_new_version_is_fetched_again(self):
+    def test_discovery_refreshes_sources_and_a_moved_record_is_rechecked_in_a_temporary_path(self):
         self.scenario["dates"] = {"2501.00001": "2025-01-01", "2502.00001": "2025-01-01", "2503.00001": "2025-01-01",
                                   "2504.00001": "2025-04-01", "2505.00001": "2025-04-01"}
         self.work.set("harvest_until", "2026-10-01")
@@ -213,29 +247,82 @@ class UpdateTests(unittest.TestCase):
         harvest = next(c for c in self.pipe.calls if c[0] == "harvest")
         self.assertEqual(harvest[1], "2026-09-30")                           # a day of overlap before the last harvest
         self.assertEqual(out["discovery"]["recollected"], ["iclr-2026"])      # only the open edition's list is re-fetched
-        self.assertEqual(self.work.source_versions("iclr-2025")["2501.00001"], "2025-01-01")
-        # the arXiv record of one paper moved to a newer datestamp: a new version
+        known = self.work.versions_of("iclr-2025")["2501.00001"]
+        self.assertEqual((known["source_version"], known["content_sha256"] is not None), ("2025-01-01", True))   # fetched now: confirmed
+        # the arXiv record of one paper moved: metadata changed, text the same -> confirmed, nothing rewritten
         self.scenario["dates"]["2501.00001"] = "2026-10-05"
         self.pipe.calls.clear()
         st = update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]
-        self.assertEqual(st["stale_sources"], 1)
-        self.assertIn("1 new source versions", st["need"][0])
+        self.assertEqual(st["recheck"], 1)
+        self.assertTrue(any("re-check 1 moved records" in n for n in st["need"]), st["need"])   # (a moved record also changes the index: re-match too)
+        ft = update.edition_paths("ICLR", 2025, self.root)["fulltext"]
+        before = ft.read_text()
         with unittest.mock.patch.object(update, "open_editions", return_value=set()):
             out = update.run(self.work, self.pipe, editions=self.EDS)
-        self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2025",)], [("parse", "iclr-2025"), ("mentions", "iclr-2025")])
-        text = next(json.loads(l) for l in update.edition_paths("ICLR", 2025, self.root)["fulltext"].read_text().splitlines()
-                    if json.loads(l)["arxiv_base"] == "2501.00001")
-        self.assertIn("2026-10-05", text["sections"][0]["text"])              # the new version was fetched and parsed
-        self.assertEqual(self.work.source_versions("iclr-2025")["2501.00001"], "2026-10-05")
+        # the moved record changed the index (re-match) and was re-checked; nothing was parsed anew
+        self.assertEqual([c[:2] for c in self.pipe.calls if c[1:2] == ("iclr-2025",)], [("match", "iclr-2025"), ("recheck", "iclr-2025"), ("mentions", "iclr-2025")])
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unknown": 0})
+        self.assertEqual(ft.read_text(), before)
+        self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], "2026-10-05")
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
-        # a permanent failure is judged again when the parser changes
-        self.scenario["fail"] = {"2502.00001": "permanent"}
-        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
-        self.assertEqual(self.work.con.execute("SELECT status FROM paper_stages WHERE event_id = '2'").fetchone()[0], "ok")
-        self.scenario["fail"] = {}
-        self.bump("html_extract.py")
-        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
-        self.assertEqual(self.work.con.execute("SELECT status FROM paper_stages WHERE event_id = '2'").fetchone()[0], "ok")
+        # the record moves again and this time the text changed: replaced, archived under both hashes, mentions re-run
+        self.scenario["dates"]["2501.00001"] = "2026-10-09"
+        self.scenario["text_version"] = {"2501.00001": "v2"}
+        self.pipe.calls.clear()
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"]["changed"], 1)
+        self.assertIn(("mentions", "iclr-2025"), self.pipe.calls)
+        text = next(json.loads(l) for l in ft.read_text().splitlines() if json.loads(l)["arxiv_base"] == "2501.00001")
+        self.assertIn("v2", text["sections"][0]["text"])
+        archive = update.edition_paths("ICLR", 2025, self.root)["archive"]
+        self.assertEqual(len(list(archive.glob("2501.00001.*.html.gz"))), 2)   # both versions kept
+        self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["content_sha256"], text["html_sha256"])
+        # the record moves once more but the fetch fails: nothing replaced, the failure is recorded and retried
+        self.scenario["dates"]["2501.00001"] = "2026-10-12"
+        self.scenario["recheck_fails"] = {"2501.00001": True}
+        before = ft.read_text()
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"]["failed"], 1)
+        self.assertEqual(ft.read_text(), before)
+        v = self.work.versions_of("iclr-2025")["2501.00001"]
+        self.assertEqual((v["source_version"], v["recheck_datestamp"], v["recheck_status"]), ("2026-10-09", "2026-10-12", "failed"))
+        self.assertEqual(out["pending_retries"], 1)
+        self.assertTrue(any("re-check 1 moved records" in n for n in update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"]))
+        self.scenario["recheck_fails"] = {}
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"]["same"], 1)
+        self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["recheck_status"], None)
+
+    def test_adopted_parses_have_no_confirmed_version_and_a_new_index_rematches(self):
+        for disp, year in self.EDS:
+            paths = update.edition_paths(disp, year, self.root)
+            self.pipe.normalize(paths); self.pipe.match(paths); self.pipe.parse(paths, reparse=False); self.pipe.mentions(paths)
+        self.scenario["dates"] = {"2501.00001": "2025-01-01"}
+        with unittest.mock.patch.object(update, "index_state", return_value=self.pipe.index_state()):
+            update.adopt(self.work, self.EDS)
+        v = self.work.versions_of("iclr-2025")["2501.00001"]
+        self.assertEqual((v["source_version"], v["content_sha256"], v["baseline_datestamp"]), (None, None, "2025-01-01"))
+        self.pipe.calls.clear()
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], None)   # a build confirms nothing
+        self.assertEqual([c for c in self.pipe.calls if c[0] in ("match", "parse", "recheck")], [])
+        # new records reach the index: every edition is matched again (unmatched, ambiguous, collided and fuzzy papers meet them)
+        self.scenario["dates"]["2599.00001"] = "2026-10-10"
+        self.pipe.calls.clear()
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], ["match (index changed)"])
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual([c for c in self.pipe.calls if c[0] == "match"], [("match", "iclr-2025"), ("match", "iclr-2026")])
+        # and the adopted paper's record moving is a re-check against its archived text, not a guessed version
+        self.scenario["dates"]["2501.00001"] = "2026-10-11"
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unknown": 0})
+        self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], "2026-10-11")
 
     def test_a_review_change_alone_regenerates_the_catalogue_and_clears_the_queue(self):
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
@@ -265,7 +352,7 @@ class UpdateTests(unittest.TestCase):
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual(out["claims"].get("mentions_rerun"), "vocabulary changed")
         self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
-        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
 
     def test_a_failed_run_is_recorded_and_the_next_one_proceeds(self):
         def broken(paths, **kw):

@@ -136,9 +136,10 @@ class Work:
         self.con.executescript(SCHEMA)
         # a working database from before a column existed gains it here
         cols = {r[1] for r in self.con.execute("PRAGMA table_info(paper_stages)")}
-        if "source_version" not in cols:
-            self.con.execute("ALTER TABLE paper_stages ADD COLUMN source_version TEXT")
-            self.con.commit()
+        for col in ("source_version", "content_sha256", "baseline_datestamp", "recheck_datestamp", "recheck_status"):
+            if col not in cols:
+                self.con.execute(f"ALTER TABLE paper_stages ADD COLUMN {col} TEXT")
+        self.con.commit()
 
     def close(self) -> None:
         self.con.close()
@@ -189,16 +190,43 @@ class Work:
             "SELECT event_id, arxiv_base, error, attempts, updated_at FROM paper_stages WHERE edition = ? AND status = 'transient'", (edition,))]
 
     def pending_retries(self) -> int:
-        return self.con.execute("SELECT COUNT(*) FROM paper_stages WHERE status IN ('transient', 'pending')").fetchone()[0]
+        return self.con.execute("SELECT COUNT(*) FROM paper_stages WHERE status IN ('transient', 'pending') "
+                                "OR recheck_status = 'failed'").fetchone()[0]
 
-    def source_versions(self, edition: str) -> dict[str, str]:
-        return {r[0]: r[1] for r in self.con.execute(
-            "SELECT arxiv_base, source_version FROM paper_stages WHERE edition = ? AND source_version IS NOT NULL", (edition,))}
+    def versions_of(self, edition: str) -> dict[str, dict]:
+        """arxiv_base -> what is known about the text behind its parse:
+        `source_version` (the OAI datestamp confirmed when the text was
+        fetched, None for a parse of unknown provenance), `content_sha256`
+        (the parsed text), `baseline_datestamp` (the stamp the paper was
+        last checked against), and the last re-check outcome."""
+        return {r["arxiv_base"]: dict(r) for r in self.con.execute(
+            "SELECT arxiv_base, source_version, content_sha256, baseline_datestamp, recheck_datestamp, recheck_status "
+            "FROM paper_stages WHERE edition = ? AND arxiv_base IS NOT NULL", (edition,))}
 
-    def set_source_versions(self, edition: str, versions: dict[str, str]) -> None:
-        self.con.executemany("UPDATE paper_stages SET source_version = ? WHERE edition = ? AND arxiv_base = ?",
-                             [(v, edition, b) for b, v in versions.items()])
+    def set_versions(self, edition: str, confirmed: dict[str, tuple[str | None, str | None]]) -> None:
+        """Record a confirmed fetch: (datestamp, content hash) per base. Only
+        a parse made in this run on text fetched now is confirmed."""
+        self.con.executemany("UPDATE paper_stages SET source_version = ?, content_sha256 = ?, baseline_datestamp = ?, "
+                             "recheck_status = NULL, recheck_datestamp = NULL WHERE edition = ? AND arxiv_base = ?",
+                             [(ds, sha, ds, edition, b) for b, (ds, sha) in confirmed.items()])
         self.con.commit()
+
+    def set_baselines(self, edition: str, stamps: dict[str, str], only_missing: bool = True) -> None:
+        """The datestamp a paper was last checked against (a signal, not a
+        version): set once for adopted rows, moved on every re-check."""
+        self.con.executemany("UPDATE paper_stages SET baseline_datestamp = ? WHERE edition = ? AND arxiv_base = ?"
+                             + (" AND baseline_datestamp IS NULL" if only_missing else ""),
+                             [(ds, edition, b) for b, ds in stamps.items()])
+        self.con.commit()
+
+    def set_recheck(self, edition: str, base: str, datestamp: str, status: str) -> None:
+        self.con.execute("UPDATE paper_stages SET recheck_datestamp = ?, recheck_status = ?, updated_at = ? WHERE edition = ? AND arxiv_base = ?",
+                         (datestamp, status, now(), edition, base))
+        self.con.commit()
+
+    def recheck_failures(self, edition: str) -> list[str]:
+        return [r[0] for r in self.con.execute(
+            "SELECT arxiv_base FROM paper_stages WHERE edition = ? AND recheck_status = 'failed'", (edition,))]
 
     def queue_claims(self, items: list[tuple[str, str, str, str]], run_id: int | None) -> None:
         self.con.executemany("INSERT OR REPLACE INTO claim_queue VALUES (?,?,?,?,?,?)",
@@ -227,19 +255,24 @@ class Work:
         return self.get("last_success")
 
 
-def index_dates(root: Path = ROOT) -> dict[str, str]:
-    """arxiv_base -> newest datestamp in the OAI index: the source version of
-    a paper's text. A record whose datestamp moved past the one a parse was
-    made on is a new version, to be fetched and parsed again."""
+def index_state(root: Path = ROOT) -> dict:
+    """The arXiv index as the run sees it: `stamps` (arxiv_base -> newest
+    record stamp: the OAI header datestamp, or the dc:date of rows
+    harvested before it was kept) and `hash`, the SHA-256 of the index file,
+    computed once per run and shared by every edition."""
     path = root / "data/raw/arxiv/oai_index.jsonl"
     out: dict[str, str] = {}
     if not path.exists():
-        return out
+        return {"stamps": out, "hash": None}
     for r in read_jsonl(path):
-        d = r.get("date") or ""
+        d = r.get("datestamp") or r.get("date") or ""
         if d >= out.get(r["arxiv_base"], ""):
             out[r["arxiv_base"]] = d
-    return out
+    return {"stamps": out, "hash": file_hash(path)}
+
+
+def index_dates(root: Path = ROOT) -> dict[str, str]:
+    return index_state(root)["stamps"]
 
 
 def open_editions(today: dt.date | None = None) -> set[str]:
@@ -264,9 +297,11 @@ def edition_funnel(paths: dict) -> dict:
             elif r.get("match") == "collision":
                 collisions += 1
     parsed: dict[str, dict] = {}
+    rows_by_base: dict[str, dict] = {}
     if paths["fulltext"].exists():
         for r in read_jsonl(paths["fulltext"]):
             parsed[r["arxiv_base"]] = {"ok": bool(r.get("ok")), "error": r.get("error"), "transient": bool(r.get("transient"))}
+            rows_by_base[r["arxiv_base"]] = {"html_sha256": r.get("html_sha256"), "arxiv_version": r.get("arxiv_version")}
     mentioned: set[str] = set()
     if paths["mentions"].exists():
         for r in read_jsonl(paths["mentions"]):
@@ -277,7 +312,7 @@ def edition_funnel(paths: dict) -> dict:
             "parsed_transient": sum(1 for b, p in parsed.items() if not p["ok"] and p["transient"]),
             "unparsed": sorted(set(matched) - set(parsed)), "mentions": len(mentioned & ok),
             "mentions_missing": sorted(ok - mentioned),
-            "_papers": papers, "_matched": matched, "_parsed": parsed}
+            "_papers": papers, "_matched": matched, "_parsed": parsed, "_rows": rows_by_base}
 
 
 # ---------------------------------------------------------------- the pipeline
@@ -315,8 +350,43 @@ class Pipeline:
         """Re-fetch an edition's paper list from its source (feeds change while a conference is current)."""
         self._run([self.python, "-m", "icml.sources", "collect", "--venue", paths["venue"], "--year", str(paths["year"]), "--force"])
 
+    def index_state(self) -> dict:
+        return index_state(self.work.root)
+
     def index_dates(self) -> dict[str, str]:
-        return index_dates(self.work.root)
+        return self.index_state()["stamps"]
+
+    def recheck(self, paths: dict, bases: list[str]) -> tuple[list[dict], list[tuple[str, str]]]:
+        """Fetch and parse the given papers again into a temporary output and
+        archive, touching nothing of the edition's files. Returns the rows
+        html_extract produced (ok or not, each with `html_sha256` of the
+        text it read) and the transient failures it reported."""
+        if not self.parser_python:
+            raise RuntimeError("no parser environment: lxml is not importable and BENCH2AGENT_PARSER_PYTHON is not set")
+        if not Path(self.parser_python).exists():
+            raise RuntimeError(f"parser environment not found: {self.parser_python} (BENCH2AGENT_PARSER_PYTHON)")
+        scratch = work_dir(self.work.root) / "recheck"
+        scratch.mkdir(parents=True, exist_ok=True)
+        resolved = scratch / f"resolved_{paths['key']}.jsonl"
+        out = scratch / f"fulltext_{paths['key']}.jsonl"
+        archive = scratch / "archive"
+        archive.mkdir(exist_ok=True)
+        wanted = set(bases)
+        with resolved.open("w", encoding="utf-8") as fh:
+            for r in read_jsonl(paths["resolved"]):
+                if r.get("arxiv_base") in wanted:
+                    fh.write(json.dumps(r) + "\n")
+        if out.exists():
+            out.unlink()
+        for b in wanted:
+            cached = archive / f"{b}.html.gz"
+            if cached.exists():
+                cached.unlink()
+        text = self._run([self.parser_python, "-m", "icml.html_extract", "--resolved", str(resolved), "--out", str(out),
+                          "--archive", str(archive)])
+        rows = list(read_jsonl(out)) if out.exists() else []
+        transient = [(l.split()[1], " ".join(l.split()[2:])) for l in text.splitlines() if l.startswith("transient ") and len(l.split()) >= 2]
+        return rows, transient
 
     def normalize(self, paths: dict) -> None:
         self._run([self.python, "-m", "icml.normalize", "--venue", paths["venue"], "--year", str(paths["year"]), "--allow-missing-abstracts"])
@@ -324,31 +394,27 @@ class Pipeline:
     def match(self, paths: dict) -> None:
         self._run([self.python, "-m", "icml.arxiv_match", "--venue", paths["venue"], "--year", str(paths["year"])])
 
-    def parse(self, paths: dict, *, reparse: bool, limit: int = 0, drop: set[str] = frozenset()) -> tuple[str, list[tuple[str, str]]]:
+    def parse(self, paths: dict, *, reparse: bool, limit: int = 0) -> tuple[str, list[tuple[str, str]]]:
         """html_extract appends rows for every resolved base absent from the
-        output. Rows to fetch again are dropped from the file first: every
-        row under `reparse`, transiently failed rows, and `drop` (papers with
-        a new source version or a failure to re-judge); their archived HTML
-        is removed too, so they are fetched, not re-read. Returns html_extract's
-        final summary line and the transient failures it reported
-        (arxiv_base, error), which it never records as rows."""
+        output; transiently failed rows (none are written by current
+        html_extract, older files may hold some) are dropped first so they
+        are fetched again; under `reparse` every row is rebuilt from the
+        archive. A paper's text is never deleted here: a new version is
+        handled by `recheck`, which fetches into a temporary path first.
+        Returns html_extract's final summary line and the transient
+        failures it reported, which it never records as rows."""
         if not self.parser_python:
             raise RuntimeError("no parser environment: lxml is not importable and BENCH2AGENT_PARSER_PYTHON is not set")
         if not Path(self.parser_python).exists():
             raise RuntimeError(f"parser environment not found: {self.parser_python} (BENCH2AGENT_PARSER_PYTHON)")
         ft = paths["fulltext"]
         if ft.exists():
-            rows = [] if reparse else [r for r in read_jsonl(ft)
-                                       if not (not r.get("ok") and r.get("transient")) and r["arxiv_base"] not in drop]
+            rows = [] if reparse else [r for r in read_jsonl(ft) if not (not r.get("ok") and r.get("transient"))]
             tmp = ft.with_suffix(".tmp")
             with tmp.open("w", encoding="utf-8") as fh:
                 for r in rows:
                     fh.write(json.dumps(r, ensure_ascii=False) + "\n")
             tmp.replace(ft)
-        for base in drop:
-            cached = paths["archive"] / f"{base}.html.gz"
-            if cached.exists():
-                cached.unlink()
         cmd = [self.parser_python, "-m", "icml.html_extract", "--resolved", str(paths["resolved"]), "--out", str(ft),
                "--archive", str(paths["archive"]), "--reparse"]
         if limit:
@@ -380,15 +446,63 @@ class Pipeline:
         return json.loads(out.strip().splitlines()[-1])
 
 
+def replace_rows(ft: Path, new_rows: dict[str, dict]) -> None:
+    """Swap the given papers' rows in an edition's full-text file, atomically."""
+    tmp = ft.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        if ft.exists():
+            for r in read_jsonl(ft):
+                if r["arxiv_base"] not in new_rows:
+                    fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+        for r in new_rows.values():
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    tmp.replace(ft)
+
+
+def archive_version(archive: Path, base: str, fetched: Path, sha: str) -> None:
+    """Keep the fetched HTML under its content hash and as the current copy
+    (`<base>.<sha12>.html.gz`, `<base>.html.gz`); an earlier current copy
+    is kept under its own hash if it is not there yet."""
+    import gzip
+    import hashlib as _h
+    current = archive / f"{base}.html.gz"
+    if current.exists():
+        old_sha = _h.sha256(gzip.decompress(current.read_bytes())).hexdigest()
+        keep = archive / f"{base}.{old_sha[:12]}.html.gz"
+        if not keep.exists():
+            os.replace(current, keep)
+    versioned = archive / f"{base}.{sha[:12]}.html.gz"
+    if not versioned.exists():
+        os.replace(fetched, versioned)
+    else:
+        fetched.unlink()
+    import shutil
+    shutil.copyfile(versioned, current)
+
+
+def archived_sha256(archive: Path, base: str) -> str | None:
+    import gzip
+    import hashlib as _h
+    current = archive / f"{base}.html.gz"
+    if not current.exists():
+        return None
+    try:
+        return _h.sha256(gzip.decompress(current.read_bytes())).hexdigest()
+    except OSError:
+        return None
+
+
 def stale_sources(work: Work, key: str, funnel: dict, dates: dict[str, str], parser_changed: bool) -> set[str]:
-    """Parsed (or permanently failed) papers whose arXiv record moved to a
-    newer datestamp than the one their parse was made on, plus permanent
-    failures to judge again when the parser changed. Papers whose parse
-    recorded no version are not guessed stale."""
-    recorded = work.source_versions(key)
-    out = set()
+    """Papers to check again: their arXiv record's stamp moved past the
+    stamp their text was confirmed on (`source_version`) or last checked
+    against (`baseline_datestamp`), a re-check failed last time, or they
+    failed permanently and the parser changed. A row with neither stamp is
+    of unknown provenance and is not judged stale by a stamp."""
+    known = work.versions_of(key)
+    out = set(work.recheck_failures(key))
     for base, p_ in funnel["_parsed"].items():
-        at = recorded.get(base)
+        v = known.get(base) or {}
+        at = v.get("source_version") or v.get("baseline_datestamp")
         if at and dates.get(base, "") > at:
             out.add(base)
         elif not p_["ok"] and not p_["transient"] and parser_changed:
@@ -396,11 +510,14 @@ def stale_sources(work: Work, key: str, funnel: dict, dates: dict[str, str], par
     return out
 
 
-def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], current: dict, dates: dict[str, str] | None = None) -> list[dict]:
+def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], current: dict, index: dict | None = None) -> list[dict]:
     """What each edition needs, from the files, the recorded versions and
-    the working database's transient failures."""
+    the working database's transient failures. `index` is `index_state()`:
+    a changed index re-matches every edition, so unmatched, ambiguous,
+    collided and fuzzily matched papers meet the new records."""
     out = []
-    dates = dates if dates is not None else {}
+    index = index or {"stamps": {}, "hash": None}
+    dates = index["stamps"]
     for disp, year in editions:
         paths = edition_paths(disp, year, work.root)
         key = paths["key"]
@@ -413,8 +530,9 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
         elif norm_v and norm_v != current["normalizer"]:
             need.append("normalize (normalizer changed)")
         match_v, match_in = work.stage_version(key, "matched")
-        if need or not paths["resolved"].exists() or match_in != papers_hash or (match_v and match_v != current["matcher"]):
-            need.append("match")
+        match_input = f"{papers_hash}|{index['hash']}"
+        if need or not paths["resolved"].exists() or match_in != match_input or (match_v and match_v != current["matcher"]):
+            need.append("match (index changed)" if match_in and match_in.split("|")[0] == papers_hash and not need else "match")
         parse_v, _ = work.stage_version(key, "parsed")
         reparse = bool(parse_v and parse_v != current["parser"])
         transient = work.transients(key)
@@ -423,15 +541,15 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
             need.append("reparse (parser changed)")
         elif funnel["unparsed"] or funnel["parsed_transient"] or transient or stale:
             need.append(f"parse {len(funnel['unparsed'])} new, retry {len(transient) + funnel['parsed_transient']} transient, "
-                        f"{len(stale)} new source versions")
+                        f"re-check {len(stale)} moved records")
         ment_v, _ = work.stage_version(key, "mentions")
         if (ment_v and ment_v != current["rules"]) or reparse:
             need.append("mentions (rules changed)" if not reparse else "mentions")
         elif funnel["mentions_missing"] or "parse" in " ".join(need):
             need.append(f"mentions ({len(funnel['mentions_missing'])} parsed papers without)")
         out.append({"edition": key, "paths": paths, "funnel": {k: v for k, v in funnel.items() if not k.startswith("_")},
-                    "need": need, "papers_hash": papers_hash, "reparse": reparse, "stale": sorted(stale),
-                    "transient": len(transient)})
+                    "need": need, "papers_hash": papers_hash, "match_input": match_input, "reparse": reparse,
+                    "stale": sorted(stale), "transient": len(transient)})
     return out
 
 
@@ -446,9 +564,8 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
     editions = editions or list(EDITIONS)
     summary = {"editions": {}, "claims": {}, "versions": current, "discovery": {}}
     if dry_run:
-        dates = pipeline.index_dates()
-        for p in plan(work, pipeline, editions, current, dates):
-            summary["editions"][p["edition"]] = {"need": p["need"], "stale_sources": len(p["stale"]), **p["funnel"]}
+        for p in plan(work, pipeline, editions, current, pipeline.index_state()):
+            summary["editions"][p["edition"]] = {"need": p["need"], "recheck": len(p["stale"]), **p["funnel"]}
         return summary
     run_id = work.start_run("update")
     try:
@@ -470,8 +587,9 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                     work.mark_stage(paths["key"], "normalized", current["normalizer"], None, run_id)
                     collected.append(paths["key"])
             summary["discovery"]["recollected"] = collected
-        dates = pipeline.index_dates()
-        plans = plan(work, pipeline, editions, current, dates)
+        index = pipeline.index_state()
+        dates = index["stamps"]
+        plans = plan(work, pipeline, editions, current, index)
         for p in plans:
             key, paths = p["edition"], p["paths"]
             steps = p["need"]
@@ -483,17 +601,59 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 done.append("normalize")
             if any(s.startswith("match") or s.startswith("normalize") for s in steps):
                 pipeline.match(paths)
-                work.mark_stage(key, "matched", current["matcher"], p["papers_hash"], run_id)
+                work.mark_stage(key, "matched", current["matcher"], f"{p['papers_hash']}|{index['hash']}", run_id)
                 done.append("match")
             funnel = edition_funnel(paths)
+            before_parse = set(funnel["_parsed"])
             parse_report, transient = None, []
-            stale = set(p["stale"]) if "match" not in done else stale_sources(work, key, funnel, dates, p["reparse"])
-            if p["reparse"] or funnel["unparsed"] or funnel["parsed_transient"] or p["transient"] or stale:
-                parse_report, transient = pipeline.parse(paths, reparse=p["reparse"], limit=max_parse, drop=stale)
+            if p["reparse"] or funnel["unparsed"] or funnel["parsed_transient"] or p["transient"]:
+                parse_report, transient = pipeline.parse(paths, reparse=p["reparse"], limit=max_parse)
                 work.mark_stage(key, "parsed", current["parser"], None, run_id)
                 done.append("reparse" if p["reparse"] else "parse")
                 funnel = edition_funnel(paths)
-            if any(s.startswith("mentions") for s in steps) or any(d in done for d in ("parse", "reparse", "match")):
+            # papers whose arXiv record moved: fetched again into a temporary
+            # path and compared with the text the current parse read; the
+            # edition's files change only for a text that differs (or a
+            # failed/unknown one), and never when the fetch fails
+            stale = set(p["stale"]) if "match" not in done else stale_sources(work, key, funnel, dates, p["reparse"])
+            stale -= set(funnel["unparsed"])
+            recheck = {"same": 0, "changed": 0, "failed": 0, "unknown": 0}
+            confirmed: dict[str, tuple[str | None, str | None]] = {}
+            if stale and not p["reparse"]:
+                rows, r_transient = pipeline.recheck(paths, sorted(stale))
+                got = {r["arxiv_base"]: r for r in rows}
+                replace = {}
+                known = work.versions_of(key)
+                for base in sorted(stale):
+                    stamp = dates.get(base, "")
+                    r = got.get(base)
+                    if r is None or (not r.get("ok") and r.get("transient")):
+                        work.set_recheck(key, base, stamp, "failed")
+                        recheck["failed"] += 1
+                        continue
+                    current_ok = funnel["_parsed"].get(base, {}).get("ok")
+                    previous = (known.get(base) or {}).get("content_sha256") or archived_sha256(paths["archive"], base)
+                    if r.get("ok") and current_ok and previous and r.get("html_sha256") == previous:
+                        work.set_versions(key, {base: (stamp, previous)})           # text unchanged: the stamp is confirmed for it
+                        recheck["same"] += 1
+                        continue
+                    replace[base] = r
+                    confirmed[base] = (stamp, r.get("html_sha256"))
+                    recheck["changed" if previous else "unknown"] += 1
+                    fetched = work_dir(work.root) / "recheck" / "archive" / f"{base}.html.gz"
+                    if fetched.exists() and r.get("html_sha256"):
+                        archive_version(paths["archive"], base, fetched, r["html_sha256"])
+                if replace:
+                    replace_rows(paths["fulltext"], replace)
+                    done.append(f"recheck {len(replace)} replaced")
+                    funnel = edition_funnel(paths)
+                for base, err in r_transient:
+                    work.set_recheck(key, base, dates.get(base, ""), "failed")
+            new_parses = set(funnel["_parsed"]) - before_parse if not p["reparse"] else set()
+            for base in new_parses:
+                row = funnel["_rows"].get(base) or {}
+                confirmed[base] = (dates.get(base), row.get("html_sha256"))
+            if any(s.startswith("mentions") for s in steps) or any(d in ("parse", "reparse", "match") or d.startswith("recheck") for d in done):
                 if paths["fulltext"].exists():
                     pipeline.mentions(paths)
                     work.mark_stage(key, "mentions", current["rules"], None, run_id)
@@ -509,11 +669,11 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             for base in funnel["unparsed"]:
                 rows.append((funnel["_matched"][base], base, "matched", "pending", None, 0))
             work.record_papers(key, rows)
-            # the source version each parse (or permanent failure) was made on
-            work.set_source_versions(key, {b: dates[b] for b, p_ in funnel["_parsed"].items() if b in dates})
+            # only a text fetched in this run has a confirmed version; everything else keeps what it had
+            work.set_versions(key, {b: v for b, v in confirmed.items() if b in funnel["_matched"]})
             work.record_transients(key, [(funnel["_matched"].get(b, "?"), b, err) for b, err in transient if b in funnel["_matched"]])
             summary["editions"][key] = {"did": done, **({"parse_report": parse_report} if parse_report else {}),
-                                        "transient_now": len(transient), "stale_sources": len(stale),
+                                        "transient_now": len(transient), "recheck": recheck, "confirmed_versions": len(confirmed),
                                         **{k: v for k, v in funnel.items() if not k.startswith("_")}}
         # claims: when any mentions changed, or the review file changed, or never compared
         review_hash = file_hash(work.root / "config" / "introduced_review.json")
@@ -572,7 +732,8 @@ def adopt(work: Work, editions: list[tuple[str, int]] | None = None) -> dict:
     what it adopted; it changes no file. Later runs trust these marks the
     way they trust their own."""
     current = versions(work.root)
-    dates = index_dates(work.root)
+    index = index_state(work.root)
+    dates = index["hash"] and index["stamps"] or {}
     run_id = work.start_run("adopt")
     adopted = {}
     for disp, year in editions or list(EDITIONS):
@@ -583,7 +744,7 @@ def adopt(work: Work, editions: list[tuple[str, int]] | None = None) -> dict:
             work.mark_stage(key, "normalized", current["normalizer"], None, run_id)
             stages.append("normalized")
             if paths["resolved"].exists():
-                work.mark_stage(key, "matched", current["matcher"], file_hash(paths["papers"]), run_id)
+                work.mark_stage(key, "matched", current["matcher"], f"{file_hash(paths['papers'])}|{index['hash']}", run_id)
                 stages.append("matched")
                 if paths["fulltext"].exists():
                     work.mark_stage(key, "parsed", current["parser"], None, run_id)
@@ -596,7 +757,8 @@ def adopt(work: Work, editions: list[tuple[str, int]] | None = None) -> dict:
                 for b, p_ in funnel["_parsed"].items() if b in funnel["_matched"]]
         rows += [(funnel["_matched"][b], b, "matched", "pending", None, 0) for b in funnel["unparsed"]]
         work.record_papers(key, rows)
-        work.set_source_versions(key, {b: dates[b] for b in funnel["_parsed"] if b in dates})
+        # adopted parses have no confirmed version: only the stamp they are checked against from now on
+        work.set_baselines(key, {b: dates[b] for b in funnel["_parsed"] if b in dates})
         adopted[key] = stages
     work.finish_run(run_id, "adopted", {"editions": adopted})
     work.set("claims_seen", None)      # claims are compared on the first real run
@@ -607,12 +769,12 @@ def adopt(work: Work, editions: list[tuple[str, int]] | None = None) -> dict:
 def status(work: Work, editions: list[tuple[str, int]] | None = None, pipeline: Pipeline | None = None) -> dict:
     current = versions(work.root)
     pipeline = pipeline or Pipeline(work)
-    plans = plan(work, pipeline, editions or list(EDITIONS), current, pipeline.index_dates())
+    plans = plan(work, pipeline, editions or list(EDITIONS), current, pipeline.index_state())
     queue = work.con.execute("SELECT reason, COUNT(*) FROM claim_queue GROUP BY reason").fetchall()
     runs = [dict(r) for r in work.con.execute("SELECT run_id, started_at, finished_at, outcome, error FROM runs ORDER BY run_id DESC LIMIT 5")]
     return {"versions": current, "last_success": work.last_success(), "harvest_until": work.get("harvest_until"),
             "pending_retries": work.pending_retries(),
-            "editions": {p["edition"]: {"need": p["need"], "stale_sources": len(p["stale"]), "transient_retries": p["transient"], **p["funnel"]}
+            "editions": {p["edition"]: {"need": p["need"], "recheck": len(p["stale"]), "transient_retries": p["transient"], **p["funnel"]}
                          for p in plans},
             "claim_queue": {r[0]: r[1] for r in queue}, "recent_runs": runs}
 
