@@ -56,6 +56,17 @@ FIGURES["16b704077d97298a"] = {**FIGURES["e41da62f2fb3616f"],
 # 2026-10-13, id-first paper identity and candidate-only benchmark identity:
 # 87,043 observations; the headline figures hold; RelBench's uses split into
 # citation-attributed (relbench-2) and unattributed ones.
+# 2026-10-14, first incremental run: 700 newly parsed papers (matched after the
+# earlier parses, or matched by the backfilled index) joined the observations.
+FIGURES["a4a18c3dbaf3ca0b"] = {
+    "robotics_latest": {"parsed": 512, "LIBERO": 81, "SIMPLER": 41, "Meta-World": 29},
+    "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
+                     ("iclr-2024", 179, 1894), ("iclr-2025", 196, 3057), ("iclr-2026", 167, 4248)],
+    "latest_all": {"parsed": 27443, "GSM8K": 1120, "CIFAR-10": 843, "MMLU": 800},
+    "computer_vision_latest": {"parsed": 2826, "COCO": 163, "POPE": 75, "Video-MME": 69},
+    "libero_adoption": {"others": 194, "self": 3, "undetermined": 0, "before_claim": 0},
+    "relbench_2_adoption": {"others": 3, "self": 1, "undetermined": 0, "unattributed": 8},
+}
 FIGURES["7607ce005c52fba5"] = {**FIGURES["16b704077d97298a"],
                                # ICLR 2025: two retitled Oral/Poster pairs were two observations each; one used CIFAR-10
                                "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
