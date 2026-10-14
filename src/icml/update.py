@@ -620,7 +620,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             stale -= set(funnel["unparsed"])
             recheck = {"same": 0, "changed": 0, "failed": 0, "unknown": 0}
             confirmed: dict[str, tuple[str | None, str | None]] = {}
-            if stale and not p["reparse"]:
+            if stale:                       # after a reparse too: the archive holds the old text, the record moved
                 rows, r_transient = pipeline.recheck(paths, sorted(stale))
                 got = {r["arxiv_base"]: r for r in rows}
                 replace = {}
