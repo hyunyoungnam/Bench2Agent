@@ -545,7 +545,8 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
         ment_v, _ = work.stage_version(key, "mentions")
         if (ment_v and ment_v != current["rules"]) or reparse:
             need.append("mentions (rules changed)" if not reparse else "mentions")
-        elif funnel["mentions_missing"] or "parse" in " ".join(need):
+        elif funnel["mentions_missing"] or funnel["unparsed"] or funnel["parsed_transient"] or transient:
+            # new text will be parsed; a re-check alone re-runs mentions only when the text changed
             need.append(f"mentions ({len(funnel['mentions_missing'])} parsed papers without)")
         out.append({"edition": key, "paths": paths, "funnel": {k: v for k, v in funnel.items() if not k.startswith("_")},
                     "need": need, "papers_hash": papers_hash, "match_input": match_input, "reparse": reparse,
@@ -653,7 +654,8 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             for base in new_parses:
                 row = funnel["_rows"].get(base) or {}
                 confirmed[base] = (dates.get(base), row.get("html_sha256"))
-            if any(s.startswith("mentions") for s in steps) or any(d in ("parse", "reparse", "match") or d.startswith("recheck") for d in done):
+            # mentions read the parsed text only: a re-match alone (no new text) does not change them
+            if any(s.startswith("mentions") for s in steps) or any(d in ("parse", "reparse") or d.startswith("recheck") for d in done):
                 if paths["fulltext"].exists():
                     pipeline.mentions(paths)
                     work.mark_stage(key, "mentions", current["rules"], None, run_id)

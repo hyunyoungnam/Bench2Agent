@@ -260,7 +260,7 @@ class UpdateTests(unittest.TestCase):
         with unittest.mock.patch.object(update, "open_editions", return_value=set()):
             out = update.run(self.work, self.pipe, editions=self.EDS)
         # the moved record changed the index (re-match) and was re-checked; nothing was parsed anew
-        self.assertEqual([c[:2] for c in self.pipe.calls if c[1:2] == ("iclr-2025",)], [("match", "iclr-2025"), ("recheck", "iclr-2025"), ("mentions", "iclr-2025")])
+        self.assertEqual([c[:2] for c in self.pipe.calls if c[1:2] == ("iclr-2025",)], [("match", "iclr-2025"), ("recheck", "iclr-2025")])   # same text: no mentions
         self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unknown": 0})
         self.assertEqual(ft.read_text(), before)
         self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], "2026-10-05")
