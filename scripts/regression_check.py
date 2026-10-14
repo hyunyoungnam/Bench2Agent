@@ -70,6 +70,13 @@ FIGURES["a4a18c3dbaf3ca0b"] = {
 # 2026-10-14, second incremental run: the 375 AAAI 2020–23 and CoRL 2020–22
 # papers arXiv had rate-limited; no latest edition changed.
 FIGURES["e203ef9d830c7254"] = dict(FIGURES["a4a18c3dbaf3ca0b"])
+# 2026-10-14, first discovery run: 9,852 index records harvested for the window
+# 2026-09-30..10-14, 16 open editions re-collected, 16 new papers parsed
+# (ICML 2026 12, ECCV 2026 4), no source version moved.
+FIGURES["ddae8df2d9caf403"] = {**FIGURES["a4a18c3dbaf3ca0b"],
+                               "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
+                               "latest_all": {"parsed": 27459, "GSM8K": 1121, "CIFAR-10": 843, "MMLU": 800},
+                               "libero_adoption": {"others": 195, "self": 3, "undetermined": 0, "before_claim": 0}}
 FIGURES["7607ce005c52fba5"] = {**FIGURES["16b704077d97298a"],
                                # ICLR 2025: two retitled Oral/Poster pairs were two observations each; one used CIFAR-10
                                "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
