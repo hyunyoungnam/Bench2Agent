@@ -34,6 +34,10 @@ class FakePipeline(update.Pipeline):
 
     def parse(self, paths, *, reparse, limit=0):
         self.calls.append(("reparse" if reparse else "parse", paths["key"]))
+        self._parse(paths, reparse=reparse)
+        return "done — fake"
+
+    def _parse(self, paths, *, reparse):
         ft = paths["fulltext"]
         ft.parent.mkdir(parents=True, exist_ok=True)
         done = set()

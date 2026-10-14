@@ -90,11 +90,25 @@ def versions(root: Path = ROOT) -> dict:
     return {"normalizer": file_hash(src / "normalize.py"),
             "matcher": file_hash(src / "arxiv_match.py"),
             "parser": file_hash(src / "html_extract.py"),
-            # the mention vocabulary comes from the registry AND the reviewed catalogue
-            # (a split entity re-keys its mentions as a homonym group), so both are rules
+            # the mention vocabulary comes from the registry AND the reviewed catalogue's
+            # entities (ids, names, aliases, homonym grouping) — not from the catalogue
+            # file, which every run regenerates downstream of the mentions themselves
             "rules": hashlib.sha256("|".join(filter(None, [
                 file_hash(src / "bench_mentions.py"), file_hash(src / "taxonomy.py"),
-                file_hash(root / "config" / "benchmarks.json"), file_hash(root / "config" / "benchmarks_introduced.json")])).encode()).hexdigest()[:16]}
+                file_hash(root / "config" / "benchmarks.json"), vocabulary_signature(root)])).encode()).hexdigest()[:16]}
+
+
+def vocabulary_signature(root: Path = ROOT) -> str | None:
+    """What of the reviewed catalogue reaches the mention vocabulary: each
+    entity's id, name, aliases and whether it shares its name. A new claim
+    that is not yet confirmed changes nothing here; a confirmed new entity
+    or a split does, and then mentions are stale by design."""
+    path = root / "config" / "benchmarks_introduced.json"
+    if not path.exists():
+        return None
+    entries = json.loads(path.read_text(encoding="utf-8")).get("benchmarks", [])
+    sig = sorted((e["id"], e.get("name"), tuple(e.get("aliases") or []), bool(e.get("homonym_of")), e.get("registered")) for e in entries)
+    return hashlib.sha256(json.dumps(sig).encode()).hexdigest()[:16]
 
 
 def edition_paths(disp: str, year: int, root: Path = ROOT) -> dict:
@@ -242,10 +256,13 @@ class Pipeline:
     def match(self, paths: dict) -> None:
         self._run([self.python, "-m", "icml.arxiv_match", "--venue", paths["venue"], "--year", str(paths["year"])])
 
-    def parse(self, paths: dict, *, reparse: bool, limit: int = 0) -> None:
+    def parse(self, paths: dict, *, reparse: bool, limit: int = 0) -> str:
         """html_extract appends rows for every resolved base absent from the
         output; transient failures are dropped from the file first so they
-        are fetched again, permanent ones stay."""
+        are fetched again, permanent ones stay. html_extract itself records
+        no row for a rate-limited or timed-out fetch ("transient (not
+        recorded)"), so such papers simply stay unparsed until the next run.
+        Returns html_extract's own summary line."""
         if not self.parser_python:
             raise RuntimeError("no parser environment: lxml is not importable and BENCH2AGENT_PARSER_PYTHON is not set")
         if not Path(self.parser_python).exists():
@@ -264,7 +281,8 @@ class Pipeline:
                "--archive", str(paths["archive"]), "--reparse"]
         if limit:
             cmd += ["--limit", str(limit)]
-        self._run(cmd)
+        out = self._run(cmd)
+        return next((l.strip() for l in out.splitlines() if l.startswith("done") or "todo=" in l), out.strip()[-200:])
 
     def mentions(self, paths: dict) -> None:
         from . import bench_mentions as bm
@@ -346,8 +364,9 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 work.mark_stage(key, "matched", current["matcher"], p["papers_hash"], run_id)
                 done.append("match")
             funnel = edition_funnel(paths)
+            parse_report = None
             if p["reparse"] or funnel["unparsed"] or funnel["parsed_transient"]:
-                pipeline.parse(paths, reparse=p["reparse"], limit=max_parse)
+                parse_report = pipeline.parse(paths, reparse=p["reparse"], limit=max_parse)
                 work.mark_stage(key, "parsed", current["parser"], None, run_id)
                 done.append("reparse" if p["reparse"] else "parse")
                 funnel = edition_funnel(paths)
@@ -367,7 +386,8 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             for base in funnel["unparsed"]:
                 rows.append((funnel["_matched"][base], base, "matched", "pending", None, 0))
             work.record_papers(key, rows)
-            summary["editions"][key] = {"did": done, **{k: v for k, v in funnel.items() if not k.startswith("_")}}
+            summary["editions"][key] = {"did": done, **({"parse_report": parse_report} if parse_report else {}),
+                                        **{k: v for k, v in funnel.items() if not k.startswith("_")}}
         if touched or not work.get("claims_seen"):
             claims = pipeline.claims()
             reviewed = pipeline.reviewed()
