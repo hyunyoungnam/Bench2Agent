@@ -184,11 +184,17 @@ class Store:
     def fulltext(self, gid: int) -> dict | None:
         key, eid = self.where(gid)
         ix = self._ft_index(key)
-        if eid not in ix:
+        # the full-text index is keyed by the paper's current representative
+        # row (through the arXiv mapping); a union built on an earlier row of
+        # the same paper reaches it through the merged record's rows
+        r = self.rec(gid)
+        rows = [eid] + ([r["event_id"], *(r.get("duplicate_event_ids") or [])] if r else [])
+        hit = next((e for e in rows if e in ix), None)
+        if hit is None:
             return None
         spec = _FT[key]
         with open(INTERIM / spec[0], "rb") as fh:
-            fh.seek(ix[eid])
+            fh.seek(ix[hit])
             row = json.loads(fh.readline())
         return row if row.get("ok", True) and row.get("sections") else None
 

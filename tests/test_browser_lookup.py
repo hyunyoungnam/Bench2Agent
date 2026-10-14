@@ -30,7 +30,16 @@ class BrowserLookupTests(unittest.TestCase):
         (root / "reports/data").mkdir(parents=True)
         (root / "reports/data/spans_neurips-2025.json").write_text("{}")
         (processed / "citations.json").write_text(json.dumps({"edges": [], "papers_with_refs": 0}))
+        # parsed full text keyed by arXiv id, bridged to the paper's CURRENT representative row (118806)
+        interim, arxraw = root / "data/interim", root / "data/raw/arxiv"
+        interim.mkdir(); arxraw.mkdir(parents=True)
+        (arxraw / "resolved_neurips-2025.jsonl").write_text(json.dumps({"event_id": 118806, "arxiv_base": "2504.13181"}) + "\n")
+        (interim / "fulltext_neurips_2025.jsonl").write_text(json.dumps({
+            "arxiv_base": "2504.13181", "ok": True, "sections": [
+                {"bucket": "intro", "title": "Introduction", "text": "We present Perception Encoder."},
+                {"bucket": "experiments", "title": "Experiments", "text": "We evaluate our embeddings on ImageNet-1k and COCO."}]}) + "\n")
         self.patches = [patch.object(mcp, "PROCESSED", processed), patch.object(mcp, "RDATA", root / "reports/data"),
+                        patch.object(mcp, "INTERIM", interim), patch.object(mcp, "ARXRAW", arxraw),
                         patch.object(mcp, "S", mcp.Store()), patch.object(mcp.Store, "meili", lambda self, path, body: None)]
         for p in self.patches:
             p.start()
@@ -48,6 +57,16 @@ class BrowserLookupTests(unittest.TestCase):
         self.assertEqual([r["gid"] for r in mcp.t_search({"query": "nothing"})["results"]], [1])
         detail = mcp.t_paper({"gid": 0})
         self.assertEqual(detail.get("title") or detail.get("paper", {}).get("title"), "Perception Encoder: the best visual embeddings")
+
+    def test_full_text_and_quote_verification_reach_the_paper_through_its_old_id(self):
+        sections = mcp.t_paper_text({"gid": 0})
+        self.assertEqual([x["bucket"] for x in sections["sections"]], ["intro", "experiments"])
+        text = mcp.t_paper_text({"gid": 0, "section": "experiments"})
+        self.assertIn("ImageNet-1k and COCO", text["text"])
+        verified = mcp.t_verify_quote({"gid": 0, "quote": "We evaluate our embeddings on ImageNet-1k and COCO."})
+        self.assertTrue(verified["verified"], verified)
+        self.assertFalse(mcp.t_verify_quote({"gid": 0, "quote": "This sentence is not in the paper at all."})["verified"])
+        self.assertIn("error", mcp.t_paper_text({"gid": 1}))               # a paper with no parsed text says so
 
 
 if __name__ == "__main__":
