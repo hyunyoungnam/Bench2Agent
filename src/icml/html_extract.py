@@ -299,10 +299,12 @@ def main() -> int:
     with out.open("a", encoding="utf-8") as fh, \
          cf.ThreadPoolExecutor(max_workers=args.workers) as pool:
         for row in pool.map(one, todo):
-            # A rate-limited batch must never be recorded as a result
+            # A rate-limited batch must never be recorded as a result; it is
+            # reported, so the caller can schedule the retry
             if row.get("transient"):
                 with lock:
                     tally["err"] += 1
+                print(f"transient {row['arxiv_base']} {row.get('error', '')}", flush=True)
                 continue
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             with lock:

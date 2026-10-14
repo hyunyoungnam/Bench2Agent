@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from icml import update
@@ -21,6 +22,16 @@ class FakePipeline(update.Pipeline):
         self.s = scenario
         self.calls = []
 
+    def harvest(self, since, until):
+        self.calls.append(("harvest", since, until))
+        return "done — fake harvest"
+
+    def collect(self, paths):
+        self.calls.append(("collect", paths["key"]))
+
+    def index_dates(self):
+        return dict(self.s.get("dates", {}))
+
     def normalize(self, paths):
         self.calls.append(("normalize", paths["key"]))
         paths["papers"].parent.mkdir(parents=True, exist_ok=True)
@@ -32,12 +43,8 @@ class FakePipeline(update.Pipeline):
         paths["resolved"].write_text("\n".join(json.dumps({"event_id": e, "arxiv_base": f"25{e:02d}.00001"})
                                                 for e in self.s["papers"][paths["key"]]) + "\n")
 
-    def parse(self, paths, *, reparse, limit=0):
+    def parse(self, paths, *, reparse, limit=0, drop=frozenset()):
         self.calls.append(("reparse" if reparse else "parse", paths["key"]))
-        self._parse(paths, reparse=reparse)
-        return "done — fake"
-
-    def _parse(self, paths, *, reparse):
         ft = paths["fulltext"]
         ft.parent.mkdir(parents=True, exist_ok=True)
         done = set()
@@ -45,21 +52,24 @@ class FakePipeline(update.Pipeline):
         if ft.exists() and not reparse:
             for line in ft.read_text().splitlines():
                 r = json.loads(line)
-                if r.get("ok") or not r.get("transient"):
+                if r["arxiv_base"] not in drop and (r.get("ok") or not r.get("transient")):
                     rows.append(r)
                     done.add(r["arxiv_base"])
+        transient = []
         for line in paths["resolved"].read_text().splitlines():
             base = json.loads(line)["arxiv_base"]
             if base in done:
                 continue
             fail = self.s.get("fail", {}).get(base)
             if fail == "transient" and self.s.get("network_down"):
-                rows.append({"arxiv_base": base, "ok": False, "error": "URLError", "transient": True})
+                transient.append((base, "HTTP 429"))                      # like html_extract: reported, not recorded
             elif fail == "permanent":
                 rows.append({"arxiv_base": base, "ok": False, "error": "no-html"})
             else:
-                rows.append({"arxiv_base": base, "ok": True, "sections": [{"bucket": "experiments", "text": f"We evaluate on Toy ({base})."}]})
+                version = self.s.get("dates", {}).get(base, "v1")
+                rows.append({"arxiv_base": base, "ok": True, "sections": [{"bucket": "experiments", "text": f"We evaluate on Toy ({base}, {version})."}]})
         ft.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        return f"done — {len(rows)} parsed, 0 unavailable/thin, {len(transient)} transient (not recorded)", transient
 
     def mentions(self, paths):
         self.calls.append(("mentions", paths["key"]))
@@ -93,6 +103,7 @@ class UpdateTests(unittest.TestCase):
             (self.root / "src/icml" / name).write_text(f"# {name} v1\n")
         (self.root / "config/benchmarks.json").write_text('{"benchmarks": []}')
         self.work = update.Work(self.root)
+        self.addCleanup(self.work.close)
         self.scenario = {"papers": {"iclr-2025": [1, 2, 3], "iclr-2026": [4, 5]},
                          "claims": {"2501.00001#toy": ("iclr-2025", "sha-a"), "2504.00001#fresh": ("iclr-2026", "sha-b")},
                          "reviewed": {"2501.00001#toy": {"label": "E", "status": "confirmed", "evidence_sha": "sha-a"}}}
@@ -103,13 +114,13 @@ class UpdateTests(unittest.TestCase):
         p.write_text(p.read_text() + "# changed\n")
 
     def test_first_run_takes_every_edition_through_every_stage_and_queues_new_claims(self):
-        dry = update.run(self.work, self.pipe, editions=self.EDS, dry_run=True)
+        dry = update.run(self.work, self.pipe, editions=self.EDS, dry_run=True, discover=False)
         self.assertEqual(dry["editions"]["iclr-2025"]["need"], ["normalize", "match"])
         self.assertEqual(self.pipe.calls, [])                                  # a dry run runs nothing
-        out = update.run(self.work, self.pipe, editions=self.EDS)
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual(out["editions"]["iclr-2025"]["did"], ["normalize", "match", "parse", "mentions"])
         self.assertEqual((out["editions"]["iclr-2025"]["parsed_ok"], out["editions"]["iclr-2025"]["mentions"]), (3, 3))
-        self.assertEqual(out["claims"], {"total": 2, "queued_new": 1, "queued_changed": 0})   # the reviewed one is not queued
+        self.assertEqual({k: out["claims"][k] for k in ("total", "queued_new", "queued_changed")}, {"total": 2, "queued_new": 1, "queued_changed": 0})   # the reviewed one is not queued
         self.assertEqual(out["build"]["revision_id"], "rev-" + str(len(self.pipe.calls)))
         rows = self.work.con.execute("SELECT edition, event_id, status FROM paper_stages ORDER BY edition, event_id").fetchall()
         self.assertEqual([tuple(r) for r in rows], [("iclr-2025", "1", "ok"), ("iclr-2025", "2", "ok"), ("iclr-2025", "3", "ok"),
@@ -118,55 +129,64 @@ class UpdateTests(unittest.TestCase):
         self.assertIsNotNone(self.work.last_success())
         # nothing changed: the next run re-runs no stage, builds again
         before = list(self.pipe.calls)
-        again = update.run(self.work, self.pipe, editions=self.EDS)
+        again = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls[len(before):] if c[0] != "build"], [])
         self.assertEqual(again["claims"], {})                                 # nothing touched: claims not recomputed
 
     def test_transient_failures_are_retried_and_permanent_ones_are_kept(self):
         self.scenario["fail"] = {"2502.00001": "transient", "2503.00001": "permanent"}
         self.scenario["network_down"] = True
-        out = update.run(self.work, self.pipe, editions=self.EDS)
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         f = out["editions"]["iclr-2025"]
-        self.assertEqual((f["parsed_ok"], f["parsed_failed"], f["parsed_transient"]), (1, 1, 1))
-        status = {r[0]: (r[1], r[2]) for r in self.work.con.execute("SELECT event_id, status, transient FROM paper_stages WHERE edition = 'iclr-2025'")}
-        self.assertEqual(status, {"1": ("ok", 0), "2": ("failed", 1), "3": ("failed", 0)})
+        self.assertEqual((f["parsed_ok"], f["parsed_failed"], f["transient_now"]), (1, 1, 1))
+        self.assertEqual(f["parse_report"], "done — 2 parsed, 0 unavailable/thin, 1 transient (not recorded)")   # the final line
+        status = {r[0]: (r[1], r[2], r[3]) for r in self.work.con.execute("SELECT event_id, status, transient, error FROM paper_stages WHERE edition = 'iclr-2025'")}
+        self.assertEqual(status, {"1": ("ok", 0, None), "2": ("transient", 1, "HTTP 429"), "3": ("failed", 0, "no-html")})
         self.assertIn("retry 1 transient", update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"][0])
+        self.assertEqual(out["pending_retries"], 1)
+        # a daily timer retries the leftover work after a day, not after the weekly period
+        self.assertFalse(update.due(self.work, 7, retry_days=1))
+        self.work.set("last_success", (__import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+                                       - __import__("datetime").timedelta(days=1.1)).isoformat())
+        self.assertTrue(update.due(self.work, 7, retry_days=1))
         self.scenario["network_down"] = False                                 # the network is back: the transient one is fetched again
-        out = update.run(self.work, self.pipe, editions=self.EDS)
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         f = out["editions"]["iclr-2025"]
-        self.assertEqual((f["parsed_ok"], f["parsed_failed"], f["parsed_transient"]), (2, 1, 0))
+        self.assertEqual((f["parsed_ok"], f["parsed_failed"], f["transient_now"]), (2, 1, 0))
         self.assertEqual(self.work.con.execute("SELECT attempts FROM paper_stages WHERE event_id = '3'").fetchone()[0], 2)   # recorded, not refetched
         self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
+        self.assertEqual(out["pending_retries"], 0)
+        self.assertFalse(update.due(self.work, 7, retry_days=1))
 
     def test_changed_code_decides_the_rerun_scope(self):
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.pipe.calls.clear()
         self.bump("bench_mentions.py")                                        # the rules changed: mentions over every parsed paper
         plan = update.status(self.work, self.EDS)["editions"]
         self.assertEqual(plan["iclr-2025"]["need"], ["mentions (rules changed)"])
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] in ("parse", "reparse", "mentions", "match")],
                          [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
         self.pipe.calls.clear()
         self.bump("html_extract.py")                                          # the parser changed: re-parse the archive, then everything after
         self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2026"]["need"], ["reparse (parser changed)", "mentions"])
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2026",)], [("reparse", "iclr-2026"), ("mentions", "iclr-2026")])
         self.pipe.calls.clear()
         self.scenario["papers"]["iclr-2026"] = [4, 5, 6]                      # a new paper in a feed: normalize changed the file
         self.pipe.normalize(update.edition_paths("ICLR", 2026, self.root))
         self.pipe.calls.clear()
         self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2026"]["need"], ["match"])
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2026",)],
                          [("match", "iclr-2026"), ("parse", "iclr-2026"), ("mentions", "iclr-2026")])
 
     def test_changed_evidence_queues_the_reviewed_claim(self):
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.scenario["claims"]["2501.00001#toy"] = ("iclr-2025", "sha-a2")   # the sentence the reviewer read is gone
         self.bump("bench_mentions.py")
-        out = update.run(self.work, self.pipe, editions=self.EDS)
-        self.assertEqual(out["claims"], {"total": 2, "queued_new": 0, "queued_changed": 1})
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual({k: out["claims"][k] for k in ("total", "queued_new", "queued_changed")}, {"total": 2, "queued_new": 0, "queued_changed": 1})
         self.assertEqual({r[0]: r[1] for r in self.work.con.execute("SELECT claim_id, reason FROM claim_queue")},
                          {"2504.00001#fresh": "new", "2501.00001#toy": "changed"})
 
@@ -180,21 +200,84 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
         self.assertEqual(self.work.con.execute("SELECT COUNT(*) FROM paper_stages WHERE status = 'ok'").fetchone()[0], 5)
         self.assertIsNone(self.work.last_success())                           # adopting is not a successful update
-        out = update.run(self.work, self.pipe, editions=self.EDS)
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] not in ("build", "claims")], [])   # nothing redone
         self.assertEqual(out["claims"]["total"], 2)                           # claims compared on the first real run
+
+    def test_discovery_refreshes_sources_and_a_new_version_is_fetched_again(self):
+        self.scenario["dates"] = {"2501.00001": "2025-01-01", "2502.00001": "2025-01-01", "2503.00001": "2025-01-01",
+                                  "2504.00001": "2025-04-01", "2505.00001": "2025-04-01"}
+        self.work.set("harvest_until", "2026-10-01")
+        with unittest.mock.patch.object(update, "open_editions", return_value={"iclr-2026"}):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        harvest = next(c for c in self.pipe.calls if c[0] == "harvest")
+        self.assertEqual(harvest[1], "2026-09-30")                           # a day of overlap before the last harvest
+        self.assertEqual(out["discovery"]["recollected"], ["iclr-2026"])      # only the open edition's list is re-fetched
+        self.assertEqual(self.work.source_versions("iclr-2025")["2501.00001"], "2025-01-01")
+        # the arXiv record of one paper moved to a newer datestamp: a new version
+        self.scenario["dates"]["2501.00001"] = "2026-10-05"
+        self.pipe.calls.clear()
+        st = update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]
+        self.assertEqual(st["stale_sources"], 1)
+        self.assertIn("1 new source versions", st["need"][0])
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual([c for c in self.pipe.calls if c[1:] == ("iclr-2025",)], [("parse", "iclr-2025"), ("mentions", "iclr-2025")])
+        text = next(json.loads(l) for l in update.edition_paths("ICLR", 2025, self.root)["fulltext"].read_text().splitlines()
+                    if json.loads(l)["arxiv_base"] == "2501.00001")
+        self.assertIn("2026-10-05", text["sections"][0]["text"])              # the new version was fetched and parsed
+        self.assertEqual(self.work.source_versions("iclr-2025")["2501.00001"], "2026-10-05")
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+        # a permanent failure is judged again when the parser changes
+        self.scenario["fail"] = {"2502.00001": "permanent"}
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(self.work.con.execute("SELECT status FROM paper_stages WHERE event_id = '2'").fetchone()[0], "ok")
+        self.scenario["fail"] = {}
+        self.bump("html_extract.py")
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(self.work.con.execute("SELECT status FROM paper_stages WHERE event_id = '2'").fetchone()[0], "ok")
+
+    def test_a_review_change_alone_regenerates_the_catalogue_and_clears_the_queue(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual([r[0] for r in self.work.con.execute("SELECT claim_id FROM claim_queue")], ["2504.00001#fresh"])
+        self.pipe.calls.clear()
+        # the reviewer decides the queued claim; nothing else changed
+        self.scenario["reviewed"]["2504.00001#fresh"] = {"label": "E", "status": "confirmed", "evidence_sha": "sha-b"}
+        (self.root / "config/introduced_review.json").write_text(json.dumps(self.scenario["reviewed"]))
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertIn(("claims",), self.pipe.calls)                           # the catalogue is regenerated
+        self.assertEqual(out["claims"]["dequeued_reviewed"], 1)
+        self.assertEqual(self.work.con.execute("SELECT COUNT(*) FROM claim_queue").fetchone()[0], 0)
+        # the sentence changes again after the review: back to the queue as "changed"
+        self.scenario["claims"]["2504.00001#fresh"] = ("iclr-2026", "sha-b2")
+        self.bump("bench_mentions.py")
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual([tuple(r) for r in self.work.con.execute("SELECT claim_id, reason FROM claim_queue")], [("2504.00001#fresh", "changed")])
+        # a confirmed new entity changes the vocabulary: mentions are re-extracted in the same run
+        self.pipe.calls.clear()
+        original_claims = self.pipe.claims
+
+        def claims_adding_entity():
+            (self.root / "config/benchmarks_introduced.json").write_text(json.dumps({"benchmarks": [{"id": "fresh", "name": "Fresh"}, {"id": "newbie", "name": "Newbie"}]}))
+            return original_claims()
+        self.pipe.claims = claims_adding_entity
+        (self.root / "config/introduced_review.json").write_text(json.dumps({**self.scenario["reviewed"], "x": {}}))
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(out["claims"].get("mentions_rerun"), "vocabulary changed")
+        self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
+        self.assertEqual(update.status(self.work, self.EDS)["editions"]["iclr-2025"]["need"], [])
 
     def test_a_failed_run_is_recorded_and_the_next_one_proceeds(self):
         def broken(paths, **kw):
             raise RuntimeError("arXiv unreachable")
         self.pipe.parse = broken
         with self.assertRaisesRegex(RuntimeError, "unreachable"):
-            update.run(self.work, self.pipe, editions=self.EDS)
+            update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         run = self.work.con.execute("SELECT outcome, error FROM runs").fetchone()
         self.assertEqual((run[0], "unreachable" in run[1]), ("failed", True))
         self.assertIsNone(self.work.last_success())
         self.pipe.parse = FakePipeline.parse.__get__(self.pipe)
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([r[0] for r in self.work.con.execute("SELECT outcome FROM runs ORDER BY run_id")], ["failed", "ok"])
 
     def test_one_run_at_a_time_and_due_check(self):
@@ -211,7 +294,7 @@ class UpdateTests(unittest.TestCase):
         with update.Locked(self.root):                                      # released: the lock can be taken again
             pass
         self.assertTrue(update.due(self.work, 7))                             # never ran: due
-        update.run(self.work, self.pipe, editions=self.EDS)
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertFalse(update.due(self.work, 7))
         self.work.set("last_success", "2026-01-01T00:00:00+00:00")           # a missed week: due once, at the next start
         self.assertTrue(update.due(self.work, 7))

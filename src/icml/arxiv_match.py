@@ -70,12 +70,24 @@ def main() -> int:
     exact: dict[str, dict] = {}
     postings: dict[str, list[int]] = defaultdict(list)
     index: list[dict] = []
+    # the index may list a paper several times (a new version has a newer
+    # datestamp); the newest row per base is the one matched
+    newest: dict[str, int] = {}
     for row in read_jsonl(INDEX):
-        i = len(index)
-        index.append(row)
+        prev = newest.get(row["arxiv_base"])
+        if prev is not None and (index[prev].get("date") or "") >= (row.get("date") or ""):
+            continue
+        if prev is not None:
+            index[prev] = row
+            i = prev
+        else:
+            i = len(index)
+            index.append(row)
+            newest[row["arxiv_base"]] = i
         exact.setdefault(norm(row["title"]), row)
         for t in toks(row["title"]):
-            postings[t].append(i)
+            if i not in postings[t][-1:]:
+                postings[t].append(i)
 
     print(f"index: {len(index):,} arXiv records, {len(exact):,} distinct titles")
     print(f"papers: {len(papers):,}")

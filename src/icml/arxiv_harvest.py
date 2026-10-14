@@ -98,7 +98,15 @@ def harvest_set(name: str, since: str, state: dict, delay: float,
     if done:
         print(f"[{key}] already complete")
         return 0
-    seen = {json.loads(l)["arxiv_base"] for l in OUT.open()} if OUT.exists() else set()
+    # base -> newest datestamp on file: a record seen again with a newer
+    # datestamp is a new version of the paper and is appended (readers keep
+    # the newest row per base); the same datestamp is a duplicate listing
+    seen: dict[str, str] = {}
+    if OUT.exists():
+        for l in OUT.open():
+            r = json.loads(l)
+            if (r.get("date") or "") >= seen.get(r["arxiv_base"], ""):
+                seen[r["arxiv_base"]] = r.get("date") or ""
 
     n = 0
     start = time.time()
@@ -110,9 +118,9 @@ def harvest_set(name: str, since: str, state: dict, delay: float,
                             **({"until": until} if until else {})})
             root = request(params)
             rows, token = parse_records(root)
-            rows = [r for r in rows if r["arxiv_base"] not in seen]
+            rows = [r for r in rows if r["arxiv_base"] not in seen or (r.get("date") or "") > seen[r["arxiv_base"]]]
             for r in rows:
-                seen.add(r["arxiv_base"])
+                seen[r["arxiv_base"]] = r.get("date") or ""
                 fh.write(json.dumps(r, ensure_ascii=False) + "\n")
             fh.flush()
             n += len(rows)
