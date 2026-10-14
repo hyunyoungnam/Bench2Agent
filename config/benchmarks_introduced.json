@@ -1,10 +1,11 @@
 {
   "_note": "Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark (owner, 2026-10-06; rebuilt after the Codex review). Only claims Claude Code's review confirmed are here; candidates, exclusions and undetermined claims are counted in `claims` and listed in introduced_review.json. kind 'benchmark' = some claim says it is evaluated on; 'dataset' = training data or a resource. `first_claim` is the first edition HERE that claims it, never 'first developed': the corpus starts in 2023. Same name, no shared author = a different product (`homonym_of`).",
   "claims": {
-    "candidate": 2325,
-    "confirmed": 9243,
-    "excluded": 875,
-    "undetermined": 16
+    "candidate": 2399,
+    "confirmed": 9240,
+    "excluded": 874,
+    "undetermined": 16,
+    "stale": 2
   },
   "benchmarks": [
     {
@@ -30786,11 +30787,9 @@
         }
       ],
       "developers": [
+        "Beijing Kuangshi Technology Co., Ltd.",
         "Jikai Wang",
-        "Kaiyun Yang",
-        "Ruilin Yang",
-        "Wei Ge",
-        "Zhimin Yao"
+        "Kaiyun Yang"
       ]
     },
     {
@@ -37035,38 +37034,6 @@
         "Ofir Press",
         "Ori Press",
         "Vishaal Udandarao"
-      ]
-    },
-    {
-      "id": "citepretrainbench",
-      "name": "CitePretrainBench",
-      "fold": "citepretrainbench",
-      "registered": null,
-      "homonym_of_registered": null,
-      "kind": "benchmark",
-      "homonym_of": null,
-      "identity_candidates": null,
-      "identity_evidence": [
-        "same-paper"
-      ],
-      "first_claim": "iclr-2026",
-      "claims": [
-        {
-          "claim_id": "2506.17585#citepretrainbench",
-          "edition": "iclr-2026",
-          "arxiv_base": "2506.17585",
-          "title": "Cite Pretrain: Retrieval-Free Knowledge Attribution for Large Language Models",
-          "noun": "benchmark",
-          "evidence": "To study this, we construct CitePretrainBench, a benchmark that mixes real-world corpora (Wikipedia, Common Crawl, arXiv) with novel, unseen documents and probes both short-form (single fact) and long-form (multi-fact) citation tasks.",
-          "label": "E"
-        }
-      ],
-      "developers": [
-        "Bhuwan Dhingra",
-        "Jian Pei",
-        "Manzil Zaheer",
-        "Sanxing Chen",
-        "Yukun Huang"
       ]
     },
     {
@@ -183048,9 +183015,7 @@
       "registered": null,
       "homonym_of_registered": null,
       "kind": "dataset",
-      "homonym_of": [
-        "noisy-mnist-2"
-      ],
+      "homonym_of": null,
       "identity_candidates": null,
       "identity_evidence": [
         "same-paper"
@@ -183073,34 +183038,6 @@
         "Wei Huang",
         "Yuan Cao"
       ]
-    },
-    {
-      "id": "noisy-mnist-2",
-      "name": "Noisy MNIST",
-      "fold": "noisymnist",
-      "registered": null,
-      "homonym_of_registered": null,
-      "kind": "dataset",
-      "homonym_of": [
-        "noisy-mnist"
-      ],
-      "identity_candidates": null,
-      "identity_evidence": [
-        "same-paper"
-      ],
-      "first_claim": "iclr-2025",
-      "claims": [
-        {
-          "claim_id": "2410.02942#noisymnist",
-          "edition": "iclr-2025",
-          "arxiv_base": "2410.02942",
-          "title": "",
-          "noun": "dataset",
-          "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
-          "label": "T"
-        }
-      ],
-      "developers": []
     },
     {
       "id": "noisy-ner",
@@ -196162,12 +196099,12 @@
       "first_claim": "icml-2026",
       "claims": [
         {
-          "claim_id": "2605.03413#otib",
+          "claim_id": "2605.03413#observationtotheoryinduction",
           "edition": "icml-2026",
           "arxiv_base": "2605.03413",
           "title": "Learning to Theorize the World from Observation",
           "noun": "benchmark",
-          "evidence": "Our contributions are summarized as follows: • We formulate Learning-to-Theorize (L2T) as a learning paradigm for inferring executable theories from raw observations, without relying on language, task labels, or program supervision. • We propose NEO, a probabilistic neural model that learns a latent Language of Thought and induces compositional executable programs as explanations of how observations are generated and transformed. • We introduce the Observation-to-Theory Induction Benchmark (OTIB",
+          "evidence": "To this end, we introduce the Observation-to-Theory Induction Benchmark.",
           "label": "E"
         }
       ],

@@ -73,6 +73,20 @@ FIGURES["e203ef9d830c7254"] = dict(FIGURES["a4a18c3dbaf3ca0b"])
 # 2026-10-14, first discovery run: 9,852 index records harvested for the window
 # 2026-09-30..10-14, 16 open editions re-collected, 16 new papers parsed
 # (ICML 2026 12, ECCV 2026 4), no source version moved.
+# 2026-10-14 (run 9): the index re-harvested with header datestamps (+20,540
+# records), every edition re-matched (+44 matches) and re-parsed from the
+# archive (parser recorded text hashes), 128 moved records re-checked: 52
+# same text, 75 changed text, 1 unknown, 0 failed. Two entities whose
+# claim sentences no longer occur were retired (ids never reused).
+FIGURES["34e3f1fb690c0878"] = {
+    "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
+    "iclr_cifar10": [("iclr-2020", 103, 547), ("iclr-2021", 135, 717), ("iclr-2022", 141, 838), ("iclr-2023", 166, 1241),
+                     ("iclr-2024", 179, 1894), ("iclr-2025", 196, 3059), ("iclr-2026", 168, 4252)],
+    "latest_all": {"parsed": 27475, "GSM8K": 1121, "CIFAR-10": 844, "MMLU": 800},
+    "computer_vision_latest": {"parsed": 2828, "COCO": 163, "POPE": 75, "Video-MME": 69},
+    "libero_adoption": {"others": 195, "self": 3, "undetermined": 0, "before_claim": 0},
+    "relbench_2_adoption": {"others": 3, "self": 1, "undetermined": 0, "unattributed": 8},
+}
 FIGURES["ddae8df2d9caf403"] = {**FIGURES["a4a18c3dbaf3ca0b"],
                                "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
                                "latest_all": {"parsed": 27459, "GSM8K": 1121, "CIFAR-10": 843, "MMLU": 800},
