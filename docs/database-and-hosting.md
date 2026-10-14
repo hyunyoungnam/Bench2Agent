@@ -347,8 +347,15 @@ reference-result tests per adapter. See the
    origins `unknown`. A difference between revisions for one edition is a
    data or rule change, reported per stage (papers, matched, parsed,
    usage/adoption); trends compare editions inside one revision.
-4. Incremental processing with per-paper stage status, re-runs that reach the
-   downstream stages, and a scheduled update with catch-up and a run lock.
+4. **First version (2026-10-14):** `python3 -m icml.update` keeps a working
+   database of per-edition stage versions, per-paper stage status with
+   retryable failures, a claim review queue and every run; `run` re-does
+   only what changed (new papers, transient parse failures, a parser or
+   rules change) down to the regenerated catalogue, queues new and changed
+   claims for review (a reviewed claim whose sentence changed is stale and
+   counts nowhere), builds and optionally publishes a revision, holds one
+   lock, and `--if-due N` lets an OS timer call it daily with a missed week
+   caught up once. The working database never enters a published revision.
 5. Revision retention: recent, active, referenced and in-use revisions are
    kept; leases live outside revision directories and share one lock with
    the delete decision.

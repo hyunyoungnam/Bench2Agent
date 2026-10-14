@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import datetime as dt
 import glob
 import json
@@ -836,6 +837,7 @@ def review_export(path: str, sample: int = 0, seed: int = 0) -> None:
 def review_import(path: str) -> None:
     """Lines 'claim_id<TAB>label[<TAB>note]' -> config/introduced_review.json."""
     rev = _load_review()
+    current = {c["claim_id"]: hashlib.sha256(c["evidence"].encode()).hexdigest()[:16] for c in all_claims()}
     n = 0
     for line in open(path, encoding="utf-8"):
         parts = line.rstrip("\n").split("\t")
@@ -843,7 +845,9 @@ def review_import(path: str) -> None:
             continue
         rev["claims"][parts[0]] = {"label": parts[1], "status": LABELS[parts[1]][0],
                                    **({"note": parts[2]} if len(parts) > 2 and parts[2] else {}),
-                                   "reviewed": dt.date.today().isoformat()}
+                                   "reviewed": dt.date.today().isoformat(),
+                                   # the sentence this decision was made on; a changed sentence makes the decision stale
+                                   **({"evidence_sha": current[parts[0]]} if parts[0] in current else {})}
         n += 1
     dump_json(REVIEW, rev)
     print(f"review: {n} decisions recorded, {len(rev['claims'])} in total -> {REVIEW.name}")
@@ -872,6 +876,10 @@ def introduced() -> Path:
     claims = all_claims()
     for c in claims:
         c["review"] = rev["claims"].get(c["claim_id"])
+        sha = hashlib.sha256(c["evidence"].encode()).hexdigest()[:16]
+        if c["review"] and c["review"].get("evidence_sha") and c["review"]["evidence_sha"] != sha:
+            # the sentence the reviewer read is not the sentence here any more
+            c["review"] = {**c["review"], "status": "stale", "stale": "evidence changed since review"}
     for c in claims:
         # the review's correction of the name: an X with "real name N; E|T" is a
         # real claim under N, and "name N" on E/T sets the short published name

@@ -246,9 +246,17 @@ first-launch downloads only happen when data is missing. A headless
 On the collection machine, build and package reviewed data separately:
 
 ```bash
-PYTHONPATH=src python3 -m bench2agent benchmarks --publish
+PYTHONPATH=src python3 -m icml.update status          # what each edition still needs
+PYTHONPATH=src python3 -m icml.update run --publish   # fetch, parse, extract and publish what changed
 PYTHONPATH=src python3 -m bench2agent data bundle --out dist/bench2agent-data.tar.gz
 ```
+
+`icml.update` keeps a working database of what was done with which code
+(`data/work/`), re-does only what changed, queues new or changed
+introduction claims for review, and takes one lock; `--if-due 7` makes a
+daily OS timer run it weekly and catch a missed week up once.
+`bench2agent benchmarks --publish` alone builds and installs from whatever
+the pipeline files hold.
 
 The bundle contains the revision's database and a manifest, plus an
 adjacent `.sha256` file. No raw HTML, embeddings, browser assets or
