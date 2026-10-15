@@ -767,17 +767,14 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             before = vocabulary_signature(work.root)
             claims = pipeline.claims()
             reviewed = pipeline.reviewed()
-            history_before = work.con.execute("SELECT 1 FROM claim_history LIMIT 1").fetchone() is not None
             new_ids, vanished = work.record_claims(claims, run_id)
-            if not history_before:
-                new_ids = []                                  # the history's first fill: nothing is new by it
             seen = work.get("claims_seen") or {}
             queued, dequeued = [], []
             for cid, c in claims.items():
                 ed, sha = c["edition"], c["sha"]
                 review = reviewed.get(cid)
                 if review is None:
-                    if cid not in seen or cid in new_ids:
+                    if cid not in seen:                       # new since the previous comparison, never re-queued by the history
                         queued.append((cid, ed, "new", sha))
                 elif review.get("evidence_sha") and review["evidence_sha"] != sha:
                     queued.append((cid, ed, "changed", sha))
