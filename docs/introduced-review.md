@@ -96,3 +96,33 @@ benchmark paper 2407.20060, same authors, mutual citation) and Sine
 (2405.16194 and 2410.05429, same lab, mutual citation) are candidates, not
 confirmed: in this corpus the two RelBench papers link different
 repositories and the Sine papers different project pages.
+
+## A claim that vanished from the latest text (2026-10-15)
+
+When a paper's arXiv text changes and a reviewed introduction sentence is
+no longer extracted, `icml.update` keeps the last sentence on the review
+entry (`retained_evidence`) and queues the claim as `vanished`. The
+benchmark stays in the catalogue with that claim marked
+`vanished_in_latest_version` — a benchmark that was introduced does not
+stop having existed because a later version words it differently — and
+its other claims are untouched. A reviewer compares the old sentence with
+the new text and records one decision on the claim:
+
+    "vanished_decision": {"decision": "retain" | "retire",
+                          "evidence_old": "<the sentence reviewed>", "evidence_new": "<what the latest text says, or that it says nothing>",
+                          "reason": "<why>", "reviewed_by": "<who>", "reviewed": "<date>"}
+
+`retain` keeps the claim confirmed on the old sentence; `retire` excludes
+it (label `U`). `retained_evidence.reason` says why the claim is gone:
+`sentence_not_extracted` (the paper is still matched; its text, the parser
+or the rules changed) or `paper_unmatched` (the paper left the edition's
+matched set — a match or identity change — so no sentence of it is read
+at all; the decision then also says whether the paper belongs to the
+edition). The two claims that vanished before this record existed were
+seeded from the git history of the catalogue and the archived HTML:
+`2410.02942#noisymnist` (confirmed T, `paper_unmatched`: ICLR 2025 event
+31893 "SymmetricDiffusers … Models over Finite Symmetric Groups" no longer
+matches arXiv title "… on Finite Symmetric Groups", token overlap 0.70 <
+0.85) and `2602.00628#175m+` (excluded X, `sentence_not_extracted`). A review whose sentence changed (`evidence_sha` differs) is
+stale: nothing of it — label, name correction, target — is reused until the
+claim is reviewed again.

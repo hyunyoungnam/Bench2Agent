@@ -853,6 +853,28 @@ def review_import(path: str) -> None:
     print(f"review: {n} decisions recorded, {len(rev['claims'])} in total -> {REVIEW.name}")
 
 
+def review_for(claim: dict, entry: dict | None) -> dict | None:
+    """The review that applies to a claim as extracted NOW. A review made on
+    another sentence (`evidence_sha` differs) is stale: none of it — label,
+    name correction, target — is reused, and the claim is pending. A claim
+    that vanished from the latest text keeps its review until a reviewer
+    decides `retain` or `retire`, and says so."""
+    if entry is None:
+        return None
+    sha = hashlib.sha256(claim["evidence"].encode()).hexdigest()[:16]
+    if claim.get("vanished") and entry.get("status") == "confirmed":
+        decision = entry.get("vanished_decision") or {}
+        if decision.get("decision") == "retire":
+            return {**entry, "status": "excluded", "label": "U", "retired": decision.get("reason")}
+        if decision.get("decision") == "retain":
+            return {**entry, "status": "confirmed", "retained": decision.get("reason")}
+        return {**entry, "status": "confirmed", "vanished_in_latest_version": True,
+                "pending_decision": "retain or retire (docs/introduced-review.md)"}
+    if entry.get("evidence_sha") and entry["evidence_sha"] != sha:
+        return {"status": "stale", "label": entry.get("label"), "stale": "evidence changed since review"}
+    return entry
+
+
 def _person(n: str) -> str:
     import unicodedata
     n = unicodedata.normalize("NFKD", n or "").encode("ascii", "ignore").decode().lower()
@@ -874,12 +896,25 @@ def introduced() -> Path:
     reg_ids = {e["id"] for e in reg}
     reg_fold = {dataset_key(s_): e["id"] for e in reg for s_ in [e["name"], *e.get("aliases", [])]}
     claims = all_claims()
+    present = {c["claim_id"] for c in claims}
+    # a reviewed claim whose sentence is no longer extracted keeps its last
+    # sentence (`retained_evidence`, written by icml.update) and its
+    # benchmark stays listed, marked, until a reviewer decides `retain`
+    # (the claim stands on the old sentence) or `retire` (excluded); other
+    # claims of the same benchmark are untouched either way
+    idx = paper_index()
+    for cid, entry in rev["claims"].items():
+        kept = entry.get("retained_evidence")
+        if cid in present or not kept or entry.get("status") != "confirmed":
+            continue
+        p = idx.get(kept.get("arxiv_base"), {})
+        claims.append({"claim_id": cid, "name": kept.get("name"), "fold": dataset_key(kept.get("name") or ""),
+                       "noun": kept.get("noun"), "edition": kept.get("edition"), "year": p.get("year"),
+                       "arxiv_base": kept.get("arxiv_base"), "title": kept.get("title") or p.get("title") or "",
+                       "authors": p.get("authors") or [], "registered": None, "in_title": False,
+                       "evidence": kept.get("evidence") or "", "vanished": True})
     for c in claims:
-        c["review"] = rev["claims"].get(c["claim_id"])
-        sha = hashlib.sha256(c["evidence"].encode()).hexdigest()[:16]
-        if c["review"] and c["review"].get("evidence_sha") and c["review"]["evidence_sha"] != sha:
-            # the sentence the reviewer read is not the sentence here any more
-            c["review"] = {**c["review"], "status": "stale", "stale": "evidence changed since review"}
+        c["review"] = review_for(c, rev["claims"].get(c["claim_id"]))
     for c in claims:
         # the review's correction of the name: an X with "real name N; E|T" is a
         # real claim under N, and "name N" on E/T sets the short published name
@@ -890,7 +925,7 @@ def introduced() -> Path:
                      r"(?:\(.*\))?\s*(?:;\s*(?:([ET])\b)?.*)?$", note, re.I)
         if m and re.search(r"\s/\s|,", note.split(";")[0]):
             m = None                        # several names in one claim: not one benchmark
-        if c["review"] and m and c["review"]["label"] in ("X", "E", "T"):
+        if c["review"] and m and c["review"]["label"] in ("X", "E", "T") and c["review"].get("status") in ("confirmed", "excluded"):
             c["name"], c["fold"] = m.group(1).strip(), dataset_key(m.group(1))
             if c["review"]["label"] == "X":
                 kind = m.group(2) or ("E" if re.search(r"bench|suite|test|evaluat", c["noun"]) else "T")
@@ -1003,7 +1038,10 @@ def introduced() -> Path:
                 "identity_evidence": sorted({c.get("identity_evidence") or "same-paper" for c in g}),
                 "first_claim": g[0]["edition"],
                 "claims": [{k_: c[k_] for k_ in ("claim_id", "edition", "arxiv_base", "title", "noun",
-                                                 "evidence")} | {"label": c["review"]["label"]} for c in g],
+                                                 "evidence")} | {"label": c["review"]["label"]}
+                           | ({"vanished_in_latest_version": True, "pending_decision": c["review"].get("pending_decision")}
+                              if c["review"].get("vanished_in_latest_version") else {})
+                           | ({"retained": c["review"]["retained"]} if c["review"].get("retained") else {}) for c in g],
                 "developers": sorted({a for c in g for a in c["authors"]})})
     # homonym ids exist only after every group got one; fill the cross-links
     by_fold = collections.defaultdict(list)

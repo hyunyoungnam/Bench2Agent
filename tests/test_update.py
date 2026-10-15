@@ -112,10 +112,14 @@ class FakePipeline(update.Pipeline):
 
     def claims(self):
         self.calls.append(("claims",))
-        return dict(self.s["claims"])
+        return {k: dict(v) for k, v in self.s["claims"].items()}
 
     def reviewed(self):
-        return dict(self.s.get("reviewed", {}))
+        return {k: dict(v) for k, v in self.s.get("reviewed", {}).items()}
+
+    def retain_vanished(self, cid, record):
+        self.calls.append(("retain", cid))
+        self.s.setdefault("reviewed", {}).setdefault(cid, {})["retained_evidence"] = {k: record.get(k) for k in ("edition", "evidence", "evidence_sha", "reason")}
 
     def build(self, publish):
         self.calls.append(("build", publish))
@@ -138,7 +142,8 @@ class UpdateTests(unittest.TestCase):
         self.work = update.Work(self.root)
         self.addCleanup(self.work.close)
         self.scenario = {"papers": {"iclr-2025": [1, 2, 3], "iclr-2026": [4, 5]},
-                         "claims": {"2501.00001#toy": ("iclr-2025", "sha-a"), "2504.00001#fresh": ("iclr-2026", "sha-b")},
+                         "claims": {"2501.00001#toy": {"edition": "iclr-2025", "sha": "sha-a", "evidence": "We introduce Toy.", "name": "Toy", "noun": "benchmark", "arxiv_base": "2501.00001", "title": "Paper 1"},
+                                    "2504.00001#fresh": {"edition": "iclr-2026", "sha": "sha-b", "evidence": "We introduce Fresh.", "name": "Fresh", "noun": "benchmark", "arxiv_base": "2504.00001", "title": "Paper 4"}},
                          "reviewed": {"2501.00001#toy": {"label": "E", "status": "confirmed", "evidence_sha": "sha-a"}}}
         self.pipe = FakePipeline(self.work, self.scenario)
 
@@ -216,7 +221,7 @@ class UpdateTests(unittest.TestCase):
 
     def test_changed_evidence_queues_the_reviewed_claim(self):
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
-        self.scenario["claims"]["2501.00001#toy"] = ("iclr-2025", "sha-a2")   # the sentence the reviewer read is gone
+        self.scenario["claims"]["2501.00001#toy"]["sha"] = "sha-a2"         # the sentence the reviewer read is gone
         self.bump("bench_mentions.py")
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual({k: out["claims"][k] for k in ("total", "queued_new", "queued_changed")}, {"total": 2, "queued_new": 0, "queued_changed": 1})
@@ -261,7 +266,7 @@ class UpdateTests(unittest.TestCase):
             out = update.run(self.work, self.pipe, editions=self.EDS)
         # the moved record changed the index (re-match) and was re-checked; nothing was parsed anew
         self.assertEqual([c[:2] for c in self.pipe.calls if c[1:2] == ("iclr-2025",)], [("match", "iclr-2025"), ("recheck", "iclr-2025")])   # same text: no mentions
-        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unknown": 0})
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unavailable": 0, "unknown": 0})
         self.assertEqual(ft.read_text(), before)
         self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], "2026-10-05")
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
@@ -321,7 +326,7 @@ class UpdateTests(unittest.TestCase):
         self.scenario["dates"]["2501.00001"] = "2026-10-11"
         with unittest.mock.patch.object(update, "open_editions", return_value=set()):
             out = update.run(self.work, self.pipe, editions=self.EDS)
-        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unknown": 0})
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 1, "changed": 0, "failed": 0, "unavailable": 0, "unknown": 0})
         self.assertEqual(self.work.versions_of("iclr-2025")["2501.00001"]["source_version"], "2026-10-11")
 
     def test_a_review_change_alone_regenerates_the_catalogue_and_clears_the_queue(self):
@@ -336,7 +341,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(out["claims"]["dequeued_reviewed"], 1)
         self.assertEqual(self.work.con.execute("SELECT COUNT(*) FROM claim_queue").fetchone()[0], 0)
         # the sentence changes again after the review: back to the queue as "changed"
-        self.scenario["claims"]["2504.00001#fresh"] = ("iclr-2026", "sha-b2")
+        self.scenario["claims"]["2504.00001#fresh"]["sha"] = "sha-b2"
         self.bump("bench_mentions.py")
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([tuple(r) for r in self.work.con.execute("SELECT claim_id, reason FROM claim_queue")], [("2504.00001#fresh", "changed")])
@@ -353,6 +358,92 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(out["claims"].get("mentions_rerun"), "vocabulary changed")
         self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+
+    def test_a_latest_text_that_is_unavailable_keeps_the_served_parse_and_is_rejudged_on_schedule(self):
+        self.scenario["dates"] = {"2501.00001": "2025-01-01", "2502.00001": "2025-01-01", "2503.00001": "2025-01-01",
+                                  "2504.00001": "2025-04-01", "2505.00001": "2025-04-01"}
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            update.run(self.work, self.pipe, editions=self.EDS)
+        ft = update.edition_paths("ICLR", 2025, self.root)["fulltext"]
+        before = ft.read_text()
+        v0 = self.work.versions_of("iclr-2025")["2501.00001"]
+        # the record moved, but the latest page has no HTML now: the served parse, its hash and version stay
+        self.scenario["dates"]["2501.00001"] = "2026-10-05"
+        self.scenario["fail"] = {"2501.00001": "permanent"}
+        original = self.pipe.recheck
+
+        def recheck_no_html(paths, bases):
+            self.pipe.calls.append(("recheck", paths["key"], tuple(bases)))
+            return [{"arxiv_base": b, "ok": False, "error": "no-html"} for b in bases], []
+        self.pipe.recheck = recheck_no_html
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"], {"same": 0, "changed": 0, "failed": 0, "unavailable": 1, "unknown": 0})
+        self.assertEqual(ft.read_text(), before)                                  # nothing overwritten
+        v = self.work.versions_of("iclr-2025")["2501.00001"]
+        self.assertEqual((v["source_version"], v["content_sha256"]), (v0["source_version"], v0["content_sha256"]))
+        self.assertEqual((v["recheck_status"], v["recheck_datestamp"]), ("unavailable", "2026-10-05"))
+        self.assertEqual(self.work.con.execute("SELECT recheck_error FROM paper_stages WHERE arxiv_base = '2501.00001'").fetchone()[0], "no-html")
+        # not a retry for the daily schedule, and not due again until the record moves, the parser changes or 30 days pass
+        self.assertEqual(out["pending_retries"], 0)
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["recheck_unavailable"], 1)
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+        self.pipe.calls.clear()
+        self.scenario["dates"]["2501.00001"] = "2026-10-09"                   # the record moved again: tried again
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["recheck"], 1)
+        self.pipe.recheck = original
+        self.scenario["fail"] = {}
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            out = update.run(self.work, self.pipe, editions=self.EDS)
+        self.assertEqual(out["editions"]["iclr-2025"]["recheck"]["same"], 1)
+        self.assertIsNone(self.work.versions_of("iclr-2025")["2501.00001"]["recheck_status"])
+        # the schedule alone brings an unavailable one back: an attempt older than recheck_days
+        self.pipe.recheck = recheck_no_html
+        self.scenario["dates"]["2501.00001"] = "2026-10-12"
+        with unittest.mock.patch.object(update, "open_editions", return_value=set()):
+            update.run(self.work, self.pipe, editions=self.EDS)
+        self.work.con.execute("UPDATE paper_stages SET updated_at = '2026-01-01T00:00:00+00:00' WHERE arxiv_base = '2501.00001'")
+        self.work.con.commit()
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["recheck"], 1)
+
+    def test_a_vanished_reviewed_claim_is_queued_with_its_last_sentence_and_its_benchmark_is_kept_for_a_decision(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(self.work.claim_record("2501.00001#toy")["evidence"], "We introduce Toy.")
+        # the paper's new text no longer says it: the claim is gone from the extraction
+        del self.scenario["claims"]["2501.00001#toy"]
+        self.bump("bench_mentions.py")
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual((out["claims"]["queued_vanished"], out["claims"]["queued_new"]), (1, 0))
+        queue = {r[0]: r[1] for r in self.work.con.execute("SELECT claim_id, reason FROM claim_queue")}
+        self.assertEqual(queue["2501.00001#toy"], "vanished")
+        record = self.work.claim_record("2501.00001#toy")
+        self.assertEqual((record["evidence"], record["vanished_run"] is not None), ("We introduce Toy.", True))   # history kept
+        self.assertIn(("retain", "2501.00001#toy"), self.pipe.calls)              # the reviewed claim is retained for a decision
+        self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["evidence"], "We introduce Toy.")
+        self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["reason"], "sentence_not_extracted")   # the paper is still matched
+        # an unreviewed vanished claim is queued too, with no retention
+        self.pipe.calls.clear()
+        del self.scenario["claims"]["2504.00001#fresh"]
+        self.bump("bench_mentions.py")
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(out["claims"]["queued_vanished"], 1)
+        self.assertNotIn(("retain", "2504.00001#fresh"), self.pipe.calls)
+
+    def test_a_stale_review_is_not_reused_and_a_vanished_claim_waits_for_a_decision(self):
+        from icml.bench_mentions import review_for
+        claim = {"claim_id": "2501.00001#toy", "evidence": "We introduce Toy, a benchmark.", "name": "Toy"}
+        import hashlib
+        sha = hashlib.sha256(claim["evidence"].encode()).hexdigest()[:16]
+        entry = {"label": "X", "status": "excluded", "note": "real name RealToy; E", "evidence_sha": sha,
+                 "target": {"benchmark_id": "realtoy", "decision": "same", "evidence": "..."}}
+        self.assertEqual(review_for(claim, entry), entry)                          # same sentence: the review applies, correction included
+        changed = {**claim, "evidence": "We use RealToy for evaluation."}
+        self.assertEqual(review_for(changed, entry), {"status": "stale", "label": "X", "stale": "evidence changed since review"})   # nothing reused
+        vanished = {**claim, "vanished": True}
+        confirmed = {"label": "E", "status": "confirmed", "evidence_sha": sha, "retained_evidence": {"evidence": claim["evidence"]}}
+        self.assertTrue(review_for(vanished, confirmed)["vanished_in_latest_version"])
+        self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retire", "reason": "no longer claimed"}})["status"], "excluded")
+        self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retain", "reason": "introduced in v1"}})["status"], "confirmed")
 
     def test_a_failed_run_is_recorded_and_the_next_one_proceeds(self):
         def broken(paths, **kw):

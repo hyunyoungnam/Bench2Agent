@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS paper_stages (
     error TEXT, transient INTEGER NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL,
     source_version TEXT,
     PRIMARY KEY (edition, event_id));
+CREATE TABLE IF NOT EXISTS claim_history (
+    claim_id TEXT PRIMARY KEY, edition TEXT NOT NULL, arxiv_base TEXT, name TEXT, noun TEXT, title TEXT,
+    evidence TEXT, evidence_sha TEXT NOT NULL, first_seen_run INTEGER, last_seen_run INTEGER, vanished_run INTEGER, vanished_at TEXT);
 CREATE TABLE IF NOT EXISTS claim_queue (
     claim_id TEXT PRIMARY KEY, edition TEXT NOT NULL, reason TEXT NOT NULL, evidence_sha TEXT NOT NULL,
     queued_at TEXT NOT NULL, run_id INTEGER);
@@ -136,7 +139,7 @@ class Work:
         self.con.executescript(SCHEMA)
         # a working database from before a column existed gains it here
         cols = {r[1] for r in self.con.execute("PRAGMA table_info(paper_stages)")}
-        for col in ("source_version", "content_sha256", "baseline_datestamp", "recheck_datestamp", "recheck_status"):
+        for col in ("source_version", "content_sha256", "baseline_datestamp", "recheck_datestamp", "recheck_status", "recheck_error"):
             if col not in cols:
                 self.con.execute(f"ALTER TABLE paper_stages ADD COLUMN {col} TEXT")
         self.con.commit()
@@ -219,14 +222,57 @@ class Work:
                              [(ds, edition, b) for b, ds in stamps.items()])
         self.con.commit()
 
-    def set_recheck(self, edition: str, base: str, datestamp: str, status: str) -> None:
-        self.con.execute("UPDATE paper_stages SET recheck_datestamp = ?, recheck_status = ?, updated_at = ? WHERE edition = ? AND arxiv_base = ?",
-                         (datestamp, status, now(), edition, base))
+    def set_recheck(self, edition: str, base: str, datestamp: str, status: str, error: str | None = None) -> None:
+        """The latest attempt to confirm a paper's text against a moved
+        record, kept apart from the text it serves: `failed` (transient,
+        retried next run) or `unavailable` (no HTML or a thin page now;
+        judged again when the record or the parser changes, or after
+        `recheck_days`). The served text, its hash and version stay."""
+        self.con.execute("UPDATE paper_stages SET recheck_datestamp = ?, recheck_status = ?, recheck_error = ?, updated_at = ? "
+                         "WHERE edition = ? AND arxiv_base = ?", (datestamp, status, error, now(), edition, base))
         self.con.commit()
 
     def recheck_failures(self, edition: str) -> list[str]:
         return [r[0] for r in self.con.execute(
             "SELECT arxiv_base FROM paper_stages WHERE edition = ? AND recheck_status = 'failed'", (edition,))]
+
+    def rechecks_to_rejudge(self, edition: str, dates: dict[str, str], parser_changed: bool, recheck_days: float) -> list[str]:
+        """`unavailable` re-checks due again: the record moved past the
+        stamp tried, the parser changed, or the attempt is older than
+        `recheck_days`."""
+        out = []
+        cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=recheck_days)).isoformat(timespec="seconds")
+        for r in self.con.execute("SELECT arxiv_base, recheck_datestamp, updated_at FROM paper_stages WHERE edition = ? AND recheck_status = 'unavailable'", (edition,)):
+            if parser_changed or dates.get(r[0], "") > (r[1] or "") or (r[2] or "") < cutoff:
+                out.append(r[0])
+        return out
+
+    def record_claims(self, claims: dict, run_id: int) -> tuple[list[str], list[str]]:
+        """Keep every claim ever extracted with its last sentence; returns
+        (new claim ids, vanished claim ids) against the previous run. A
+        vanished claim keeps its last sentence and is marked, never deleted."""
+        seen_before = {r[0]: r[1] for r in self.con.execute("SELECT claim_id, vanished_run FROM claim_history")}
+        new_ids, ts = [], now()
+        for cid, c in claims.items():
+            if cid not in seen_before:
+                new_ids.append(cid)
+            self.con.execute(
+                "INSERT INTO claim_history (claim_id, edition, arxiv_base, name, noun, title, evidence, evidence_sha, first_seen_run, last_seen_run) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(claim_id) DO UPDATE SET edition = excluded.edition, name = excluded.name, "
+                "noun = excluded.noun, title = excluded.title, evidence = excluded.evidence, evidence_sha = excluded.evidence_sha, "
+                "last_seen_run = excluded.last_seen_run, vanished_run = NULL, vanished_at = NULL",
+                (cid, c["edition"], c.get("arxiv_base"), c.get("name"), c.get("noun"), c.get("title"), c.get("evidence"), c["sha"], run_id, run_id))
+        vanished = [cid for cid, v in seen_before.items() if cid not in claims and v is None]
+        self.con.executemany("UPDATE claim_history SET vanished_run = ?, vanished_at = ? WHERE claim_id = ?", [(run_id, ts, cid) for cid in vanished])
+        self.con.commit()
+        return new_ids, vanished
+
+    def has_paper(self, edition: str, base: str) -> bool:
+        return self.con.execute("SELECT 1 FROM paper_stages WHERE edition = ? AND arxiv_base = ?", (edition, base)).fetchone() is not None
+
+    def claim_record(self, cid: str) -> dict | None:
+        r = self.con.execute("SELECT * FROM claim_history WHERE claim_id = ?", (cid,)).fetchone()
+        return dict(r) if r else None
 
     def queue_claims(self, items: list[tuple[str, str, str, str]], run_id: int | None) -> None:
         self.con.executemany("INSERT OR REPLACE INTO claim_queue VALUES (?,?,?,?,?,?)",
@@ -431,14 +477,31 @@ class Pipeline:
         bm.run(paths["key"], bm.Finder(fold_to, casings))
 
     def claims(self) -> dict:
-        """Regenerate the catalogue; return claim_id -> (edition, evidence sha)."""
+        """Regenerate the catalogue; return claim_id -> the claim as extracted
+        now (edition, sentence hash, sentence, name, noun, paper, title)."""
         from . import bench_mentions as bm
         bm.introduced()
-        return {c["claim_id"]: (c["edition"], hashlib.sha256(c["evidence"].encode()).hexdigest()[:16]) for c in bm.all_claims()}
+        return {c["claim_id"]: {"edition": c["edition"], "sha": hashlib.sha256(c["evidence"].encode()).hexdigest()[:16],
+                                "evidence": c["evidence"], "name": c["name"], "noun": c["noun"], "arxiv_base": c["arxiv_base"],
+                                "title": c["title"]} for c in bm.all_claims()}
 
     def reviewed(self) -> dict:
         from . import bench_mentions as bm
         return bm._load_review().get("claims", {})
+
+    def retain_vanished(self, cid: str, record: dict) -> None:
+        """A reviewed claim's sentence is gone from the latest text: keep its
+        last sentence on the review entry, so the catalogue keeps the
+        benchmark with that claim marked as vanished until a reviewer
+        decides retain or retire (`docs/introduced-review.md`)."""
+        from . import bench_mentions as bm
+        rev = bm._load_review()
+        entry = rev["claims"].get(cid)
+        if entry is None:
+            return
+        entry["retained_evidence"] = {k: record.get(k) for k in ("edition", "arxiv_base", "name", "noun", "title", "evidence", "evidence_sha", "reason")}
+        entry["retained_evidence"]["vanished_at"] = record.get("vanished_at") or now()
+        bm.dump_json(bm.REVIEW, rev)
 
     def build(self, publish: bool) -> dict:
         cmd = [self.python, "-m", "bench2agent", "benchmarks"] + (["--publish"] if publish else [])
@@ -492,16 +555,23 @@ def archived_sha256(archive: Path, base: str) -> str | None:
         return None
 
 
-def stale_sources(work: Work, key: str, funnel: dict, dates: dict[str, str], parser_changed: bool) -> set[str]:
+RECHECK_DAYS = 30.0
+
+
+def stale_sources(work: Work, key: str, funnel: dict, dates: dict[str, str], parser_changed: bool, recheck_days: float = RECHECK_DAYS) -> set[str]:
     """Papers to check again: their arXiv record's stamp moved past the
     stamp their text was confirmed on (`source_version`) or last checked
-    against (`baseline_datestamp`), a re-check failed last time, or they
-    failed permanently and the parser changed. A row with neither stamp is
-    of unknown provenance and is not judged stale by a stamp."""
+    against (`baseline_datestamp`, and for an `unavailable` re-check the
+    stamp tried), a re-check failed transiently last time, an `unavailable`
+    re-check is due again (parser changed, or older than `recheck_days`), or
+    they failed permanently and the parser changed. A row with no stamp at
+    all is of unknown provenance and is not judged stale by a stamp."""
     known = work.versions_of(key)
-    out = set(work.recheck_failures(key))
+    out = set(work.recheck_failures(key)) | set(work.rechecks_to_rejudge(key, dates, parser_changed, recheck_days))
     for base, p_ in funnel["_parsed"].items():
         v = known.get(base) or {}
+        if v.get("recheck_status") == "unavailable":
+            continue                        # judged by rechecks_to_rejudge above, against the stamp tried
         at = v.get("source_version") or v.get("baseline_datestamp")
         if at and dates.get(base, "") > at:
             out.add(base)
@@ -510,7 +580,8 @@ def stale_sources(work: Work, key: str, funnel: dict, dates: dict[str, str], par
     return out
 
 
-def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], current: dict, index: dict | None = None) -> list[dict]:
+def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], current: dict, index: dict | None = None,
+         recheck_days: float = RECHECK_DAYS) -> list[dict]:
     """What each edition needs, from the files, the recorded versions and
     the working database's transient failures. `index` is `index_state()`:
     a changed index re-matches every edition, so unmatched, ambiguous,
@@ -536,7 +607,7 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
         parse_v, _ = work.stage_version(key, "parsed")
         reparse = bool(parse_v and parse_v != current["parser"])
         transient = work.transients(key)
-        stale = stale_sources(work, key, funnel, dates, reparse) if not reparse else set()
+        stale = stale_sources(work, key, funnel, dates, reparse, recheck_days) if not reparse else set()
         if reparse:
             need.append("reparse (parser changed)")
         elif funnel["unparsed"] or funnel["parsed_transient"] or transient or stale:
@@ -555,7 +626,8 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
 
 
 def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | None = None, publish: bool = False,
-        dry_run: bool = False, max_parse: int = 0, discover: bool = True, recollect: str = "open") -> dict:
+        dry_run: bool = False, max_parse: int = 0, discover: bool = True, recollect: str = "open",
+        recheck_days: float = RECHECK_DAYS) -> dict:
     """One update. With `discover`: refresh the arXiv index for the window
     since the last harvest, re-collect the open editions' lists, and treat
     a record whose datestamp moved as a new source version. Then every
@@ -565,7 +637,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
     editions = editions or list(EDITIONS)
     summary = {"editions": {}, "claims": {}, "versions": current, "discovery": {}}
     if dry_run:
-        for p in plan(work, pipeline, editions, current, pipeline.index_state()):
+        for p in plan(work, pipeline, editions, current, pipeline.index_state(), recheck_days):
             summary["editions"][p["edition"]] = {"need": p["need"], "recheck": len(p["stale"]), **p["funnel"]}
         return summary
     run_id = work.start_run("update")
@@ -590,7 +662,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             summary["discovery"]["recollected"] = collected
         index = pipeline.index_state()
         dates = index["stamps"]
-        plans = plan(work, pipeline, editions, current, index)
+        plans = plan(work, pipeline, editions, current, index, recheck_days)
         for p in plans:
             key, paths = p["edition"], p["paths"]
             steps = p["need"]
@@ -616,9 +688,9 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             # path and compared with the text the current parse read; the
             # edition's files change only for a text that differs (or a
             # failed/unknown one), and never when the fetch fails
-            stale = set(p["stale"]) if "match" not in done else stale_sources(work, key, funnel, dates, p["reparse"])
+            stale = set(p["stale"]) if "match" not in done else stale_sources(work, key, funnel, dates, p["reparse"], recheck_days)
             stale -= set(funnel["unparsed"])
-            recheck = {"same": 0, "changed": 0, "failed": 0, "unknown": 0}
+            recheck = {"same": 0, "changed": 0, "failed": 0, "unavailable": 0, "unknown": 0}
             confirmed: dict[str, tuple[str | None, str | None]] = {}
             if stale:                       # after a reparse too: the archive holds the old text, the record moved
                 rows, r_transient = pipeline.recheck(paths, sorted(stale))
@@ -628,13 +700,24 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 for base in sorted(stale):
                     stamp = dates.get(base, "")
                     r = got.get(base)
+                    current_ok = funnel["_parsed"].get(base, {}).get("ok")
                     if r is None or (not r.get("ok") and r.get("transient")):
-                        work.set_recheck(key, base, stamp, "failed")
+                        work.set_recheck(key, base, stamp, "failed", (r or {}).get("error") or "not fetched")
                         recheck["failed"] += 1
                         continue
-                    current_ok = funnel["_parsed"].get(base, {}).get("ok")
+                    if not r.get("ok"):
+                        # the latest text is not there (no HTML, a thin page): the served
+                        # parse stays, with its own hash and version; the attempt is recorded
+                        if current_ok:
+                            work.set_recheck(key, base, stamp, "unavailable", r.get("error"))
+                            recheck["unavailable"] += 1
+                            continue
+                        replace[base] = r                                        # a failed parse replaced by a failed parse: recorded as such
+                        confirmed[base] = (stamp, r.get("html_sha256"))
+                        recheck["unknown"] += 1
+                        continue
                     previous = (known.get(base) or {}).get("content_sha256") or archived_sha256(paths["archive"], base)
-                    if r.get("ok") and current_ok and previous and r.get("html_sha256") == previous:
+                    if current_ok and previous and r.get("html_sha256") == previous:
                         work.set_versions(key, {base: (stamp, previous)})           # text unchanged: the stamp is confirmed for it
                         recheck["same"] += 1
                         continue
@@ -649,7 +732,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                     done.append(f"recheck {len(replace)} replaced")
                     funnel = edition_funnel(paths)
                 for base, err in r_transient:
-                    work.set_recheck(key, base, dates.get(base, ""), "failed")
+                    work.set_recheck(key, base, dates.get(base, ""), "failed", err)
             new_parses = set(funnel["_parsed"]) - before_parse if not p["reparse"] else set()
             for base in new_parses:
                 row = funnel["_rows"].get(base) or {}
@@ -684,25 +767,47 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
             before = vocabulary_signature(work.root)
             claims = pipeline.claims()
             reviewed = pipeline.reviewed()
+            history_before = work.con.execute("SELECT 1 FROM claim_history LIMIT 1").fetchone() is not None
+            new_ids, vanished = work.record_claims(claims, run_id)
+            if not history_before:
+                new_ids = []                                  # the history's first fill: nothing is new by it
             seen = work.get("claims_seen") or {}
             queued, dequeued = [], []
-            for cid, (ed, sha) in claims.items():
+            for cid, c in claims.items():
+                ed, sha = c["edition"], c["sha"]
                 review = reviewed.get(cid)
                 if review is None:
-                    if cid not in seen:
+                    if cid not in seen or cid in new_ids:
                         queued.append((cid, ed, "new", sha))
                 elif review.get("evidence_sha") and review["evidence_sha"] != sha:
                     queued.append((cid, ed, "changed", sha))
                 else:
                     dequeued.append(cid)                      # reviewed on this very sentence: done
+            # a claim that is no longer extracted: queued with its last sentence;
+            # a reviewed one keeps its benchmark listed, marked, until a reviewer decides
+            for cid in vanished:
+                record = work.claim_record(cid) or {}
+                # why: the paper left the edition's matched set (identity or match
+                # change), or it is still there and the sentence is not extracted
+                # any more (text, parser or rule change)
+                record["reason"] = ("sentence_not_extracted" if work.has_paper(record.get("edition") or "", record.get("arxiv_base") or "")
+                                    else "paper_unmatched")
+                queued.append((cid, record.get("edition") or "?", "vanished", record.get("evidence_sha") or ""))
+                if reviewed.get(cid, {}).get("status") == "confirmed":
+                    pipeline.retain_vanished(cid, record)
+            if vanished:
+                reviewed = pipeline.reviewed()
+                if any(reviewed.get(cid, {}).get("retained_evidence") for cid in vanished):
+                    pipeline.claims()                         # the catalogue with the retained claims marked
             in_queue = {r[0] for r in work.con.execute("SELECT claim_id FROM claim_queue")}
             dequeued = [c for c in dequeued if c in in_queue]
             work.queue_claims(queued, run_id)
             work.dequeue_claims(dequeued)
-            work.set("claims_seen", {cid: sha for cid, (_, sha) in claims.items()})
-            work.set("review_hash", review_hash)
+            work.set("claims_seen", {cid: c["sha"] for cid, c in claims.items()})
+            work.set("review_hash", file_hash(work.root / "config" / "introduced_review.json"))
             summary["claims"] = {"total": len(claims), "queued_new": sum(1 for q in queued if q[2] == "new"),
                                  "queued_changed": sum(1 for q in queued if q[2] == "changed"),
+                                 "queued_vanished": sum(1 for q in queued if q[2] == "vanished"),
                                  "dequeued_reviewed": len(dequeued)}
             after = vocabulary_signature(work.root)
             if after != before:
@@ -714,7 +819,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                         work.mark_stage(p["edition"], "mentions", current["rules"], None, run_id)
                 summary["claims"]["mentions_rerun"] = "vocabulary changed"
                 claims = pipeline.claims()
-                work.set("claims_seen", {cid: sha for cid, (_, sha) in claims.items()})
+                work.set("claims_seen", {cid: c["sha"] for cid, c in claims.items()})
         built = pipeline.build(publish)
         summary["build"] = {k: built.get(k) for k in ("revision_id", "parsed_papers", "editions", "benchmarks")}
         if publish:
@@ -773,9 +878,10 @@ def status(work: Work, editions: list[tuple[str, int]] | None = None, pipeline: 
     pipeline = pipeline or Pipeline(work)
     plans = plan(work, pipeline, editions or list(EDITIONS), current, pipeline.index_state())
     queue = work.con.execute("SELECT reason, COUNT(*) FROM claim_queue GROUP BY reason").fetchall()
+    unavailable = work.con.execute("SELECT COUNT(*) FROM paper_stages WHERE recheck_status = 'unavailable'").fetchone()[0]
     runs = [dict(r) for r in work.con.execute("SELECT run_id, started_at, finished_at, outcome, error FROM runs ORDER BY run_id DESC LIMIT 5")]
     return {"versions": current, "last_success": work.last_success(), "harvest_until": work.get("harvest_until"),
-            "pending_retries": work.pending_retries(),
+            "pending_retries": work.pending_retries(), "recheck_unavailable": unavailable,
             "editions": {p["edition"]: {"need": p["need"], "recheck": len(p["stale"]), "transient_retries": p["transient"], **p["funnel"]}
                          for p in plans},
             "claim_queue": {r[0]: r[1] for r in queue}, "recent_runs": runs}
@@ -833,6 +939,7 @@ def main() -> int:
     ap.add_argument("--if-due", type=float, default=None, metavar="DAYS", help="run only when the last success is older")
     ap.add_argument("--max-parse", type=int, default=0, help="fetch at most this many new papers per edition")
     ap.add_argument("--retry-days", type=float, default=1.0, help="with --if-due: leftover work is due again after this many days")
+    ap.add_argument("--recheck-days", type=float, default=RECHECK_DAYS, help="an unavailable latest text is tried again after this many days")
     ap.add_argument("--no-discover", action="store_true", help="skip the arXiv index refresh and the re-collection of open editions")
     ap.add_argument("--recollect", choices=["open", "all", "none"], default="open", help="which editions' lists to re-fetch")
     args = ap.parse_args()
@@ -853,7 +960,7 @@ def main() -> int:
     try:
         with Locked():
             summary = run(work, Pipeline(work), editions=editions, publish=args.publish, dry_run=args.dry_run, max_parse=args.max_parse,
-                          discover=not args.no_discover, recollect=args.recollect)
+                          discover=not args.no_discover, recollect=args.recollect, recheck_days=args.recheck_days)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 2
