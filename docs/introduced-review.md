@@ -113,7 +113,11 @@ the new text and records one decision on the claim:
                           "reason": "<why>", "reviewed_by": "<who>", "reviewed": "<date>"}
 
 `retain` keeps the claim confirmed on the old sentence; `retire` excludes
-it (label `U`). `retained_evidence.reason` says why the claim is gone:
+it (label `U`). Either decision takes the claim out of the review queue at
+the next update; its history row (`claim_history`) stays. The entry keeps
+what was known of the paper when the claim was last extracted (`title`,
+`authors`), so a benchmark whose paper left the matched set still names
+its paper and developers. `retained_evidence.reason` says why the claim is gone:
 `sentence_not_extracted` (the paper is still matched; its text, the parser
 or the rules changed) or `paper_unmatched` (the paper left the edition's
 matched set — a match or identity change — so no sentence of it is read

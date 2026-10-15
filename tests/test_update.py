@@ -402,7 +402,12 @@ class UpdateTests(unittest.TestCase):
         self.scenario["dates"]["2501.00001"] = "2026-10-12"
         with unittest.mock.patch.object(update, "open_editions", return_value=set()):
             update.run(self.work, self.pipe, editions=self.EDS)
+        # an unrelated run records the row again (updated_at moves) without trying it: not due by that
         self.work.con.execute("UPDATE paper_stages SET updated_at = '2026-01-01T00:00:00+00:00' WHERE arxiv_base = '2501.00001'")
+        self.work.con.commit()
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["recheck"], 0)
+        # the ATTEMPT older than recheck_days is what brings it back, however recent the row
+        self.work.con.execute("UPDATE paper_stages SET last_recheck_at = '2026-01-01T00:00:00+00:00', updated_at = ? WHERE arxiv_base = '2501.00001'", (update.now(),))
         self.work.con.commit()
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["recheck"], 1)
 
@@ -421,13 +426,35 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(("retain", "2501.00001#toy"), self.pipe.calls)              # the reviewed claim is retained for a decision
         self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["evidence"], "We introduce Toy.")
         self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["reason"], "sentence_not_extracted")   # the paper is still matched
-        # an unreviewed vanished claim is queued too, with no retention
+        # a decision on the vanished claim takes it out of the queue; the history stays
+        self.scenario["reviewed"]["2501.00001#toy"]["vanished_decision"] = {"decision": "retain", "reason": "introduced in v1", "reviewed_by": "test"}
+        self.bump("bench_mentions.py")
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertNotIn("2501.00001#toy", {r[0] for r in self.work.con.execute("SELECT claim_id FROM claim_queue")})
+        self.assertEqual(self.work.claim_record("2501.00001#toy")["vanished_run"] is not None, True)
+        # the same for retire, on a reviewed claim that vanishes later
+        self.scenario["reviewed"]["2504.00001#fresh"] = {"status": "confirmed", "label": "E", "evidence_sha": "sha-b"}
         self.pipe.calls.clear()
         del self.scenario["claims"]["2504.00001#fresh"]
         self.bump("bench_mentions.py")
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual(out["claims"]["queued_vanished"], 1)
-        self.assertNotIn(("retain", "2504.00001#fresh"), self.pipe.calls)
+        self.assertIn(("retain", "2504.00001#fresh"), self.pipe.calls)
+        self.scenario["reviewed"]["2504.00001#fresh"]["vanished_decision"] = {"decision": "retire", "reason": "no longer claimed", "reviewed_by": "test"}
+        self.bump("bench_mentions.py")
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual({r[0] for r in self.work.con.execute("SELECT claim_id FROM claim_queue WHERE reason = 'vanished'")}, set())
+        self.assertEqual(self.work.claim_record("2504.00001#fresh")["evidence"], "We introduce Fresh.")
+        # an unreviewed vanished claim is queued too, with no retention
+        self.scenario["claims"]["2505.00001#late"] = {"edition": "iclr-2026", "sha": "sha-c", "evidence": "We introduce Late.", "name": "Late", "noun": "benchmark", "arxiv_base": "2505.00001", "title": "Paper 5"}
+        self.bump("bench_mentions.py")
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.pipe.calls.clear()
+        del self.scenario["claims"]["2505.00001#late"]
+        self.bump("bench_mentions.py")
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(out["claims"]["queued_vanished"], 1)
+        self.assertNotIn(("retain", "2505.00001#late"), self.pipe.calls)
 
     def test_a_stale_review_is_not_reused_and_a_vanished_claim_waits_for_a_decision(self):
         from icml.bench_mentions import review_for
@@ -444,6 +471,12 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue(review_for(vanished, confirmed)["vanished_in_latest_version"])
         self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retire", "reason": "no longer claimed"}})["status"], "excluded")
         self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retain", "reason": "introduced in v1"}})["status"], "confirmed")
+        # a retained claim keeps the title and authors recorded with it when the paper is no longer in the index
+        from icml.bench_mentions import retained_claim
+        kept = {"name": "Toy", "noun": "benchmark", "edition": "iclr-2025", "arxiv_base": "2501.00001", "title": "Paper 1",
+                "authors": ["A. Author"], "evidence": "We introduce Toy, a benchmark."}
+        c = retained_claim("2501.00001#toy", kept, {})
+        self.assertEqual((c["title"], c["authors"], c["vanished"]), ("Paper 1", ["A. Author"], True))
 
     def test_a_failed_run_is_recorded_and_the_next_one_proceeds(self):
         def broken(paths, **kw):

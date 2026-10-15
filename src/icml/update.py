@@ -139,7 +139,7 @@ class Work:
         self.con.executescript(SCHEMA)
         # a working database from before a column existed gains it here
         cols = {r[1] for r in self.con.execute("PRAGMA table_info(paper_stages)")}
-        for col in ("source_version", "content_sha256", "baseline_datestamp", "recheck_datestamp", "recheck_status", "recheck_error"):
+        for col in ("source_version", "content_sha256", "baseline_datestamp", "recheck_datestamp", "recheck_status", "recheck_error", "last_recheck_at"):
             if col not in cols:
                 self.con.execute(f"ALTER TABLE paper_stages ADD COLUMN {col} TEXT")
         self.con.commit()
@@ -203,15 +203,16 @@ class Work:
         (the parsed text), `baseline_datestamp` (the stamp the paper was
         last checked against), and the last re-check outcome."""
         return {r["arxiv_base"]: dict(r) for r in self.con.execute(
-            "SELECT arxiv_base, source_version, content_sha256, baseline_datestamp, recheck_datestamp, recheck_status "
+            "SELECT arxiv_base, source_version, content_sha256, baseline_datestamp, recheck_datestamp, recheck_status, last_recheck_at "
             "FROM paper_stages WHERE edition = ? AND arxiv_base IS NOT NULL", (edition,))}
 
     def set_versions(self, edition: str, confirmed: dict[str, tuple[str | None, str | None]]) -> None:
         """Record a confirmed fetch: (datestamp, content hash) per base. Only
         a parse made in this run on text fetched now is confirmed."""
+        ts = now()
         self.con.executemany("UPDATE paper_stages SET source_version = ?, content_sha256 = ?, baseline_datestamp = ?, "
-                             "recheck_status = NULL, recheck_datestamp = NULL WHERE edition = ? AND arxiv_base = ?",
-                             [(ds, sha, ds, edition, b) for b, (ds, sha) in confirmed.items()])
+                             "recheck_status = NULL, recheck_datestamp = NULL, last_recheck_at = ? WHERE edition = ? AND arxiv_base = ?",
+                             [(ds, sha, ds, ts, edition, b) for b, (ds, sha) in confirmed.items()])
         self.con.commit()
 
     def set_baselines(self, edition: str, stamps: dict[str, str], only_missing: bool = True) -> None:
@@ -227,9 +228,13 @@ class Work:
         record, kept apart from the text it serves: `failed` (transient,
         retried next run) or `unavailable` (no HTML or a thin page now;
         judged again when the record or the parser changes, or after
-        `recheck_days`). The served text, its hash and version stay."""
-        self.con.execute("UPDATE paper_stages SET recheck_datestamp = ?, recheck_status = ?, recheck_error = ?, updated_at = ? "
-                         "WHERE edition = ? AND arxiv_base = ?", (datestamp, status, error, now(), edition, base))
+        `recheck_days`). The served text, its hash and version stay.
+        `last_recheck_at` moves only here and on a fetch: `updated_at` moves
+        on every run that records the paper, so a period measured from it
+        would slide forever."""
+        ts = now()
+        self.con.execute("UPDATE paper_stages SET recheck_datestamp = ?, recheck_status = ?, recheck_error = ?, updated_at = ?, last_recheck_at = ? "
+                         "WHERE edition = ? AND arxiv_base = ?", (datestamp, status, error, ts, ts, edition, base))
         self.con.commit()
 
     def recheck_failures(self, edition: str) -> list[str]:
@@ -238,11 +243,11 @@ class Work:
 
     def rechecks_to_rejudge(self, edition: str, dates: dict[str, str], parser_changed: bool, recheck_days: float) -> list[str]:
         """`unavailable` re-checks due again: the record moved past the
-        stamp tried, the parser changed, or the attempt is older than
-        `recheck_days`."""
+        stamp tried, the parser changed, or the last ATTEMPT
+        (`last_recheck_at`, never `updated_at`) is older than `recheck_days`."""
         out = []
         cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=recheck_days)).isoformat(timespec="seconds")
-        for r in self.con.execute("SELECT arxiv_base, recheck_datestamp, updated_at FROM paper_stages WHERE edition = ? AND recheck_status = 'unavailable'", (edition,)):
+        for r in self.con.execute("SELECT arxiv_base, recheck_datestamp, last_recheck_at FROM paper_stages WHERE edition = ? AND recheck_status = 'unavailable'", (edition,)):
             if parser_changed or dates.get(r[0], "") > (r[1] or "") or (r[2] or "") < cutoff:
                 out.append(r[0])
         return out
@@ -500,6 +505,10 @@ class Pipeline:
         if entry is None:
             return
         entry["retained_evidence"] = {k: record.get(k) for k in ("edition", "arxiv_base", "name", "noun", "title", "evidence", "evidence_sha", "reason")}
+        # what was known of the paper when the claim was last extracted stays with it
+        p = bm.paper_index().get(record.get("arxiv_base") or "", {})
+        entry["retained_evidence"]["title"] = record.get("title") or p.get("title") or ""
+        entry["retained_evidence"]["authors"] = list(p.get("authors") or [])
         entry["retained_evidence"]["vanished_at"] = record.get("vanished_at") or now()
         bm.dump_json(bm.REVIEW, rev)
 
@@ -796,6 +805,11 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 reviewed = pipeline.reviewed()
                 if any(reviewed.get(cid, {}).get("retained_evidence") for cid in vanished):
                     pipeline.claims()                         # the catalogue with the retained claims marked
+            # a vanished claim leaves the queue once a reviewer decided retain or
+            # retire (`vanished_decision`); its history row stays as it is
+            for (cid,) in work.con.execute("SELECT claim_id FROM claim_queue WHERE reason = 'vanished'").fetchall():
+                if (reviewed.get(cid, {}).get("vanished_decision") or {}).get("decision") in ("retain", "retire"):
+                    dequeued.append(cid)
             in_queue = {r[0] for r in work.con.execute("SELECT claim_id FROM claim_queue")}
             dequeued = [c for c in dequeued if c in in_queue]
             work.queue_claims(queued, run_id)

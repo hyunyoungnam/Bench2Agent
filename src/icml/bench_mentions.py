@@ -853,6 +853,18 @@ def review_import(path: str) -> None:
     print(f"review: {n} decisions recorded, {len(rev['claims'])} in total -> {REVIEW.name}")
 
 
+def retained_claim(cid: str, kept: dict, paper: dict) -> dict:
+    """A vanished reviewed claim as the catalogue lists it: the sentence,
+    title and authors kept on the review entry, the paper index only where
+    it still knows the paper (`year`); the kept title and authors stand
+    when the paper has left the matched set."""
+    return {"claim_id": cid, "name": kept.get("name"), "fold": dataset_key(kept.get("name") or ""),
+            "noun": kept.get("noun"), "edition": kept.get("edition"), "year": paper.get("year"),
+            "arxiv_base": kept.get("arxiv_base"), "title": kept.get("title") or paper.get("title") or "",
+            "authors": list(paper.get("authors") or kept.get("authors") or []), "registered": None, "in_title": False,
+            "evidence": kept.get("evidence") or "", "vanished": True}
+
+
 def review_for(claim: dict, entry: dict | None) -> dict | None:
     """The review that applies to a claim as extracted NOW. A review made on
     another sentence (`evidence_sha` differs) is stale: none of it — label,
@@ -907,12 +919,7 @@ def introduced() -> Path:
         kept = entry.get("retained_evidence")
         if cid in present or not kept or entry.get("status") != "confirmed":
             continue
-        p = idx.get(kept.get("arxiv_base"), {})
-        claims.append({"claim_id": cid, "name": kept.get("name"), "fold": dataset_key(kept.get("name") or ""),
-                       "noun": kept.get("noun"), "edition": kept.get("edition"), "year": p.get("year"),
-                       "arxiv_base": kept.get("arxiv_base"), "title": kept.get("title") or p.get("title") or "",
-                       "authors": p.get("authors") or [], "registered": None, "in_title": False,
-                       "evidence": kept.get("evidence") or "", "vanished": True})
+        claims.append(retained_claim(cid, kept, idx.get(kept.get("arxiv_base"), {})))
     for c in claims:
         c["review"] = review_for(c, rev["claims"].get(c["claim_id"]))
     for c in claims:
