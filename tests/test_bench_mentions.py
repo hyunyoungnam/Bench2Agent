@@ -1,8 +1,9 @@
 """Boundary cases for the rule that turns a text n-gram into a benchmark mention."""
 import unittest
 
-from icml.bench_mentions import (Finder, _title_names, caption_role, data_linked, introduced_names, role_at,
+from icml.bench_mentions import (Finder, caption_role, data_linked, introduced_names, role_at,
                                   stated_roles, unlisted_names)
+from icml.catalogue import _title_names
 from icml.taxonomy import dataset_key
 
 

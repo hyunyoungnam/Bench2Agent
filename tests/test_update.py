@@ -119,7 +119,7 @@ class FakePipeline(update.Pipeline):
 
     def retain_vanished(self, cid, record):
         self.calls.append(("retain", cid))
-        self.s.setdefault("reviewed", {}).setdefault(cid, {})["retained_evidence"] = {k: record.get(k) for k in ("edition", "evidence", "evidence_sha", "reason")}
+        self.s.setdefault("reviewed", {}).setdefault(cid, {})["retained_evidence"] = {k: record.get(k) for k in ("edition", "evidence", "evidence_sha", "reason", "title", "authors")}
 
     def build(self, publish):
         self.calls.append(("build", publish))
@@ -136,13 +136,13 @@ class UpdateTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "src/icml").mkdir(parents=True)
         (self.root / "config").mkdir()
-        for name in ("normalize.py", "arxiv_match.py", "html_extract.py", "bench_mentions.py", "taxonomy.py"):
+        for name in ("normalize.py", "arxiv_match.py", "html_extract.py", "bench_mentions.py", "taxonomy.py", "catalogue.py"):
             (self.root / "src/icml" / name).write_text(f"# {name} v1\n")
         (self.root / "config/benchmarks.json").write_text('{"benchmarks": []}')
         self.work = update.Work(self.root)
         self.addCleanup(self.work.close)
         self.scenario = {"papers": {"iclr-2025": [1, 2, 3], "iclr-2026": [4, 5]},
-                         "claims": {"2501.00001#toy": {"edition": "iclr-2025", "sha": "sha-a", "evidence": "We introduce Toy.", "name": "Toy", "noun": "benchmark", "arxiv_base": "2501.00001", "title": "Paper 1"},
+                         "claims": {"2501.00001#toy": {"edition": "iclr-2025", "sha": "sha-a", "evidence": "We introduce Toy.", "name": "Toy", "noun": "benchmark", "arxiv_base": "2501.00001", "title": "Paper 1", "authors": ["A. Author", "B. Writer"]},
                                     "2504.00001#fresh": {"edition": "iclr-2026", "sha": "sha-b", "evidence": "We introduce Fresh.", "name": "Fresh", "noun": "benchmark", "arxiv_base": "2504.00001", "title": "Paper 4"}},
                          "reviewed": {"2501.00001#toy": {"label": "E", "status": "confirmed", "evidence_sha": "sha-a"}}}
         self.pipe = FakePipeline(self.work, self.scenario)
@@ -201,7 +201,7 @@ class UpdateTests(unittest.TestCase):
         self.pipe.calls.clear()
         self.bump("bench_mentions.py")                                        # the rules changed: mentions over every parsed paper
         plan = update.status(self.work, self.EDS, self.pipe)["editions"]
-        self.assertEqual(plan["iclr-2025"]["need"], ["mentions (rules changed)"])
+        self.assertEqual(plan["iclr-2025"]["need"], ["mentions (extraction changed)"])
         update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] in ("parse", "reparse", "mentions", "match")],
                          [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
@@ -355,9 +355,69 @@ class UpdateTests(unittest.TestCase):
         self.pipe.claims = claims_adding_entity
         (self.root / "config/introduced_review.json").write_text(json.dumps({**self.scenario["reviewed"], "x": {}}))
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
-        self.assertEqual(out["claims"].get("mentions_rerun"), "vocabulary changed")
+        # the catalogue is regenerated BEFORE the plan, so the new vocabulary is extracted once per edition
+        self.assertTrue(out["claims"].get("catalogue_first"))
+        self.assertNotIn("mentions_rerun", out["claims"])
         self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
+        self.assertEqual(out["editions"]["iclr-2025"]["did"], ["mentions"])
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+        self.pipe.claims = original_claims
+
+    def test_catalogue_code_changes_re_extract_nothing_and_extraction_code_changes_re_extract_everything(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.pipe.calls.clear()
+        self.bump("catalogue.py")                                             # review/catalogue code: not an extraction rule
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [])
+        self.assertEqual(out["editions"]["iclr-2025"]["did"], [])
+        self.pipe.calls.clear()
+        self.bump("taxonomy.py")                                              # a name rule shared by the extraction: it is
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual(out["editions"]["iclr-2025"]["did"], ["mentions"])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+
+    def test_a_vocabulary_that_moves_again_after_the_pass_gets_one_more_pass_and_never_the_same_twice(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.pipe.calls.clear()
+        original = self.pipe.claims
+        n = {"calls": 0}
+
+        def claims_moving_twice():
+            n["calls"] += 1
+            ents = [{"id": "toy", "name": "Toy"}] + ([{"id": "newbie", "name": "Newbie"}] if n["calls"] >= 1 else []) \
+                   + ([{"id": "later", "name": "Later"}] if n["calls"] >= 2 else [])
+            (self.root / "config/benchmarks_introduced.json").write_text(json.dumps({"benchmarks": ents}))
+            return original()
+        self.pipe.claims = claims_moving_twice
+        (self.root / "config/introduced_review.json").write_text(json.dumps({**self.scenario["reviewed"], "y": {}}))
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        # call 1 (catalogue first) adds Newbie: extracted once in the main pass; the comparison's call 2 adds
+        # Later: one more pass; call 3 adds nothing: stop. Two extractions per edition, none repeated
+        self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"],
+                         [("mentions", "iclr-2025"), ("mentions", "iclr-2026"), ("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
+        self.assertEqual(out["claims"]["mentions_rerun"], "vocabulary changed: 2 editions, pass 1")
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], [])
+        self.pipe.claims = original
+
+    def test_adopt_rules_moves_only_the_code_version_of_the_named_stages_and_never_a_recorded_vocabulary(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        current = update.versions(self.root)
+        # the stages were made under an earlier version scheme: one without a recorded vocabulary, one with
+        self.work.con.execute("UPDATE edition_stages SET version = 'old-rules-1', input_hash = NULL WHERE stage = 'mentions' AND edition = 'iclr-2025'")
+        self.work.con.execute("UPDATE edition_stages SET version = 'old-rules-2', input_hash = 'vocab-then' WHERE stage = 'mentions' AND edition = 'iclr-2026'")
+        self.work.con.commit()
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], ["mentions (extraction changed)"])
+        with self.assertRaises(RuntimeError):
+            update.adopt_rules(self.work, ["old-rules-1"], "not-the-signature", "checked")    # the operator must name the current vocabulary
+        with self.assertRaises(RuntimeError):
+            update.adopt_rules(self.work, ["no-such-version"], current["vocabulary"], "checked")
+        out = update.adopt_rules(self.work, ["old-rules-1", "old-rules-2"], current["vocabulary"], "catalogue code moved; 3 editions re-run identical")
+        self.assertEqual((out["from"], out["to"], out["editions"]), (["old-rules-1", "old-rules-2"], current["extraction"], ["iclr-2025", "iclr-2026"]))
+        self.assertEqual(self.work.stage_version("iclr-2025", "mentions"), (current["extraction"], current["vocabulary"]))
+        self.assertEqual(self.work.stage_version("iclr-2026", "mentions"), (current["extraction"], "vocab-then"))   # recorded vocabulary kept: still stale by it
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], ["mentions (vocabulary changed)"])
+        self.assertEqual(self.work.con.execute("SELECT kind, outcome FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()[:2], ("adopt-rules", "ok"))
 
     def test_a_latest_text_that_is_unavailable_keeps_the_served_parse_and_is_rejudged_on_schedule(self):
         self.scenario["dates"] = {"2501.00001": "2025-01-01", "2502.00001": "2025-01-01", "2503.00001": "2025-01-01",
@@ -426,6 +486,9 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(("retain", "2501.00001#toy"), self.pipe.calls)              # the reviewed claim is retained for a decision
         self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["evidence"], "We introduce Toy.")
         self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["reason"], "sentence_not_extracted")   # the paper is still matched
+        # the title and authors recorded while the paper was matched travel with the retained claim
+        self.assertEqual((record["title"], record["authors"]), ("Paper 1", ["A. Author", "B. Writer"]))
+        self.assertEqual(self.scenario["reviewed"]["2501.00001#toy"]["retained_evidence"]["authors"], ["A. Author", "B. Writer"])
         # a decision on the vanished claim takes it out of the queue; the history stays
         self.scenario["reviewed"]["2501.00001#toy"]["vanished_decision"] = {"decision": "retain", "reason": "introduced in v1", "reviewed_by": "test"}
         self.bump("bench_mentions.py")
@@ -457,7 +520,7 @@ class UpdateTests(unittest.TestCase):
         self.assertNotIn(("retain", "2505.00001#late"), self.pipe.calls)
 
     def test_a_stale_review_is_not_reused_and_a_vanished_claim_waits_for_a_decision(self):
-        from icml.bench_mentions import review_for
+        from icml.catalogue import review_for
         claim = {"claim_id": "2501.00001#toy", "evidence": "We introduce Toy, a benchmark.", "name": "Toy"}
         import hashlib
         sha = hashlib.sha256(claim["evidence"].encode()).hexdigest()[:16]
@@ -472,7 +535,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retire", "reason": "no longer claimed"}})["status"], "excluded")
         self.assertEqual(review_for(vanished, {**confirmed, "vanished_decision": {"decision": "retain", "reason": "introduced in v1"}})["status"], "confirmed")
         # a retained claim keeps the title and authors recorded with it when the paper is no longer in the index
-        from icml.bench_mentions import retained_claim
+        from icml.catalogue import retained_claim
         kept = {"name": "Toy", "noun": "benchmark", "edition": "iclr-2025", "arxiv_base": "2501.00001", "title": "Paper 1",
                 "authors": ["A. Author"], "evidence": "We introduce Toy, a benchmark."}
         c = retained_claim("2501.00001#toy", kept, {})
