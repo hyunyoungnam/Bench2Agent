@@ -2,7 +2,7 @@
   "_note": "Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark (owner, 2026-10-06; rebuilt after the Codex review). Only claims Claude Code's review confirmed are here; candidates, exclusions and undetermined claims are counted in `claims` and listed in introduced_review.json. kind 'benchmark' = some claim says it is evaluated on; 'dataset' = training data or a resource. `first_claim` is the first edition HERE that claims it, never 'first developed': the corpus starts in 2023. Same name, no shared author = a different product (`homonym_of`).",
   "claims": {
     "candidate": 2399,
-    "confirmed": 9240,
+    "confirmed": 9241,
     "excluded": 874,
     "undetermined": 16,
     "stale": 2
@@ -183015,7 +183015,9 @@
       "registered": null,
       "homonym_of_registered": null,
       "kind": "dataset",
-      "homonym_of": null,
+      "homonym_of": [
+        "noisy-mnist-2"
+      ],
       "identity_candidates": null,
       "identity_evidence": [
         "same-paper"
@@ -183038,6 +183040,36 @@
         "Wei Huang",
         "Yuan Cao"
       ]
+    },
+    {
+      "id": "noisy-mnist-2",
+      "name": "Noisy MNIST",
+      "fold": "noisymnist",
+      "registered": null,
+      "homonym_of_registered": null,
+      "kind": "dataset",
+      "homonym_of": [
+        "noisy-mnist"
+      ],
+      "identity_candidates": null,
+      "identity_evidence": [
+        "same-paper"
+      ],
+      "first_claim": "iclr-2025",
+      "claims": [
+        {
+          "claim_id": "2410.02942#noisymnist",
+          "edition": "iclr-2025",
+          "arxiv_base": "2410.02942",
+          "title": "",
+          "noun": "dataset",
+          "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
+          "label": "T",
+          "vanished_in_latest_version": true,
+          "pending_decision": "retain or retire (docs/introduced-review.md)"
+        }
+      ],
+      "developers": []
     },
     {
       "id": "noisy-ner",

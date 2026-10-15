@@ -90,6 +90,14 @@ FIGURES["34e3f1fb690c0878"] = {
 FIGURES["b1bf7b2c90e9f1b9"] = dict(FIGURES["34e3f1fb690c0878"])   # run 10: 118 re-checks, one NeurIPS 2024 parse lost to the pre-fix no-html path
 FIGURES["1eeab45461183fa7"] = {**FIGURES["34e3f1fb690c0878"],   # run 11: +5 newly collected papers parsed, Noisy MNIST retained (vanished, pending)
                                "latest_all": {"parsed": 27479, "GSM8K": 1121, "CIFAR-10": 844, "MMLU": 800}}
+FIGURES["66c4aa1cc0c564e7"] = {   # run 12: the NeurIPS 2024 parse lost in run 10 restored from the archive
+    'robotics_latest': {'parsed': 513, 'LIBERO': 82, 'SIMPLER': 41, 'Meta-World': 29},
+    'iclr_cifar10': [('iclr-2020', 103, 547), ('iclr-2021', 135, 717), ('iclr-2022', 141, 838), ('iclr-2023', 166, 1241), ('iclr-2024', 179, 1894), ('iclr-2025', 196, 3059), ('iclr-2026', 168, 4252)],
+    'latest_all': {'parsed': 27479, 'GSM8K': 1121, 'CIFAR-10': 844, 'MMLU': 800},
+    'computer_vision_latest': {'parsed': 2828, 'COCO': 163, 'POPE': 75, 'Video-MME': 69},
+    'libero_adoption': {'others': 195, 'self': 3, 'undetermined': 0, 'before_claim': 0},
+    'relbench_2_adoption': {'others': 3, 'self': 1, 'undetermined': 0, 'unattributed': 8},
+}
 FIGURES["ddae8df2d9caf403"] = {**FIGURES["a4a18c3dbaf3ca0b"],
                                "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
                                "latest_all": {"parsed": 27459, "GSM8K": 1121, "CIFAR-10": 843, "MMLU": 800},

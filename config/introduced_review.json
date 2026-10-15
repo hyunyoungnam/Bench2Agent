@@ -44964,7 +44964,18 @@
       "label": "T",
       "status": "confirmed",
       "reviewed": "2026-10-06",
-      "evidence_sha": "a739aadd9eb48c89"
+      "evidence_sha": "a739aadd9eb48c89",
+      "retained_evidence": {
+        "edition": "iclr-2025",
+        "arxiv_base": "2410.02942",
+        "name": "Noisy MNIST",
+        "noun": "dataset",
+        "title": "",
+        "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
+        "evidence_sha": "a739aadd9eb48c89",
+        "reason": "paper_unmatched",
+        "vanished_at": "2026-10-14T11:16:06+00:00"
+      }
     },
     "2506.11115#noisyner": {
       "label": "T",
