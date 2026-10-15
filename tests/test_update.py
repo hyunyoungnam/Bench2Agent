@@ -370,6 +370,11 @@ class UpdateTests(unittest.TestCase):
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
         self.assertEqual([c for c in self.pipe.calls if c[0] == "mentions"], [])
         self.assertEqual(out["editions"]["iclr-2025"]["did"], [])
+        self.assertEqual(out["claims"]["catalogue_first"], "catalogue code changed")   # but the catalogue IS regenerated
+        self.assertIn(("claims",), self.pipe.calls)
+        self.pipe.calls.clear()
+        out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)   # and only once per change
+        self.assertNotIn(("claims",), self.pipe.calls)
         self.pipe.calls.clear()
         self.bump("taxonomy.py")                                              # a name rule shared by the extraction: it is
         out = update.run(self.work, self.pipe, editions=self.EDS, discover=False)
@@ -397,6 +402,27 @@ class UpdateTests(unittest.TestCase):
                          [("mentions", "iclr-2025"), ("mentions", "iclr-2026"), ("mentions", "iclr-2025"), ("mentions", "iclr-2026")])
         self.assertEqual(out["claims"]["mentions_rerun"], "vocabulary changed: 2 editions, pass 1")
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], [])
+        self.pipe.claims = original
+
+    def test_a_vocabulary_that_never_settles_fails_the_run_without_a_build_or_a_success(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        success_before = self.work.last_success()
+        self.pipe.calls.clear()
+        original = self.pipe.claims
+        n = {"calls": 0}
+
+        def claims_never_settling():
+            n["calls"] += 1
+            (self.root / "config/benchmarks_introduced.json").write_text(json.dumps({"benchmarks": [{"id": f"e{n['calls']}", "name": f"E{n['calls']}"}]}))
+            return original()
+        self.pipe.claims = claims_never_settling
+        (self.root / "config/introduced_review.json").write_text(json.dumps({**self.scenario["reviewed"], "z": {}}))
+        with self.assertRaises(RuntimeError):
+            update.run(self.work, self.pipe, editions=self.EDS, publish=True, discover=False)
+        self.assertNotIn(("build", True), self.pipe.calls)                       # nothing built, nothing published
+        self.assertEqual(self.work.con.execute("SELECT outcome FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()[0], "failed")
+        self.assertEqual(self.work.last_success(), success_before)
+        self.assertLessEqual(sum(1 for c in self.pipe.calls if c == ("mentions", "iclr-2025")), 4)   # the cap holds
         self.pipe.claims = original
 
     def test_adopt_rules_moves_only_the_code_version_of_the_named_stages_and_never_a_recorded_vocabulary(self):

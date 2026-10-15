@@ -193,7 +193,7 @@ def cmd_data(args, root: Path) -> int:
     if args.action == "status":
         result = data.status(root)
     elif args.action == "install":
-        result = data.install(root, file=args.file, url=args.url, sha256=args.sha256)
+        result = data.install(root, file=args.file, url=args.url, sha256=args.sha256, activate=not args.no_activate)
     elif args.action == "sqlite":
         result = data.build_sqlite(root, args.source, args.out)
     elif args.action == "activate":
@@ -588,6 +588,8 @@ def main(argv=None) -> int:
     source.add_argument("--file")
     source.add_argument("--url")
     install.add_argument("--sha256", help="expected SHA-256 of the downloaded file")
+    install.add_argument("--no-activate", action="store_true",
+                         help="install and verify the revision as a candidate; the active pointer stays where it is")
     bundle = actions.add_parser("bundle")
     common_options(bundle, child=True)
     bundle.add_argument("--out", required=True)

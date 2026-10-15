@@ -106,6 +106,7 @@ def versions(root: Path = ROOT) -> dict:
             # names, aliases, homonym grouping — not the catalogue file, which every
             # run regenerates downstream of the mentions). Catalogue and review code
             # (catalogue.py) is neither: a change there re-extracts nothing.
+            "catalogue": file_hash(src / "catalogue.py"),
             "extraction": hashlib.sha256("|".join(filter(None, [
                 file_hash(src / "bench_mentions.py"), file_hash(src / "taxonomy.py"),
                 file_hash(root / "config" / "benchmarks.json")])).encode()).hexdigest()[:16],
@@ -678,11 +679,13 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
         # changes the mention vocabulary; regenerating the catalogue now lets the
         # plan below re-extract once, with the vocabulary that will stand
         review_path = work.root / "config" / "introduced_review.json"
-        if file_hash(review_path) != work.get("review_hash") or not work.get("claims_seen"):
+        catalogue_changed = current["catalogue"] != work.get("catalogue_version")
+        if file_hash(review_path) != work.get("review_hash") or catalogue_changed or not work.get("claims_seen"):
             pipeline.claims()
+            work.set("catalogue_version", current["catalogue"])
             current = versions(work.root)
             summary["versions"] = current
-            summary["claims"]["catalogue_first"] = True
+            summary["claims"]["catalogue_first"] = "catalogue code changed" if catalogue_changed else "review changed"
         if discover:
             today = dt.date.today().isoformat()
             since = work.get("harvest_until") or (max(pipeline.index_dates().values(), default=None))
@@ -802,7 +805,7 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                                         **{k: v for k, v in funnel.items() if not k.startswith("_")}}
         # claims: when any mentions changed, or the review file changed, or never compared
         review_changed = file_hash(review_path) != work.get("review_hash")
-        if touched or review_changed or not work.get("claims_seen"):
+        if touched or review_changed or catalogue_changed or not work.get("claims_seen"):
             def compare(claims: dict) -> None:
                 """Queue and dequeue against the previous comparison; retain vanished reviewed claims."""
                 reviewed = pipeline.reviewed()
@@ -871,7 +874,8 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 passes += 1
                 if passes > 3:
                     summary["claims"]["mentions_rerun_stopped"] = f"the vocabulary still differs after {passes - 1} passes: {len(stale)} editions left stale"
-                    break
+                    raise RuntimeError(f"the mention vocabulary did not settle after {passes - 1} passes ({len(stale)} editions stale): "
+                                       "nothing built or published; the catalogue must be looked at")
                 for p in stale:
                     pipeline.mentions(p["paths"])
                     work.mark_stage(p["edition"], "mentions", current["extraction"], current["vocabulary"], run_id)
