@@ -411,6 +411,7 @@ class UpdateTests(unittest.TestCase):
             update.adopt_rules(self.work, ["old-rules-1"], "not-the-signature", "checked")    # the operator must name the current vocabulary
         with self.assertRaises(RuntimeError):
             update.adopt_rules(self.work, ["no-such-version"], current["vocabulary"], "checked")
+        before_success = self.work.last_success()
         out = update.adopt_rules(self.work, ["old-rules-1", "old-rules-2"], current["vocabulary"], "catalogue code moved; 3 editions re-run identical")
         self.assertEqual((out["from"], out["to"], out["editions"]), (["old-rules-1", "old-rules-2"], current["extraction"], ["iclr-2025", "iclr-2026"]))
         self.assertEqual(self.work.stage_version("iclr-2025", "mentions"), (current["extraction"], current["vocabulary"]))
@@ -418,6 +419,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
         self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2026"]["need"], ["mentions (vocabulary changed)"])
         self.assertEqual(self.work.con.execute("SELECT kind, outcome FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()[:2], ("adopt-rules", "ok"))
+        self.assertEqual(self.work.last_success(), before_success)                # not a refresh: the weekly due date does not move
 
     def test_a_latest_text_that_is_unavailable_keeps_the_served_parse_and_is_rejudged_on_schedule(self):
         self.scenario["dates"] = {"2501.00001": "2025-01-01", "2502.00001": "2025-01-01", "2503.00001": "2025-01-01",

@@ -314,10 +314,9 @@ class Work:
         self.con.execute("UPDATE runs SET finished_at = ?, outcome = ?, summary = ?, error = ? WHERE run_id = ?",
                          (now(), outcome, json.dumps(summary or {}), error, run_id))
         self.con.commit()
-        if outcome == "ok":
+        kind = self.con.execute("SELECT kind FROM runs WHERE run_id = ?", (run_id,)).fetchone()[0]
+        if outcome == "ok" and kind == "update":              # an adopt-rules run is a record, not a refresh
             self.set("last_success", now())
-        elif outcome == "adopted":
-            pass
 
     def last_success(self) -> str | None:
         return self.get("last_success")
