@@ -46699,9 +46699,9 @@
       "evidence_sha": "f7aab63d743be9fb"
     },
     "2605.03413#otib": {
-      "label": "E",
-      "status": "confirmed",
-      "reviewed": "2026-10-15",
+      "label": "?",
+      "status": "excluded",
+      "reviewed": "2026-10-16",
       "evidence_sha": "5c3cd658665c3774",
       "history": [
         {
@@ -46709,10 +46709,18 @@
           "status": "confirmed",
           "reviewed": "2026-10-06",
           "evidence_sha": "180d7b3b012a0caf"
+        },
+        {
+          "label": "E",
+          "status": "confirmed",
+          "reviewed": "2026-10-15",
+          "evidence_sha": "5c3cd658665c3774",
+          "note": "new version rewords the contributions list; still introduces OTIB (the entity also has the claim 2605.03413#observationtotheoryinduction)",
+          "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)"
         }
       ],
-      "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)",
-      "note": "new version rewords the contributions list; still introduces OTIB (the entity also has the claim 2605.03413#observationtotheoryinduction)"
+      "reviewed_by": "Claude Code (correction of its own 2026-10-15 re-review)",
+      "note": "the extracted sentence is cut at the 500-character evidence limit before the words naming OTIB, so it does not show the introduction; the paper's introduction of OTIB stands on 2605.03413#observationtotheoryinduction ('To this end, we introduce the Observation-to-Theory Induction Benchmark.')"
     },
     "2506.00308#oudsearch": {
       "label": "T",

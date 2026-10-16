@@ -2,8 +2,8 @@
   "_note": "Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark (owner, 2026-10-06; rebuilt after the Codex review). Only claims Claude Code's review confirmed are here; candidates, exclusions and undetermined claims are counted in `claims` and listed in introduced_review.json. kind 'benchmark' = some claim says it is evaluated on; 'dataset' = training data or a resource. `first_claim` is the first edition HERE that claims it, never 'first developed': the corpus starts in 2023. Same name, no shared author = a different product (`homonym_of`).",
   "claims": {
     "candidate": 2399,
-    "confirmed": 9243,
-    "excluded": 874,
+    "confirmed": 9242,
+    "excluded": 875,
     "undetermined": 16
   },
   "benchmarks": [
@@ -196165,12 +196165,12 @@
       "first_claim": "icml-2026",
       "claims": [
         {
-          "claim_id": "2605.03413#otib",
+          "claim_id": "2605.03413#observationtotheoryinduction",
           "edition": "icml-2026",
           "arxiv_base": "2605.03413",
           "title": "Learning to Theorize the World from Observation",
           "noun": "benchmark",
-          "evidence": "Our contributions are summarized as follows: • We formulate Learning-to-Theorize (L2T) as a learning paradigm for inferring executable theories from raw observations, without relying on language, task labels, or program supervision, and introduce the notion of a World Theory Model (WTM)—a class of world models whose object of inference is an explicit executable theory rather than a future observation. • We propose NEO, a probabilistic neural model that learns a latent Language of Thought and ind",
+          "evidence": "To this end, we introduce the Observation-to-Theory Induction Benchmark.",
           "label": "E"
         }
       ],
