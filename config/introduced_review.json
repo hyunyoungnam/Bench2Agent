@@ -19365,7 +19365,15 @@
       "status": "excluded",
       "note": "real name none (unnamed behavioral association dataset, HF llm-association-geometry)",
       "reviewed": "2026-10-06",
-      "evidence_sha": "20443d3759d888d2"
+      "evidence_sha": "20443d3759d888d2",
+      "vanished_decision": {
+        "decision": "retire",
+        "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)",
+        "reviewed": "2026-10-15",
+        "evidence_old": "For reproducibility, we release the full behavioral association dataset (17.5M+ trials) on Hugging Face ...",
+        "evidence_new": "No sentence of the latest text (f818b083fc48) names '17.5M+'; the release sentence was rewritten.",
+        "reason": "Excluded X before (not a benchmark name: an unnamed behavioral association dataset); nothing to keep."
+      }
     },
     "2507.03069#1kstrategyqa": {
       "label": "X",
@@ -24630,8 +24638,18 @@
     "2506.17585#citepretrainbench": {
       "label": "E",
       "status": "confirmed",
-      "reviewed": "2026-10-06",
-      "evidence_sha": "d27be74eb3b44b4c"
+      "reviewed": "2026-10-15",
+      "evidence_sha": "73c4da2c092991fb",
+      "history": [
+        {
+          "label": "E",
+          "status": "confirmed",
+          "reviewed": "2026-10-06",
+          "evidence_sha": "d27be74eb3b44b4c"
+        }
+      ],
+      "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)",
+      "note": "new version rewords the claim; still introduces the benchmark CitePretrainBench"
     },
     "2608.29793#city3dmultigen": {
       "label": "E",
@@ -44970,11 +44988,26 @@
         "arxiv_base": "2410.02942",
         "name": "Noisy MNIST",
         "noun": "dataset",
-        "title": "",
+        "title": "SymmetricDiffusers: Learning Discrete Diffusion Models over Finite Symmetric Groups",
         "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
         "evidence_sha": "a739aadd9eb48c89",
         "reason": "paper_unmatched",
-        "vanished_at": "2026-10-14T11:16:06+00:00"
+        "vanished_at": "2026-10-14T11:16:06+00:00",
+        "authors": [
+          "Yongxing Zhang",
+          "Donglin Yang",
+          "Renjie Liao"
+        ],
+        "paper_event": "iclr-2025:31893",
+        "source": "config/benchmarks_introduced.json at git 3fde8f2; archived HTML data/raw/html/2410.02942.html.gz (2026-08-28)"
+      },
+      "vanished_decision": {
+        "decision": "retain",
+        "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)",
+        "reviewed": "2026-10-15",
+        "evidence_old": "We created the Noisy MNIST dataset by adding i.i.d.",
+        "evidence_new": "The archived text (fetched 2026-08-28) still contains the sentence, followed by 'Gaussian noise with a mean of 0 and a standard deviation of 0.01 to each pixel of the MNIST images'. No newer text was read: the paper (ICLR 2025 event 31893, 'SymmetricDiffusers: Learning Discrete Diffusion Models over Finite Symmetric Groups', Zhang, Yang, Liao) is no longer matched to arXiv 2410.02942, whose title reads '... Discrete Diffusion on Finite Symmetric Groups' (token overlap 0.70 < 0.85).",
+        "reason": "The claim stands on the reviewed sentence (label T, a training-resource dataset made by the authors). The loss is a match decision, not a text change: an individual match record with the official id is the pending mechanism (Codex 2026-10-15); the global threshold is not lowered for one case."
       }
     },
     "2506.11115#noisyner": {
@@ -46668,8 +46701,18 @@
     "2605.03413#otib": {
       "label": "E",
       "status": "confirmed",
-      "reviewed": "2026-10-06",
-      "evidence_sha": "180d7b3b012a0caf"
+      "reviewed": "2026-10-15",
+      "evidence_sha": "5c3cd658665c3774",
+      "history": [
+        {
+          "label": "E",
+          "status": "confirmed",
+          "reviewed": "2026-10-06",
+          "evidence_sha": "180d7b3b012a0caf"
+        }
+      ],
+      "reviewed_by": "Claude Code (re-review after the text changed; see todo.md 2026-10-15)",
+      "note": "new version rewords the contributions list; still introduces OTIB (the entity also has the claim 2605.03413#observationtotheoryinduction)"
     },
     "2506.00308#oudsearch": {
       "label": "T",

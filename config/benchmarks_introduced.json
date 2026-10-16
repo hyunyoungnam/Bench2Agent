@@ -2,10 +2,9 @@
   "_note": "Benchmarks and datasets a paper in this corpus says it built, one entry per benchmark (owner, 2026-10-06; rebuilt after the Codex review). Only claims Claude Code's review confirmed are here; candidates, exclusions and undetermined claims are counted in `claims` and listed in introduced_review.json. kind 'benchmark' = some claim says it is evaluated on; 'dataset' = training data or a resource. `first_claim` is the first edition HERE that claims it, never 'first developed': the corpus starts in 2023. Same name, no shared author = a different product (`homonym_of`).",
   "claims": {
     "candidate": 2399,
-    "confirmed": 9241,
+    "confirmed": 9243,
     "excluded": 874,
-    "undetermined": 16,
-    "stale": 2
+    "undetermined": 16
   },
   "benchmarks": [
     {
@@ -37034,6 +37033,38 @@
         "Ofir Press",
         "Ori Press",
         "Vishaal Udandarao"
+      ]
+    },
+    {
+      "id": "citepretrainbench",
+      "name": "CitePretrainBench",
+      "fold": "citepretrainbench",
+      "registered": null,
+      "homonym_of_registered": null,
+      "kind": "benchmark",
+      "homonym_of": null,
+      "identity_candidates": null,
+      "identity_evidence": [
+        "same-paper"
+      ],
+      "first_claim": "iclr-2026",
+      "claims": [
+        {
+          "claim_id": "2506.17585#citepretrainbench",
+          "edition": "iclr-2026",
+          "arxiv_base": "2506.17585",
+          "title": "Cite Pretrain: Retrieval-Free Knowledge Attribution for Large Language Models",
+          "noun": "benchmark",
+          "evidence": "To address this, we introduce CitePretrainBench, a benchmark emphasizing document complexity and long-form citation.",
+          "label": "E"
+        }
+      ],
+      "developers": [
+        "Bhuwan Dhingra",
+        "Jian Pei",
+        "Manzil Zaheer",
+        "Sanxing Chen",
+        "Yukun Huang"
       ]
     },
     {
@@ -183061,15 +183092,18 @@
           "claim_id": "2410.02942#noisymnist",
           "edition": "iclr-2025",
           "arxiv_base": "2410.02942",
-          "title": "",
+          "title": "SymmetricDiffusers: Learning Discrete Diffusion Models over Finite Symmetric Groups",
           "noun": "dataset",
           "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
           "label": "T",
-          "vanished_in_latest_version": true,
-          "pending_decision": "retain or retire (docs/introduced-review.md)"
+          "retained": "The claim stands on the reviewed sentence (label T, a training-resource dataset made by the authors). The loss is a match decision, not a text change: an individual match record with the official id is the pending mechanism (Codex 2026-10-15); the global threshold is not lowered for one case."
         }
       ],
-      "developers": []
+      "developers": [
+        "Donglin Yang",
+        "Renjie Liao",
+        "Yongxing Zhang"
+      ]
     },
     {
       "id": "noisy-ner",
@@ -196131,12 +196165,12 @@
       "first_claim": "icml-2026",
       "claims": [
         {
-          "claim_id": "2605.03413#observationtotheoryinduction",
+          "claim_id": "2605.03413#otib",
           "edition": "icml-2026",
           "arxiv_base": "2605.03413",
           "title": "Learning to Theorize the World from Observation",
           "noun": "benchmark",
-          "evidence": "To this end, we introduce the Observation-to-Theory Induction Benchmark.",
+          "evidence": "Our contributions are summarized as follows: • We formulate Learning-to-Theorize (L2T) as a learning paradigm for inferring executable theories from raw observations, without relying on language, task labels, or program supervision, and introduce the notion of a World Theory Model (WTM)—a class of world models whose object of inference is an explicit executable theory rather than a future observation. • We propose NEO, a probabilistic neural model that learns a latent Language of Thought and ind",
           "label": "E"
         }
       ],
