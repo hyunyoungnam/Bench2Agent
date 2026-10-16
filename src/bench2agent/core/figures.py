@@ -343,41 +343,61 @@ _ROLE_KEYS = {"evaluates_on", "trains_on"}
 _GROUP_KEYS = {"others", "self", "undetermined"}
 _VENUES = ("aaai", "acl", "corl", "cvpr", "eccv", "emnlp", "iccv", "iclr", "icml", "naacl", "neurips")
 
-# metric families; a fact's metric is its key ("count:<key>" for a list's or a mapping's size)
-_PAPERS = {"papers", "parsed_papers", "total_papers", "arxiv_matched", "in_scope_parsed", "field_labelled_papers", "unattributed_papers",
-           "others", "self", "undetermined", "unattributed_using_papers", "before_claim", "total", "n_papers", "using_papers", "sum:groups"}
-_ANY_COUNT = _PAPERS | {"count:*", "catalogue_entries"}
-_EDITIONS = {"count:editions", "count:by_edition", "editions", "n_editions"}
-_RATE = {"per_1000", "share_per_1000", "rate_per_1000"}
+# metric families — never pooled: a number is connected inside ONE family
+USAGE = {"papers", "n_papers", "using_papers"}                                       # paper-edition observations
+ADOPTION = {"others", "self", "undetermined", "sum:groups", "unattributed_using_papers", "before_claim"}   # unique papers
+DENOM = {"parsed_papers", "total_papers", "arxiv_matched", "in_scope_parsed", "field_labelled_papers", "unattributed_papers", "unlabelled_papers"}
+TOTALS = DENOM | {"total", "catalogue_entries", "count:venues"}
+EDITIONS = {"count:editions", "count:by_edition", "editions", "n_editions"}
+RATE = {"per_1000", "share_per_1000", "rate_per_1000"}
+_COUNTS = USAGE | ADOPTION                                                           # what a bare "papers" unit can mean
+_ANY = _COUNTS | {"count:*", "catalogue_entries", "total", "total_benchmarks"}
+
+
+def family(metric: str) -> str:
+    return ("usage" if metric in USAGE else "adoption" if metric in ADOPTION else "denominator" if metric in DENOM
+            else "editions" if metric in EDITIONS else "rate" if metric in RATE else metric)
+
+
 # the unit right after a number sets its family
-_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:회차|에디션|editions?(?![A-Za-z]))", _EDITIONS), (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _PAPERS),
-               (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", _RATE), (r"\s*%", {"percent"}),
-               (r"\s*(?:건|개|items?(?![A-Za-z]))", _ANY_COUNT)]
-# the nearest of these words BEFORE the number narrows the family
-_METRIC_WORDS = [(r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", _EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}), (r"‰|per\s*1,?000|1,?000\s*(?:편|개)?\s*당|천\s*편당", _RATE),
-                 (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}), (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
-                 (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "total", "catalogue_entries"}), (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers", "unattributed_papers"}),
-                 (r"채택|adoption", {"sum:groups", "others", "self", "undetermined"}),
-                 (r"(?<!미)귀속|attributed", {"sum:groups", "others", "self", "undetermined"}), (r"미라벨|라벨\s*없|unlabell?ed", {"unattributed_papers", "unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
-                 (r"학회|venues?", {"count:venues"}), (r"이전|before[_ ]claim", {"before_claim"})]
+_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:회차|에디션|editions?(?![A-Za-z]))", EDITIONS), (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
+               (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*%", {"percent"}),
+               (r"\s*(?:건|개|items?(?![A-Za-z]))", _ANY)]
+# words BEFORE the number: a specific word beats a generic one; among specific ones the nearest wins
+_SPECIFIC_WORDS = [
+    (r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}),
+    (r"‰|per\s*1,?000|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE), (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
+    (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
+    (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "total", "catalogue_entries"}),
+    (r"미라벨|라벨\s*없|unlabell?ed", {"unattributed_papers", "unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
+    (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"}), (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
+    (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"})]
+_GENERIC_WORDS = [(r"사용|(?<![A-Za-z])uses?(?![A-Za-z])|usage|관측|observations?", USAGE)]
 _CONTEXT_WORDS = [(r"타\s*저자|다른\s*저자|(?<![A-Za-z])others?(?![A-Za-z])", "group", "others"), (r"자기|자체\s*저자|(?<![A-Za-z])self(?![A-Za-z])", "group", "self"),
                   (r"미확정|(?<![A-Za-z])undetermined(?![A-Za-z])", "group", "undetermined"), (r"평가|evaluat", "role", "evaluates_on"), (r"학습|훈련|train", "role", "trains_on")]
 
 
+def fold(name: str) -> str:
+    """Case, spaces, hyphens and underscores only: '+' and other identity characters stay ('HumanEval' != 'HumanEval+')."""
+    return re.sub(r"[\s_-]", "", name.lower())
+
+
 def facts(log: TurnLog) -> list[dict]:
-    """(value, metric, context) for every number in the turn's benchmark tool results."""
+    """(value, metric, context) for every number in the turn's benchmark tool results. A value inside one
+    benchmark's result (its counts, its coverage) carries that benchmark's id; scope-wide values carry none."""
     out: list[dict] = []
 
     def walk(o, ctx, key):
         if isinstance(o, dict):
             c = dict(ctx)
             if isinstance(o.get("id"), str) and isinstance(o.get("name"), str):
-                c["benchmark"] = {o["id"].lower(), o["name"].lower()}
+                c["benchmark_id"] = o["id"]
+                c["surfaces"] = {o["id"], o["name"], *[a for a in o.get("aliases") or [] if isinstance(a, str)]}
             if isinstance(o.get("edition"), str):
                 c["edition"] = o["edition"].lower()
             if isinstance(o.get("role"), str) and o["role"] in _ROLE_KEYS:
                 c["role"] = o["role"]
-            if key in {"editions", "by_edition", "by_year"} or all(_EDITION.fullmatch(str(k)) for k in o) and o:
+            if key in {"editions", "by_edition", "by_year"} or (o and all(_EDITION.fullmatch(str(k)) for k in o)):
                 out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c})
             for k, v in o.items():
                 if k in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "snapshot_id", "generated_at", "authors", "developers",
@@ -407,117 +427,189 @@ def facts(log: TurnLog) -> list[dict]:
         if isinstance(args, dict) and isinstance(args.get("role"), str):
             base["role"] = args["role"]
         walk(e.get("result"), base, None)
-    # a share someone computes from a count and its denominator in ONE object (same context)
-    by_ctx: dict = {}
+    # the attributed total of one role (others + self + undetermined), within one object
+    groups: dict = {}
     for f in out:
-        k = json.dumps({x: (sorted(v) if isinstance(v, set) else v) for x, v in f["ctx"].items()}, sort_keys=True)
-        by_ctx.setdefault(k, []).append(f)
-    for fs in by_ctx.values():
-        nums = [f for f in fs if f["metric"] in {"papers", "others", "self", "undetermined", "unattributed_using_papers", "n_papers"}]
-        dens = [f for f in fs if f["metric"] in {"parsed_papers", "in_scope_parsed", "total_papers"}]
-        for n in nums:
-            for d in dens:
-                if d["value"]:
-                    out.append({"value": n["value"] / d["value"] * 100, "metric": "percent", "ctx": n["ctx"]})
-        groups = [f for f in fs if f["metric"] in _GROUP_KEYS]
-        if len(groups) >= 2:
-            out.append({"value": sum(f["value"] for f in groups), "metric": "sum:groups", "ctx": {k: v for k, v in groups[0]["ctx"].items() if k != "group"}})
+        if f["metric"] in _GROUP_KEYS:
+            k = json.dumps({x: (sorted(v) if isinstance(v, set) else v) for x, v in f["ctx"].items() if x != "group"}, sort_keys=True)
+            groups.setdefault(k, []).append(f)
+    for fs in groups.values():
+        if len(fs) >= 2:
+            out.append({"value": sum(f["value"] for f in fs), "metric": "sum:groups", "ctx": {k: v for k, v in fs[0]["ctx"].items() if k != "group"}})
     return out
 
 
-def _names(fs: list[dict]) -> set[str]:
-    return {n for f in fs for n in (f["ctx"].get("benchmark") or ()) if len(n) >= 3}
+_B_BEFORE = r"(?<![a-z0-9+])(?<![a-z0-9][-_])"
+_B_AFTER = r"(?![a-z0-9+])(?![-_][a-z0-9])"
+
+
+def _surfaces(fs: list[dict]) -> tuple[dict, dict, dict]:
+    """ids (matched exactly), and folded names -> the ids they can mean (a homonym maps to several)."""
+    ids, names, originals = {}, {}, {}
+    for f in fs:
+        bid = f["ctx"].get("benchmark_id")
+        if not bid:
+            continue
+        ids[bid.lower()] = bid
+        for s in (f["ctx"].get("surfaces") or set()) - {bid}:
+            if len(fold(s)) >= 3:
+                names.setdefault(fold(s), set()).add(bid)
+                originals.setdefault(fold(s), s)
+    return ids, names, originals
+
+
+def _mentions(text: str, surf: tuple, _unused=None) -> set[str] | None:
+    """Benchmark ids named in this text, None when nothing is named. An id is read exactly and
+    claims its span first; a name (case, spaces and hyphens folded, '+' kept) yields every id it can mean."""
+    ids_map, names, originals = surf
+    low, found = text.lower(), set()
+    shown = set(originals.values())
+    for lid in sorted(ids_map, key=len, reverse=True):
+        bid = ids_map[lid]
+        if bid in shown:
+            continue                                   # an id spelled exactly like a display name reads as that name
+        for m in re.finditer(r"(?<![A-Za-z0-9+])(?<![A-Za-z0-9][-_])" + re.escape(bid) + r"(?![A-Za-z0-9+])(?![-_][A-Za-z0-9])", text):
+            found.add(bid)                             # the id, in its own spelling and case
+            low = low[:m.start()] + " " * (m.end() - m.start()) + low[m.end():]
+    exact = set(found)
+    for folded, original in originals.items():
+        pat = re.sub(r"\\[ \-_]|_", "[-_\\\\s]?", re.escape(original.lower()))
+        if re.search(_B_BEFORE + pat + _B_AFTER, low):
+            # a name next to one of its own ids means that id: "Noisy-MNIST (id: `noisy-mnist`)"
+            found |= (names[folded] & exact) or names[folded]
+    return found or None
 
 
 def _clause(text: str, a: int, b: int) -> tuple[str, str]:
-    """The number's own clause: back to the previous break, forward to the next."""
     start = max(text.rfind(ch, 0, a) for ch in ("\n", ". ", "。", "|", "; ", "·", "(", "—", ", ", " + ", "→"))
     start = 0 if start < 0 else start + 1
     ends = [i for i in (text.find(ch, b) for ch in ("\n", ". ", "|", ";", ", ", "(", ")", " + ", "—", " – ")) if i >= 0]
     return text[start:a], text[b:min(min(ends) if ends else len(text), b + 30)]
 
 
-def _named(text: str, names: set[str]) -> set[str]:
-    low = text.lower()
-    return {n for n in names if re.search(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])", low)}
-
-
-def _section(text: str, a: int, names: set[str]) -> set[str]:
-    """The benchmark the number's section is about: the nearest heading or bold line above it naming one."""
+def _section(text: str, a: int, surf, raw=None) -> set[str] | None:
+    """The benchmark of the number's section: the nearest heading (or a line led by a bold name) above it.
+    The walk stops there: a heading that names no benchmark ends the previous section."""
     for line in reversed(text[:a].split("\n")[:-1]):
-        if re.match(r"\s*(?:#{1,6}\s|[-*]?\s*\*\*)", line):
-            hit = _named(line, names)
-            if hit:
-                return hit
-    return set()
+        if re.match(r"\s*#{1,6}\s", line):
+            return _mentions(line, surf)
+        if re.match(r"\s*[-*]?\s*\*\*[^*]+\*\*", line):
+            ids = _mentions(re.match(r"\s*[-*]?\s*\*\*([^*]+)\*\*", line).group(1), surf)
+            if ids:
+                return ids
+    return None
 
 
-def cues(text: str, a: int, b: int, names: set[str]) -> dict:
-    before, after = _clause(text, a, b)
-    c: dict = {}
-    for rx, fam in _UNIT_AFTER:
-        if re.match(rx, after, re.I):
-            c["metric"] = set(fam)
-            break
-    last = None
-    for rx, fam in _METRIC_WORDS:
+def _metric_cues(before: str, after: str) -> set | None:
+    unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
+    if unit is None and re.match(r"\s*/\s*\d", after):
+        return set(USAGE)                                      # "0/547": an edition's use count ...
+    if unit is None and re.search(r"\d\s*/\s*$", before):
+        return set(DENOM)                                      # ... over its denominator
+    best = None
+    for rx, fam in _SPECIFIC_WORDS:
         for m in re.finditer(rx, before, re.I):
-            if last is None or m.end() > last[0]:
-                last = (m.end(), fam)
-    if "metric" not in c and re.match(r"\s*/\s*\d", after):
-        c["metric"] = {"papers", "sum:groups", "others", "self", "undetermined", "n_papers"}          # "0/547": a count ...
-    if "metric" not in c and re.search(r"\d\s*/\s*$", before):
-        c["metric"] = {"parsed_papers", "in_scope_parsed", "total_papers"}                            # ... over its denominator
-        last = None
-    if last:
-        if "metric" in c:
-            narrowed = {x for x in last[1] if x in c["metric"] or ("count:*" in c["metric"] and x.startswith("count:"))}
-            c["metric"] = narrowed or c["metric"]
-        else:
-            c["metric"] = set(last[1])
-    clause = before + " " + after
-    right_after = re.split(r"\d", after, maxsplit=1)[0][:12]      # up to the next number, not into the next item
-    for rx, kind, val in _CONTEXT_WORDS:               # roles and groups: before the number, or right after it
+            if best is None or m.end() > best[0]:
+                best = (m.end(), fam)
+    word = set(best[1]) if best else None
+    if word is None:
+        for rx, fam in _GENERIC_WORDS:
+            if re.search(rx, before, re.I):
+                return {"__generic__"} | (set(fam) & unit if unit else set(fam))   # a guess: may connect, never contradicts
+    if unit is None:
+        return word
+    if word is None:
+        return unit
+    narrowed = {x for x in word if x in unit or ("count:*" in unit and x.startswith("count:"))}
+    if narrowed:
+        return narrowed
+    # a denominator or total word with a count unit ("분모 3,059편", "전체 4,417편", "미라벨 35,504건"): the word says what is counted
+    return set(word) if set(word) <= TOTALS and (unit == _COUNTS or unit == _ANY) else unit
+
+
+def _context_cues(before: str, after: str) -> dict:
+    right_after = re.split(r"\d", after, maxsplit=1)[0][:12]
+    c: dict = {}
+    for rx, kind, val in _CONTEXT_WORDS:
         if re.search(rx, before + " " + right_after, re.I):
             c[kind] = val
-    hit = _named(clause, names)
-    if hit:
-        c["benchmark"] = hit
-    else:
-        sec = _section(text, a, names)
-        if sec:
-            c["section_benchmark"] = sec
-    eds = {f"{v}-{y}" for v, y in re.findall(r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)", clause.lower())}
+    eds = {f"{v}-{y}" for v, y in re.findall(r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)", (before + " " + after).lower())}
     if eds:
         c["edition"] = eds
     return c
 
 
-def _specific(c: dict) -> bool:
-    """A cue that says WHAT the number counts: a metric narrower than a generic
-    count, or a role or author group. A benchmark or edition name alone says
-    where to look, not what was counted."""
-    return any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY_COUNT)
-
-
-def _fold(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower())
+def _tables(text: str) -> list[dict]:
+    """Markdown tables whose header names an identity column (benchmark or edition): per data
+    row its span, the identity cell, and each cell's span with its column header."""
+    out, lines, pos = [], text.split("\n"), 0
+    offs = []
+    for ln in lines:
+        offs.append(pos); pos += len(ln) + 1
+    i = 0
+    while i < len(lines) - 1:
+        if lines[i].strip().startswith("|") and re.fullmatch(r"\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*", lines[i + 1]):
+            header = [h.strip() for h in lines[i].strip().strip("|").split("|")]
+            ident = next((j for j, h in enumerate(header) if re.search(r"benchmark|벤치마크|dataset|데이터셋|(?<![A-Za-z])name(?![A-Za-z])|이름", h, re.I)), None)
+            ed_col = next((j for j, h in enumerate(header) if re.search(r"edition|회차|에디션|venue|학회", h, re.I)), None)
+            k = i + 2
+            while k < len(lines) and lines[k].strip().startswith("|"):
+                cells, start = [], offs[k] + lines[k].index("|") + 1
+                for part in lines[k].strip().strip("|").split("|"):
+                    cells.append((start, start + len(part), part)); start += len(part) + 1
+                out.append({"span": (offs[k], offs[k] + len(lines[k])), "header": header, "cells": cells,
+                            "ident": cells[ident][2].strip() if ident is not None and ident < len(cells) else None,
+                            "edition": cells[ed_col][2].strip() if ed_col is not None and ed_col < len(cells) else None,
+                            "supported": ident is not None or ed_col is not None, "ident_col": ident, "ed_col": ed_col})
+                k += 1
+            i = k
+        else:
+            i += 1
+    return out
 
 
 def _satisfies(f: dict, c: dict) -> bool:
     ctx, metric = f["ctx"], f["metric"]
     if "metric" in c and metric not in c["metric"] and not ("count:*" in c["metric"] and metric.startswith("count:")):
         return False
-    named = c.get("benchmark") or c.get("section_benchmark")
-    if named and ctx.get("benchmark") and not ({_fold(x) for x in ctx["benchmark"]} & {_fold(x) for x in named}):
-        return False                                   # another benchmark's value ("Noisy MNIST" = "Noisy-MNIST")
+    ids = c.get("benchmark_ids")
+    if ids is not None and ctx.get("benchmark_id") not in ids:
+        return False                                   # a named benchmark: its own values only, never a scope-wide one
     if "edition" in c and ctx.get("edition") not in c["edition"]:
         return False
     if "role" in c and ctx.get("role") != c["role"]:
-        return False                                   # a role cue needs a fact that carries that role
+        return False
     if "group" in c and ctx.get("group") != c["group"]:
         return False
     return True
+
+
+def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
+    dp = len(raw.split(".")[1]) if "." in raw else 0
+    guessed = "metric" in c and "__generic__" in c["metric"]
+    if guessed:
+        c = {**c, "metric": c["metric"] - {"__generic__"}}
+    if c.get("ambiguous_name"):
+        return "na", "the name means several benchmark ids"
+    if not (any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY)):
+        return "na", "no cue says what it counts"
+    cand = [f for f in fs if _satisfies(f, c)]
+    fams = {family(f["metric"]) for f in cand}
+    if {"usage", "adoption"} <= fams and "metric" in c and c["metric"] >= _COUNTS:
+        return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
+    hits = [f for f in cand if round(f["value"], dp) == round(v, dp)]
+    benchmark_stat = any(family(f["metric"]) not in ("denominator", "editions") for f in hits)
+    if c.get("benchmark_ids") is None and benchmark_stat and len({f["ctx"].get("benchmark_id") for f in hits if f["ctx"].get("benchmark_id")}) > 1 \
+            and all(f["ctx"].get("benchmark_id") for f in hits):
+        return "na", "the value belongs to several benchmarks and the text names none"
+    if hits:
+        return "ok", "connected"
+    if cand and guessed:
+        return "na", "only a generic word says what it counts"
+    if cand:
+        vals = sorted({round(f["value"], dp) for f in cand})[:4]
+        return "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}"
+    return "na", "no tool result has this context"
 
 
 def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set) -> list[tuple]:
@@ -526,7 +618,8 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
     'date-no' for a date found / not found verbatim in this turn's results.
     Dates are not statistics: they are never counted as verified figures."""
     text = text.translate(_MINUS)
-    names = _names(fs)
+    surf, raw_names = _surfaces(fs), None
+    tables = _tables(text)
     out, taken = [], []
     for m in _DATE.finditer(text):
         raw = m.group(0)
@@ -538,42 +631,64 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
         raw, v = m.group(0), _val(m.group(0))
         line_start = text.rfind("\n", 0, m.start()) + 1
         if re.fullmatch(r"\s*(?:#{1,6}\s*|[-*]\s*)?", text[line_start:m.start()]) and re.match(r"[.)]\s", text[m.end():m.end() + 2]):
-            continue                                            # "1. " / "### 2. " list numbering
+            continue                                            # list numbering
         if text[max(0, m.start() - 1):m.start()] == "[" and text[m.end():m.end() + 1] == "]":
             continue                                            # [1] reference marker
         if v == 1000 and re.search(r"/\s*$", text[:m.start()]):
             continue                                            # the fixed rate unit in "0.0/1000"
         if text[m.end():m.end() + 1] == "차" and text[max(0, m.start() - 1):m.start()] != "회":
-            continue                                            # "1차 출처": an ordinal, not a count
+            continue                                            # "1차": an ordinal
         if v in skip:
             continue
         if re.match(r"\s*(?:이|가)\s*(?:아니|아닙|아님)", text[m.end():m.end() + 6]) or re.search(r"\bnot\s+$", text[max(0, m.start() - 6):m.start()]):
-            continue                                            # "…미확인이며 0이 아닙니다" / "not 0": a negation, not a reported value
+            continue                                            # a negation, not a reported value
         if _YEAR.fullmatch(raw) and (re.search(r"(?:19|20)\d\d\s*[/~–]\s*$", text[max(0, m.start() - 8):m.start()])
                                      or re.match(r"\s*[/~–]\s*(?:19|20)\d\d", text[m.end():m.end() + 8])):
-            continue                                            # "eccv-2024/2026", "2020~2025": edition years, not counts
-        c = cues(text, m.start(), m.end(), names)
-        if _YEAR.fullmatch(raw) and "metric" not in c:
-            continue                                            # a year as context, not a count (a year with a unit is checked)
-        dp = len(raw.split(".")[1]) if "." in raw else 0
-        if not _specific(c):
-            out.append((m.start(), m.end(), raw, "na", "no cue in its clause connects it to a tool result"))
-            continue
-        cand = [f for f in fs if _satisfies(f, c)]
-        hits = [f for f in cand if round(f["value"], dp) == round(v, dp)]
-        # one product name shared by homonym entities with the same value is one answer, not an ambiguity
-        owners = {frozenset(re.sub(r"[^a-z0-9]", "", n) for n in f["ctx"]["benchmark"]) for f in hits if f["ctx"].get("benchmark")}
-        if owners and frozenset.intersection(*owners):
-            owners = {frozenset.intersection(*owners)}
-        if hits and not (c.get("benchmark") or c.get("section_benchmark")) and len(owners) > 1 and all(f["ctx"].get("benchmark") for f in hits):
-            out.append((m.start(), m.end(), raw, "na", "the value belongs to several benchmarks and the text names none"))
-        elif hits:
-            out.append((m.start(), m.end(), raw, "ok", "connected"))
-        elif cand:
-            vals = sorted({round(f["value"], dp) for f in cand})[:4]
-            out.append((m.start(), m.end(), raw, "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}"))
+            continue                                            # edition-year shorthand
+        row = next((t for t in tables if t["span"][0] <= m.start() < t["span"][1]), None)
+        if row is not None:
+            cell = next(((j, cs) for j, cs in enumerate(row["cells"]) if cs[0] <= m.start() < cs[1]), None)
+            if cell is None or not row["supported"] or cell[0] in (row["ident_col"], row["ed_col"]):
+                if cell is not None and cell[0] in (row["ident_col"], row["ed_col"]):
+                    continue                                    # a number inside the identity cell is part of a name
+                out.append((m.start(), m.end(), raw, "na", "a table this check cannot read (no benchmark or edition column)"))
+                continue
+            head = row["header"][cell[0]] if cell[0] < len(row["header"]) else ""
+            before, after = head + " ", text[m.end():cell[1][1]]
+            c = {"metric": _metric_cues(before, after)} if _metric_cues(before, after) else {}
+            c.update(_context_cues(head, after))
+            if "group" in c:
+                c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
+            if row["edition"]:
+                c.update({k: x for k, x in _context_cues(row["edition"], "").items() if k == "edition"})
+            if row["ident"]:
+                ids = _mentions(row["ident"], surf, raw_names)
+                if ids is None:
+                    out.append((m.start(), m.end(), raw, "na", "the row's benchmark is not in this turn's results")); continue
+                c["benchmark_ids"] = ids
+                c["ambiguous_name"] = len(ids) > 1
         else:
-            out.append((m.start(), m.end(), raw, "na", "no tool result has this context"))
+            before, after = _clause(text, m.start(), m.end())
+            if _YEAR.fullmatch(raw) and _metric_cues(before, after) is None:
+                continue                                        # a year as context, not a count
+            c = {}
+            mc = _metric_cues(before, after)
+            if mc:
+                c["metric"] = mc
+            c.update(_context_cues(before, after))
+            if "group" in c:                                    # an author group only exists for adoption counts
+                c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
+            ids = _mentions(before + " " + after, surf, raw_names)
+            if ids is None and not (c.get("metric") and c["metric"] <= EDITIONS):
+                para_start = max(text.rfind("\n\n", 0, m.start()), text.rfind("\n#", 0, m.start()))
+                ids = _mentions(text[para_start + 1 if para_start >= 0 else 0:m.start()], surf)   # the paragraph so far
+                if ids is None:
+                    ids = _section(text, m.start(), surf, raw_names)   # a heading does not make a count of editions a benchmark's
+            if ids is not None:
+                c["benchmark_ids"] = ids
+                c["ambiguous_name"] = len(ids) > 1
+        verdict, why = _judge(raw, v, c, fs)
+        out.append((m.start(), m.end(), raw, verdict, why))
     return sorted(out)
 
 

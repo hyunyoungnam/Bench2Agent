@@ -61,14 +61,50 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts(text, self.lg), [("10", "ok"), ("3059", "ok"), ("12", "ok"), ("4252", "ok")])
         self.assertEqual(verdicts("### ToyBench\niclr-2025 12/3059", self.lg), [("12", "no"), ("3059", "ok")])
 
-    def test_one_name_spelled_two_ways_is_one_benchmark(self):
+    def test_a_name_shared_by_two_ids_verifies_nothing_and_an_id_does(self):
         lg = log(("benchmark_trend", {"benchmark": "noisy-mnist"}, {"id": "noisy-mnist", "name": "Noisy-MNIST",
-                  "results": [{"edition": "iclr-2025", "papers": 0, "parsed_papers": 3060}]}))
-        self.assertEqual(verdicts("## Noisy MNIST\n- iclr-2025 0/3060", lg)[:1], [("0", "ok")])   # one benchmark in the log: no name to violate
-        lg2 = log(("benchmark_trend", {"benchmark": "noisy-mnist"}, {"id": "noisy-mnist", "name": "Noisy-MNIST",
-                   "results": [{"edition": "iclr-2025", "papers": 0, "parsed_papers": 3060}]}),
-                  ("benchmark_adoption", {"benchmark": "noisy-mnist-2"}, {"id": "noisy-mnist-2", "name": "Noisy MNIST", "before_claim": 0}))
-        self.assertEqual(verdicts("## Noisy MNIST\n- iclr-2025 0/3060", lg2), [("0", "ok"), ("3060", "ok")])
+                  "results": [{"edition": "iclr-2025", "papers": 0, "parsed_papers": 3060}]}),
+                 ("benchmark_adoption", {"benchmark": "noisy-mnist-2"}, {"id": "noisy-mnist-2", "name": "Noisy MNIST", "before_claim": 0}))
+        # "Noisy MNIST" and "Noisy-MNIST" are one spelling (spaces and hyphens fold) but two ids: not attributable
+        self.assertEqual(verdicts("## Noisy MNIST\n- iclr-2025 0/3060", lg), [("0", "na"), ("3060", "na")])
+        # the id names one benchmark ("noisy-mnist" is not read inside "noisy-mnist-2")
+        self.assertEqual(verdicts("## noisy-mnist\n- iclr-2025 0/3060", lg), [("0", "ok"), ("3060", "ok")])
+        self.assertEqual(verdicts("noisy-mnist-2: before_claim 0", lg), [("0", "ok")])
+
+    # ---- reproduced false passes (Codex, 2026-10-16) and the limits agreed with them
+    def test_a_scope_wide_count_never_stands_in_for_a_named_benchmark(self):
+        self.assertEqual(verdicts("ToyBench는 ICLR 2025에서 80편", self.lg), [("80", "no")])      # 80 is ICLR 2025's parsed papers, ToyBench used 10
+        self.assertEqual(verdicts("ToyBench ICLR 2025 분모 80편", self.lg), [("80", "no")])       # nor as its denominator: ToyBench's is 3,059
+        self.assertEqual(verdicts("ToyBench ICLR 2025 분모 3059편", self.lg), [("3059", "ok")])   # the denominator of ToyBench's own query
+
+    def test_humaneval_and_humaneval_plus_stay_apart(self):
+        lg = log(("new_benchmarks", {}, {"results": [
+            {"id": "humaneval", "name": "HumanEval", "adoption": {"evaluates_on": {"others": 10, "self": 0, "undetermined": 0}}},
+            {"id": "humaneval-plus", "name": "HumanEval+", "adoption": {"evaluates_on": {"others": 20, "self": 0, "undetermined": 0}}}]}))
+        self.assertEqual(verdicts("HumanEval: 20 papers by other authors", lg), [("20", "no")])
+        self.assertEqual(verdicts("HumanEval: 10 papers by other authors", lg), [("10", "ok")])
+        self.assertEqual(verdicts("HumanEval+: 20 papers by other authors", lg), [("20", "ok")])
+
+    def test_a_homonym_name_is_unverified_even_when_the_values_agree(self):
+        lg = log(("new_benchmarks", {}, {"results": [
+            {"id": "sine", "name": "Sine", "adoption": {"evaluates_on": {"others": 0, "self": 0, "undetermined": 0}, "unattributed_using_papers": 18}},
+            {"id": "sine-2", "name": "Sine", "adoption": {"evaluates_on": {"others": 0, "self": 0, "undetermined": 0}, "unattributed_using_papers": 18}}]}))
+        self.assertEqual(verdicts("Sine: 미귀속 18편", lg), [("18", "na")])
+        self.assertEqual(verdicts("sine-2: 미귀속 18편", lg), [("18", "ok")])
+
+    def test_a_table_cell_takes_its_row_benchmark_and_its_column_header_only(self):
+        table = "| Benchmark | Other authors |\n|---|---|\n| ToyBench  | 3 papers     |\n| OtherBench | 3 papers |"
+        self.assertEqual(verdicts(table, self.lg), [("3", "no"), ("3", "ok")])
+        numbered = "| # | Benchmark | Other authors |\n|---|---|---|\n| 1 | OtherBench | 3 papers |"
+        self.assertEqual(verdicts(numbered, self.lg), [("1", "na"), ("3", "ok")])       # the ordinal column is no identity
+        unreadable = "| Metric | Value |\n|---|---|\n| Other authors | 3 papers |"
+        self.assertEqual(verdicts(unreadable, self.lg), [("3", "na")])
+
+    def test_usage_adoption_and_denominators_are_never_one_pool(self):
+        self.assertEqual(verdicts("ToyBench는 ICLR 2025에서 3059편이 사용", self.lg), [("3059", "no")])   # a denominator is not a use count
+        self.assertEqual(verdicts("ToyBench 12편", self.lg), [("12", "na")])                         # usage or adoption not stated
+        self.assertEqual(verdicts("ToyBench ICLR 2026 사용 12편", self.lg), [("12", "ok")])           # usage, per edition
+        self.assertEqual(verdicts("ToyBench 평가 타저자 12편", self.lg), [("12", "no")])               # adoption: 5 unique papers
 
     def test_dates_are_not_statistics_and_are_never_counted_as_verified_figures(self):
         found = figures.scan_connected("생성 2026-10-15입니다. 확인 2026-10-17입니다.", figures.facts(self.lg), figures.date_strings(self.lg), set())
