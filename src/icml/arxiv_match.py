@@ -26,6 +26,82 @@ from .common import PROCESSED, RAW, ensure_dirs, read_jsonl
 
 INDEX = RAW / "arxiv" / "oai_index.jsonl"
 OUT = RAW / "arxiv" / "resolved.jsonl"
+# reviewed individual match decisions (config/match_decisions.json): a link the
+# title rule cannot make, recorded with the paper's stable ids, the inputs the
+# reviewer saw, the evidence and the reviewer; applied only while those inputs
+# still hold (see `apply_decisions`)
+DECISIONS = RAW.parent.parent / "config" / "match_decisions.json"
+
+
+def load_decisions(edition: str, path: Path | None = None) -> list[dict]:
+    path = path or DECISIONS
+    if not path.exists():
+        return []
+    return [d for d in json.loads(path.read_text(encoding="utf-8")).get("decisions", []) if d.get("edition") == edition]
+
+
+def apply_decisions(results: list[dict], papers: list[dict], by_base: dict[str, dict], decisions: list[dict]) -> dict:
+    """Apply reviewed links before the collision check (which still runs over
+    them). A decision is applied only when the paper's title, authors and
+    source ids and the arXiv record's title are what the reviewer saw; a
+    changed input is `stale`, a paper already linked elsewhere or an arXiv
+    record already matched to another paper is a `conflict` — both are left
+    unapplied, recorded on the row, and wait for a new review."""
+    counts = {"applied": 0, "already": 0, "stale": 0, "conflict": 0}
+    rows = {str(r["event_id"]): r for r in results}
+    paper = {str(x["event_id"]): x for x in papers}
+    for d in decisions:
+        eid, base, seen = str(d["event_id"]), d["arxiv_base"], d.get("inputs") or {}
+        row, p, arx = rows.get(eid), paper.get(eid), by_base.get(base)
+        status = None
+        if row is None or p is None:
+            status = "stale: the paper is not in this edition's list"
+        elif p.get("title") != seen.get("title") or list(p.get("authors") or []) != list(seen.get("authors") or []) \
+                or sorted(p.get("source_ids") or []) != sorted(seen.get("source_ids") or []):
+            status = "stale: the paper's title, authors or source ids changed since the review"
+        elif arx is None:
+            status = "stale: the arXiv record is not in the index"
+        elif arx.get("title") != seen.get("arxiv_title"):
+            status = "stale: the arXiv record's title changed since the review"
+        elif row.get("arxiv_base") == base:
+            status = "already"
+        elif row.get("arxiv_base"):
+            status = f"conflict: the title rule links this paper to {row['arxiv_base']}"
+        elif any(r.get("arxiv_base") == base for r in results if r is not row):
+            status = "conflict: the arXiv record is matched to another paper of this edition"
+        else:
+            row.update({"arxiv_base": base, "arxiv_id": base, "arxiv_title": arx["title"], "published": arx.get("date"),
+                        "match": "reviewed", "score": row.get("score")})
+            status = "applied"
+        key = status.split(":")[0]
+        counts[key] += 1
+        if row is not None:
+            row["decision"] = {"id": d.get("id"), "status": status}
+    return counts
+
+
+def refuse_collisions(results: list[dict], papers: list[dict]) -> int:
+    """Two different papers (disjoint authors) matched to one arXiv record is
+    a collision: the title alone cannot say which is which, so neither is
+    matched. Schedule duplicates that normalize left apart (authors overlap)
+    keep the match; they are one paper."""
+    by_base: dict[str, list[dict]] = defaultdict(list)
+    for r in results:
+        if r.get("arxiv_base"):
+            by_base[r["arxiv_base"]].append(r)
+    authors = {p["event_id"]: {_person(a) for a in p.get("authors") or [] if _person(a)} for p in papers}
+    n = 0
+    for base, rs in by_base.items():
+        if len(rs) < 2:
+            continue
+        disjoint = any(authors[a["event_id"]] and authors[b["event_id"]] and not (authors[a["event_id"]] & authors[b["event_id"]])
+                       for i, a in enumerate(rs) for b in rs[i + 1:])
+        if disjoint:
+            for r in rs:
+                r.update({"arxiv_id": None, "match": "collision", "collision_with": sorted(x["event_id"] for x in rs if x is not r),
+                          "rejected_arxiv_base": r.pop("arxiv_base")})
+                n += 1
+    return n
 
 _NORM = re.compile(r"[^a-z0-9]+")
 STOP = {"the", "and", "for", "with", "via", "from", "into", "using", "based", "その"}
@@ -153,26 +229,8 @@ def main() -> int:
             n_none += 1
         results.append(row)
 
-    # Two different papers (disjoint authors) matched to one arXiv record is
-    # a collision: the title alone cannot say which is which, so neither is
-    # matched. Schedule duplicates that normalize left apart (authors overlap)
-    # keep the match; they are one paper.
-    by_base: dict[str, list[dict]] = defaultdict(list)
-    for r in results:
-        if r.get("arxiv_base"):
-            by_base[r["arxiv_base"]].append(r)
-    authors = {p["event_id"]: {_person(a) for a in p.get("authors") or [] if _person(a)} for p in papers}
-    n_collision = 0
-    for base, rs in by_base.items():
-        if len(rs) < 2:
-            continue
-        disjoint = any(authors[a["event_id"]] and authors[b["event_id"]] and not (authors[a["event_id"]] & authors[b["event_id"]])
-                       for i, a in enumerate(rs) for b in rs[i + 1:])
-        if disjoint:
-            for r in rs:
-                r.update({"arxiv_id": None, "match": "collision", "collision_with": sorted(x["event_id"] for x in rs if x is not r),
-                          "rejected_arxiv_base": r.pop("arxiv_base")})
-                n_collision += 1
+    decided = apply_decisions(results, papers, {r["arxiv_base"]: r for r in index}, load_decisions(corpus.key))
+    n_collision = refuse_collisions(results, papers)
     n_exact -= sum(1 for r in results if r.get("match") == "collision" and r.get("score") == 1.0)
     n_fuzzy -= sum(1 for r in results if r.get("match") == "collision" and r.get("score") != 1.0)
 
@@ -181,13 +239,15 @@ def main() -> int:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     total = len(results)
-    matched = n_exact + n_fuzzy
+    n_reviewed = sum(1 for r in results if r.get("match") == "reviewed")
+    matched = n_exact + n_fuzzy + n_reviewed
     print(f"\nmatched {matched:,}/{total:,} ({matched/total:.1%}) -> {out_path.name}")
     print(f"  exact     {n_exact:,}")
     print(f"  fuzzy     {n_fuzzy:,}  (>= {args.threshold})")
     print(f"  ambiguous {n_ambig:,}  (rejected: runner-up within {args.margin})")
     print(f"  collision {n_collision:,}  (two papers with disjoint authors, one arXiv record: neither matched)")
-    print(f"  no match  {n_none:,}")
+    print(f"  reviewed  {n_reviewed:,}  (decisions: {decided['applied']} applied, {decided['already']} already, {decided['stale']} stale, {decided['conflict']} conflict)")
+    print(f"  no match  {n_none - decided['applied']:,}")
     if args.report and samples:
         print("\nsample fuzzy matches:")
         print("\n".join(samples))

@@ -113,6 +113,16 @@ def versions(root: Path = ROOT) -> dict:
             "vocabulary": vocabulary_signature(root)}
 
 
+def decisions_hash(root: Path, edition: str) -> str:
+    """The reviewed match decisions for one edition, as an input of its match
+    stage: a new, changed or withdrawn decision re-matches that edition only."""
+    path = root / "config" / "match_decisions.json"
+    if not path.exists():
+        return ""
+    ds = [d for d in json.loads(path.read_text(encoding="utf-8")).get("decisions", []) if d.get("edition") == edition]
+    return hashlib.sha256(json.dumps(sorted(ds, key=lambda d: str(d.get("id"))), sort_keys=True).encode()).hexdigest()[:16] if ds else ""
+
+
 def vocabulary_signature(root: Path = ROOT) -> str | None:
     """What of the reviewed catalogue reaches the mention vocabulary: each
     entity's id, name, aliases and whether it shares its name. A new claim
@@ -629,9 +639,11 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
         elif norm_v and norm_v != current["normalizer"]:
             need.append("normalize (normalizer changed)")
         match_v, match_in = work.stage_version(key, "matched")
-        match_input = f"{papers_hash}|{index['hash']}"
+        match_input = f"{papers_hash}|{index['hash']}|{decisions_hash(work.root, key)}"
         if need or not paths["resolved"].exists() or match_in != match_input or (match_v and match_v != current["matcher"]):
-            need.append("match (index changed)" if match_in and match_in.split("|")[0] == papers_hash and not need else "match")
+            parts = (match_in or "").split("|")
+            need.append("match (decisions changed)" if match_in and parts[0] == papers_hash and parts[1:2] == [index["hash"]] and not need
+                        else "match (index changed)" if match_in and parts[0] == papers_hash and not need else "match")
         parse_v, _ = work.stage_version(key, "parsed")
         reparse = bool(parse_v and parse_v != current["parser"])
         transient = work.transients(key)
@@ -717,7 +729,8 @@ def run(work: Work, pipeline: Pipeline, *, editions: list[tuple[str, int]] | Non
                 done.append("normalize")
             if any(s.startswith("match") or s.startswith("normalize") for s in steps):
                 pipeline.match(paths)
-                work.mark_stage(key, "matched", current["matcher"], f"{p['papers_hash']}|{index['hash']}", run_id)
+                # the papers hash after this run's normalize, the decisions as they are now
+                work.mark_stage(key, "matched", current["matcher"], f"{p['papers_hash']}|{index['hash']}|{decisions_hash(work.root, key)}", run_id)
                 done.append("match")
             funnel = edition_funnel(paths)
             before_parse = set(funnel["_parsed"])
@@ -912,7 +925,7 @@ def adopt(work: Work, editions: list[tuple[str, int]] | None = None) -> dict:
             work.mark_stage(key, "normalized", current["normalizer"], None, run_id)
             stages.append("normalized")
             if paths["resolved"].exists():
-                work.mark_stage(key, "matched", current["matcher"], f"{file_hash(paths['papers'])}|{index['hash']}", run_id)
+                work.mark_stage(key, "matched", current["matcher"], f"{file_hash(paths['papers'])}|{index['hash']}|{decisions_hash(work.root, key)}", run_id)
                 stages.append("matched")
                 if paths["fulltext"].exists():
                     work.mark_stage(key, "parsed", current["parser"], None, run_id)

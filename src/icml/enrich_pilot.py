@@ -181,13 +181,29 @@ def _person(n: str) -> str:
     return p(n)
 
 
+def author_match(a: list[str], b: list[str]) -> dict:
+    """A review aid, never an approval rule: authors paired one to one (each
+    author of either list used once), full normalized names first, then
+    surname + first initial. Both list sizes are reported, so no denominator
+    is chosen for the reader."""
+    P = lambda n: _person(n).split()
+    pa, pb = [P(x) for x in a], [P(y) for y in b]
+    left, used, full, initial = [i for i in range(len(a)) if pa[i]], set(), 0, 0
+    for i in list(left):
+        j = next((j for j in range(len(b)) if j not in used and pb[j] and pa[i] == pb[j]), None)
+        if j is not None:
+            used.add(j); left.remove(i); full += 1
+    for i in list(left):
+        j = next((j for j in range(len(b)) if j not in used and pb[j] and pa[i][-1] == pb[j][-1] and pa[i][0][0] == pb[j][0][0]), None)
+        if j is not None:
+            used.add(j); left.remove(i); initial += 1
+    return {"conference": len(a), "candidate": len(b), "full": full, "initial_only": initial}
+
+
 def author_overlap(a: list[str], b: list[str]) -> tuple[int, int]:
-    """(shared, of len(a)) by normalized full name, else surname + first initial."""
-    def keys(n):
-        p = _person(n).split()
-        return {" ".join(p), (p[-1] + " " + p[0][0]) if len(p) > 1 else " ".join(p)} if p else set()
-    kb = set().union(*(keys(x) for x in b)) if b else set()
-    return sum(1 for x in a if keys(x) & kb), len(a)
+    """(full + initial-only one-to-one matches, len(a)); kept for the sample-time display."""
+    m = author_match(a, b)
+    return m["full"] + m["initial_only"], m["conference"]
 
 
 def jaccard(x: str, y: str) -> float:
@@ -522,10 +538,47 @@ def openalex_candidates(p: dict) -> list[dict]:
         out.append({"via": how, "openalex": w.get("id"), "doi": w.get("doi"), "title": w.get("display_name"), "year": w.get("publication_year"),
                     "type": w.get("type"), "venue": ((w.get("primary_location") or {}).get("source") or {}).get("display_name"),
                     "authors": authors[:12], "title_overlap": round(jaccard(p["title"], w.get("display_name") or ""), 3),
-                    "authors_shared": f"{shared}/{of}", "arxiv": openalex_arxiv(w),
+                    "authors_shared": f"{shared}/{of}", "author_match": author_match(p["authors"], authors), "arxiv": openalex_arxiv(w),
                     "locations": [{k: l.get(k) for k in ("landing_page_url", "pdf_url", "version")} | {"source": (l.get("source") or {}).get("display_name")}
                                   for l in (w.get("locations") or [])][:8]})
     return out
+
+
+# ---------------------------------------------------------------- arXiv's own metadata (free)
+
+def cmd_arxiv_authors() -> None:
+    """Authors, title and version of the candidate arXiv records from arXiv's
+    API (`id_list`, one request, no key): the same 23 ids the OpenAlex
+    arXiv-DOI batch asked for, plus the recovered ids that came from OpenAlex
+    title search, so every recovered link can be compared. Cached; the
+    returned ids are checked against the requested ones."""
+    import xml.etree.ElementTree as ET
+    s = load_sample()
+    rev = json.loads(REVIEW.read_text(encoding="utf-8"))["papers"] if REVIEW.exists() else {}
+    batch = json.loads((PILOT / "openalex_arxiv_batch.json").read_text())["bases"]
+    extra = sorted({v["arxiv_id"] for v in rev.values() if v.get("arxiv_id")} - set(batch))
+    ids = batch + extra
+    out = PILOT / "arxiv_api.json"
+    if out.exists():
+        print("cached:", out); return
+    url = "https://export.arxiv.org/api/query?" + urllib.parse.urlencode({"id_list": ",".join(ids), "max_results": len(ids)})
+    _append(LEDGER, {"service": "arxiv", "event": "sent", "urls": len(ids), "at": _now()})
+    st, body = _get_text(url)
+    _append(LEDGER, {"service": "arxiv", "event": "ok" if st == 200 else "http_error", "status": st, "at": _now()})
+    if st != 200:
+        raise SystemExit(f"arXiv API: HTTP {st}")
+    A = "{http://www.w3.org/2005/Atom}"
+    got = {}
+    for e in ET.fromstring(body).iter(f"{A}entry"):
+        m = re.search(r"abs/(\d{4}\.\d{4,5})(v\d+)?", e.findtext(f"{A}id") or "")
+        if not m:
+            continue
+        got[m.group(1)] = {"version": m.group(2), "title": re.sub(r"\s+", " ", e.findtext(f"{A}title") or "").strip(),
+                           "authors": [a.findtext(f"{A}name") for a in e.findall(f"{A}author")],
+                           "updated": e.findtext(f"{A}updated"), "published": e.findtext(f"{A}published")}
+    out.write_text(json.dumps({"requested": ids, "from_openalex_batch": batch, "added_title_search_recoveries": extra,
+                               "fetched_at": _now(), "missing": sorted(set(ids) - set(got)), "records": got}, ensure_ascii=False, indent=1))
+    print(f"requested {len(ids)} (23 from the OpenAlex batch + {len(extra)} title-search recoveries), returned {len(got)}, missing {sorted(set(ids) - set(got))}")
 
 
 # ---------------------------------------------------------------- Tavily
@@ -689,7 +742,7 @@ def cmd_report() -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("command", choices=["sample", "baseline", "openalex", "openalex-arxiv", "tavily", "extract", "checks", "report"])
+    ap.add_argument("command", choices=["sample", "baseline", "openalex", "openalex-arxiv", "arxiv-authors", "tavily", "extract", "checks", "report"])
     ap.add_argument("--limit", type=int, default=10 ** 6)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("urls", nargs="*")
@@ -702,6 +755,8 @@ def main() -> int:
         cmd_openalex(a.limit)
     elif a.command == "openalex-arxiv":
         cmd_openalex_arxiv()
+    elif a.command == "arxiv-authors":
+        cmd_arxiv_authors()
     elif a.command == "tavily":
         cmd_tavily(a.limit)
     elif a.command == "extract":

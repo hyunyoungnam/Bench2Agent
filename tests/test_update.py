@@ -569,6 +569,18 @@ class UpdateTests(unittest.TestCase):
         c = retained_claim("2501.00001#toy", kept, {})
         self.assertEqual((c["title"], c["authors"], c["vanished"]), ("Paper 1", ["A. Author"], True))
 
+    def test_a_changed_match_decision_re_matches_its_edition_only(self):
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        (self.root / "config/match_decisions.json").write_text(json.dumps({"decisions": [
+            {"id": "md-1", "edition": "iclr-2025", "event_id": 1, "arxiv_base": "2501.00009", "inputs": {}}]}))
+        st = update.status(self.work, self.EDS, self.pipe)["editions"]
+        self.assertEqual(st["iclr-2025"]["need"][:1], ["match (decisions changed)"])
+        self.assertEqual(st["iclr-2026"]["need"], [])
+        self.pipe.calls.clear()
+        update.run(self.work, self.pipe, editions=self.EDS, discover=False)
+        self.assertEqual([c for c in self.pipe.calls if c[0] == "match"], [("match", "iclr-2025")])
+        self.assertEqual(update.status(self.work, self.EDS, self.pipe)["editions"]["iclr-2025"]["need"], [])
+
     def test_a_failed_run_is_recorded_and_the_next_one_proceeds(self):
         def broken(paths, **kw):
             raise RuntimeError("arXiv unreachable")

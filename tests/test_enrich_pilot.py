@@ -49,9 +49,12 @@ class PilotTests(unittest.TestCase):
         self.assertEqual(sum(r["event"] == "cache_hit" for r in rows), 1)
         self.assertNotIn("oa-secret-123", ep.LEDGER.read_text() + ep.CACHE.read_text())
 
-    def test_author_overlap_tolerates_initials_and_accents(self):
-        self.assertEqual(ep.author_overlap(["Tin Hadži Veljković", "A. Smith"], ["Tin Hadzi Veljkovic", "Alice Smith"]), (2, 2))
-        self.assertEqual(ep.author_overlap(["Oran Lang"], ["Chase van de Geijn"]), (0, 1))
+    def test_authors_pair_one_to_one_and_initials_are_counted_apart(self):
+        # Codex's case: one "A. Smith" cannot stand for two Smiths
+        self.assertEqual(ep.author_match(["Alice Smith", "Andrew Smith"], ["A. Smith"]), {"conference": 2, "candidate": 1, "full": 0, "initial_only": 1})
+        self.assertEqual(ep.author_match(["Tin Hadži Veljković", "A. Smith"], ["Tin Hadzi Veljkovic", "Alice Smith"]),
+                         {"conference": 2, "candidate": 2, "full": 1, "initial_only": 1})
+        self.assertEqual(ep.author_match(["Oran Lang"], ["Chase van de Geijn"])["full"], 0)
 
 
 if __name__ == "__main__":
