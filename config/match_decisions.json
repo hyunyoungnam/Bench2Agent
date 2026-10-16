@@ -1,0 +1,343 @@
+{
+ "about": "Reviewed individual arXiv links the title rule cannot make (icml.arxiv_match.apply_decisions). Applied only while `inputs` hold; a changed input or an existing link elsewhere leaves the decision unapplied (stale / conflict) for a new review.",
+ "decisions": [
+  {
+   "id": "md-2026-10-16-01",
+   "edition": "iclr-2025",
+   "event_id": 31893,
+   "source_ids": [
+    "-5686",
+    "2025-Oral--5686-f4ed6b9e",
+    "5686",
+    "EO8xpnW7aX",
+    "https://openreview.net/forum?id=2025-Oral--5686-f4ed6b9e",
+    "https://openreview.net/forum?id=EO8xpnW7aX",
+    "https://openreview.net/group?id=ICLR.cc/2025/Conference#30408",
+    "https://openreview.net/group?id=ICLR.cc/2025/Conference#31893"
+   ],
+   "arxiv_base": "2410.02942",
+   "decision": "link",
+   "inputs": {
+    "title": "SymmetricDiffusers: Learning Discrete Diffusion Models over Finite Symmetric Groups",
+    "authors": [
+     "Yongxing Zhang",
+     "Donglin Yang",
+     "Renjie Liao"
+    ],
+    "source_ids": [
+     "-5686",
+     "2025-Oral--5686-f4ed6b9e",
+     "5686",
+     "EO8xpnW7aX",
+     "https://openreview.net/forum?id=2025-Oral--5686-f4ed6b9e",
+     "https://openreview.net/forum?id=EO8xpnW7aX",
+     "https://openreview.net/group?id=ICLR.cc/2025/Conference#30408",
+     "https://openreview.net/group?id=ICLR.cc/2025/Conference#31893"
+    ],
+    "arxiv_title": "SymmetricDiffusers: Learning Discrete Diffusion on Finite Symmetric Groups",
+    "arxiv_version": "v2",
+    "papers_file_sha256": "059891567bb6af53"
+   },
+   "evidence": {
+    "title_difference": "'Models over' vs 'on'",
+    "authors_arxiv_api": {
+     "conference": 3,
+     "candidate": 3,
+     "full": 3,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 3,
+     "candidate": 3,
+     "full": 3,
+     "initial_only": 0
+    },
+    "openalex": "https://openalex.org/W4403885729",
+    "parse": {
+     "ok": true,
+     "chars": 79740,
+     "sections": 14,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "best title overlap 0.778 < 0.85"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "id": "md-2026-10-16-02",
+   "edition": "icml-2021",
+   "event_id": 3421379581,
+   "source_ids": [
+    "https://proceedings.mlr.press/v139/asi21b.html",
+    "pmlr:v139#3421379581"
+   ],
+   "arxiv_base": "2103.01516",
+   "decision": "link",
+   "inputs": {
+    "title": "Private Stochastic Convex Optimization: Optimal Rates in L1 Geometry",
+    "authors": [
+     "Hilal Asi",
+     "Vitaly Feldman",
+     "Tomer Koren",
+     "Kunal Talwar"
+    ],
+    "source_ids": [
+     "https://proceedings.mlr.press/v139/asi21b.html",
+     "pmlr:v139#3421379581"
+    ],
+    "arxiv_title": "Private Stochastic Convex Optimization: Optimal Rates in $\\ell_1$ Geometry",
+    "arxiv_version": "v1",
+    "papers_file_sha256": "0572b8b81adbdb2f"
+   },
+   "evidence": {
+    "title_difference": "'L1' vs LaTeX '$\\ell_1$'; the runner-up 2005.04763 ('... in Linear Time') is a different paper",
+    "authors_arxiv_api": {
+     "conference": 4,
+     "candidate": 4,
+     "full": 4,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 4,
+     "candidate": 4,
+     "full": 4,
+     "initial_only": 0
+    },
+    "openalex": "https://openalex.org/W3170733491",
+    "parse": {
+     "ok": true,
+     "chars": 56699,
+     "sections": 11,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "ambiguous: a second record by the same group ('... in Linear Time', 2005.04763) within the margin"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "id": "md-2026-10-16-03",
+   "edition": "eccv-2024",
+   "event_id": 2425,
+   "source_ids": [
+    "10006",
+    "ECCV2024#2425"
+   ],
+   "arxiv_base": "2403.05352",
+   "decision": "link",
+   "inputs": {
+    "title": "Enhancing Plausibility Evaluation for Generated Designs with Denoising Autoencoder",
+    "authors": [
+     "Jiajie Fan",
+     "Amal Trigui",
+     "Thomas Bäck",
+     "Hao Wang"
+    ],
+    "source_ids": [
+     "10006",
+     "ECCV2024#2425"
+    ],
+    "arxiv_title": "Fréchet Denoised Distance: Enhancing Plausibility Evaluation for Generated Designs with Denoising Autoencoder",
+    "arxiv_version": "v3",
+    "papers_file_sha256": "9510b196350d1a0c"
+   },
+   "evidence": {
+    "title_difference": "identical title",
+    "authors_arxiv_api": {
+     "conference": 4,
+     "candidate": 4,
+     "full": 4,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 4,
+     "candidate": 4,
+     "full": 3,
+     "initial_only": 1
+    },
+    "openalex": "https://openalex.org/W4403706949",
+    "parse": {
+     "ok": true,
+     "chars": 28999,
+     "sections": 6,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "best title overlap 0.7 < 0.85"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "id": "md-2026-10-16-04",
+   "edition": "aaai-2026",
+   "event_id": 39932,
+   "source_ids": [
+    "aaai:issue/714#39932",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/39932"
+   ],
+   "arxiv_base": "2601.09176",
+   "decision": "link",
+   "inputs": {
+    "title": "D2 Prune: Sparsifying Large Language Models via Dual Taylor Expansion and Attention Distribution Awareness",
+    "authors": [
+     "Lang Xiong",
+     "Ning Liu",
+     "Ao Ren",
+     "Yuheng Bai",
+     "Haining Fang",
+     "Binyan Zhang",
+     "Zhe Jiang",
+     "Yujuan Tan",
+     "Duo Liu"
+    ],
+    "source_ids": [
+     "aaai:issue/714#39932",
+     "https://ojs.aaai.org/index.php/AAAI/article/view/39932"
+    ],
+    "arxiv_title": "$D^2Prune$: Sparsifying Large Language Models via Dual Taylor Expansion and Attention Distribution Awareness",
+    "arxiv_version": "v1",
+    "papers_file_sha256": "63b157c36f9e1560"
+   },
+   "evidence": {
+    "title_difference": "identical title",
+    "authors_arxiv_api": {
+     "conference": 9,
+     "candidate": 9,
+     "full": 9,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 9,
+     "candidate": 9,
+     "full": 9,
+     "initial_only": 0
+    },
+    "openalex": "https://openalex.org/W7138032617",
+    "parse": {
+     "ok": true,
+     "chars": 51158,
+     "sections": 13,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "best title overlap 0.833 < 0.85"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "id": "md-2026-10-16-05",
+   "edition": "eccv-2024",
+   "event_id": 2547,
+   "source_ids": [
+    "4872",
+    "ECCV2024#2547"
+   ],
+   "arxiv_base": "2403.15955",
+   "decision": "link",
+   "inputs": {
+    "title": "Finding a needle in a haystack: A Black-Box Approach to Invisible Watermark Detection",
+    "authors": [
+     "Minzhou Pan",
+     "Zhenting Wang",
+     "Xin Dong",
+     "Vikash Sehwag",
+     "Lingjuan Lyu",
+     "Xue Lin"
+    ],
+    "source_ids": [
+     "4872",
+     "ECCV2024#2547"
+    ],
+    "arxiv_title": "Finding needles in a haystack: A Black-Box Approach to Invisible Watermark Detection",
+    "arxiv_version": "v3",
+    "papers_file_sha256": "9510b196350d1a0c"
+   },
+   "evidence": {
+    "title_difference": "'a needle' vs 'Needles'",
+    "authors_arxiv_api": {
+     "conference": 6,
+     "candidate": 6,
+     "full": 6,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 6,
+     "candidate": 6,
+     "full": 6,
+     "initial_only": 0
+    },
+    "openalex": "https://openalex.org/W4403726931",
+    "parse": {
+     "ok": true,
+     "chars": 51269,
+     "sections": 11,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "best title overlap 0.8 < 0.85"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "id": "md-2026-10-16-06",
+   "edition": "iccv-2025",
+   "event_id": 2449,
+   "source_ids": [
+    "6838",
+    "thecvf.com/ICCV/2025/Conference#2449"
+   ],
+   "arxiv_base": "2507.06651",
+   "decision": "link",
+   "inputs": {
+    "title": "Diff2I2P: Differentiable Image-to-Point Cloud Registration with Diffusion Prior",
+    "authors": [
+     "Juncheng Mu",
+     "Chengwei REN",
+     "Weixiang Zhang",
+     "Liang Pan",
+     "Xiao-Ping Zhang",
+     "Yue Gao"
+    ],
+    "source_ids": [
+     "6838",
+     "thecvf.com/ICCV/2025/Conference#2449"
+    ],
+    "arxiv_title": "Diff$^2$I2P: Differentiable Image-to-Point Cloud Registration with Diffusion Prior",
+    "arxiv_version": "v1",
+    "papers_file_sha256": "17a09ca5ac976eca"
+   },
+   "evidence": {
+    "title_difference": "'Diff2I2P' vs LaTeX 'Diff$^2$I2P'",
+    "authors_arxiv_api": {
+     "conference": 6,
+     "candidate": 6,
+     "full": 6,
+     "initial_only": 0
+    },
+    "authors_openalex": {
+     "conference": 6,
+     "candidate": 6,
+     "full": 5,
+     "initial_only": 1
+    },
+    "openalex": "https://openalex.org/W4416102656",
+    "parse": {
+     "ok": true,
+     "chars": 44723,
+     "sections": 12,
+     "parser": "icml.html_extract (current)"
+    },
+    "why_the_title_rule_missed": "best title overlap 0.7 < 0.85"
+   },
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "reviewed": "2026-10-16",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  }
+ ]
+}

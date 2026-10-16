@@ -642,7 +642,8 @@ def plan(work: Work, pipeline: Pipeline, editions: list[tuple[str, int]], curren
         match_input = f"{papers_hash}|{index['hash']}|{decisions_hash(work.root, key)}"
         if need or not paths["resolved"].exists() or match_in != match_input or (match_v and match_v != current["matcher"]):
             parts = (match_in or "").split("|")
-            need.append("match (decisions changed)" if match_in and parts[0] == papers_hash and parts[1:2] == [index["hash"]] and not need
+            need.append("match (matcher changed)" if match_v and match_v != current["matcher"] and not need
+                        else "match (decisions changed)" if match_in and parts[0] == papers_hash and parts[1:2] == [index["hash"]] and not need
                         else "match (index changed)" if match_in and parts[0] == papers_hash and not need else "match")
         parse_v, _ = work.stage_version(key, "parsed")
         reparse = bool(parse_v and parse_v != current["parser"])

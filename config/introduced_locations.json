@@ -1,0 +1,100 @@
+{
+ "about": "Reviewed locations of introduced benchmarks, keyed by benchmark id (bench2agent.core.benchmarks.catalogue). distribution: official code / dataset / project page, or third_party_distribution; data_available says whether data is at that location, as checked.",
+ "locations": [
+  {
+   "benchmark_id": "eidseg",
+   "url": "https://github.com/HUILIHUANG413/EIDSeg",
+   "host": "github",
+   "distribution": "official_code_repository",
+   "data_available": "not verified: a repository; its download routes were not followed",
+   "basis": "owner profile name is an author: profile 'Huili Huang' (HUILIHUANG413)",
+   "benchmark_shown": [
+    "the README / card names the benchmark",
+    "the repository / page is named after the benchmark"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "api: exists",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "benchmark_id": "eidseg",
+   "url": "https://huggingface.co/datasets/huilihuang413/EIDSeg",
+   "host": "huggingface",
+   "distribution": "official_dataset",
+   "data_available": "yes: Hub dataset",
+   "basis": "owner profile name is an author: profile 'Huili Huang' (huilihuang413)",
+   "benchmark_shown": [
+    "the README / card names the benchmark",
+    "the repository / page is named after the benchmark"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "api: exists",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "benchmark_id": "lavpr",
+   "url": "https://github.com/oferidan1/LaVPR",
+   "host": "github",
+   "distribution": "official_code_repository",
+   "data_available": "not verified: a repository; its download routes were not followed",
+   "basis": "the introducing paper links it: \"Our dataset and code are available at https://github.com/oferidan1/LaVPR.\"",
+   "benchmark_shown": [
+    "the paper's release sentence covers the data",
+    "the README / card names the benchmark",
+    "the repository / page is named after the benchmark"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "api: exists",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "benchmark_id": "murgat",
+   "url": "https://github.com/meetdavidwan/murgat",
+   "host": "github",
+   "distribution": "official_code_repository",
+   "data_available": "not verified: a repository; its download routes were not followed",
+   "basis": "the introducing paper links it: \"Code and data are available at https://github.com/meetdavidwan/murgat.\"",
+   "benchmark_shown": [
+    "the paper's release sentence covers the data",
+    "the repository / page is named after the benchmark"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "api: exists",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "benchmark_id": "structbench",
+   "url": "https://github.com/zhuole1025/Structured-Visuals",
+   "host": "github",
+   "distribution": "official_code_repository",
+   "data_available": "not verified: a repository; its download routes were not followed",
+   "basis": "owner profile name is an author: profile 'Le Zhuo' (zhuole1025)",
+   "benchmark_shown": [
+    "the README / card names the benchmark"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "api: exists",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  },
+  {
+   "benchmark_id": "interdrive",
+   "url": "https://langtraj.github.io",
+   "host": "web",
+   "distribution": "official_project_page",
+   "data_available": "no: the page says the code will be released soon and gives no data link (Tavily Extract)",
+   "basis": "the introducing paper links it: \"Project website: https://langtraj.github.io/.\"",
+   "benchmark_shown": [
+    "the page names it (Inter-Drive, Tavily Extract)"
+   ],
+   "checked_at": "2026-10-16",
+   "existence": "search result / Tavily Extract",
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "source": "OpenAlex/Tavily pilot, data/work/pilot/review.json"
+  }
+ ]
+}
