@@ -729,9 +729,16 @@ class SqliteRepository:
                     "JOIN observations o USING (obs_id) WHERE o.paper_id = ? ORDER BY o.ord, e.use_id, e.role, e.ord", (paper_id,)):
                 if not (r[2] or "").endswith(":cell") and q in " ".join((r[3] or "").split()):
                     return {"title": r[0], "edition": r[1]}
-            for r in con.execute("SELECT title, edition, evidence FROM claims WHERE arxiv_base = ? ORDER BY benchmark_id, ord", (paper_id,)):
+            claim_rows = list(con.execute("SELECT title, edition, evidence, benchmark_id FROM claims WHERE arxiv_base = ? ORDER BY benchmark_id, ord", (paper_id,)))
+            for r in claim_rows:
                 if q in " ".join((r[2] or "").split()):
                     return {"title": r[0], "edition": r[1]}
+            # a reviewed location's release sentence: the introducing paper's own verbatim text
+            for r in claim_rows:
+                for (extra,) in con.execute("SELECT extra FROM benchmarks WHERE id = ?", (r[3],)):
+                    for loc in (json.loads(extra) if extra else {}).get("reviewed_locations") or []:
+                        if loc.get("paper_id") == paper_id and q in " ".join((loc.get("release_sentence") or "").split()):
+                            return {"title": r[0], "edition": r[1]}
         finally:
             self._done(con)
         return None

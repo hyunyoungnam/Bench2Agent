@@ -34,7 +34,8 @@ def render(turn: dict, *, sources: bool = False) -> str:
         if seg.get("t") == "p":
             pieces.append(seg.get("s", ""))
         elif seg.get("t") == "n":
-            mark = " [unverified figure]" if seg.get("v") in {"no", "na"} else ""
+            mark = ((" [unverified date]" if seg.get("kind") == "date" else " [unverified figure]")
+                    if seg.get("v") in {"no", "na", "unconnected"} else "")
             pieces.append(seg.get("s", "") + mark)
         elif seg.get("t") == "c":
             evidence.append(seg)

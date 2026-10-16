@@ -176,7 +176,8 @@ def segment(text: str, store: Store, ver: Verifier,
                          "url": "https://arxiv.org/abs/" + arg if valid_id else None,
                          "venue": _VENUE.get(venue, venue), "year": year})
             continue
-        fig = figures.check(tool, arg, claim, fcache, log)
+        fig = (_anchored_connected(tool, arg, claim, log) if log is not None and _benchmark_only(log)
+               and figures.RECOMPUTABLE.get(tool) == "json" else figures.check(tool, arg, claim, fcache, log))
         if fig["state"] != "na":                         # 'na' claims nothing
             v["fchecked"] += 1
             v["fpassed"] += fig["state"] == "ok"
@@ -188,6 +189,26 @@ def segment(text: str, store: Store, ver: Verifier,
     return _auto_figures(segs, v, trail, fcache, log), v
 
 
+def _benchmark_only(log) -> bool:
+    return bool(log.entries) and all(figures.RECOMPUTABLE.get(e.get("name")) == "json" for e in log.entries)
+
+
+def _anchored_connected(tool: str, arg: str, claim: str, log) -> dict:
+    """An anchored claim: its numbers must connect to facts of THAT call."""
+    key = figures.canonical_args(arg)
+    fs = [f for f in figures.facts(log) if f["ctx"].get("tool") == tool and f["ctx"].get("args") == key]
+    nums = figures.claimed(claim)
+    if not fs:
+        return {"state": "no", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
+                "why": "this turn did not call the tool with these arguments"}
+    found = [x for x in figures.scan_connected(claim, fs, figures.date_strings(log), set()) if not x[3].startswith("date")]
+    if not found:
+        return {"state": "na", "tool": tool, "arg": arg, "n": 0, "why": "no figure in the claim"}
+    bad = [x for x in found if x[3] != "ok"]
+    return {"state": "no" if any(x[3] == "no" for x in bad) else ("unconnected" if bad else "ok"), "tool": tool, "arg": arg,
+            "n": len(found), "missing": [x[2] for x in bad], "why": "; ".join(sorted({x[4] for x in bad})) or None}
+
+
 def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
     """Check every printed number against this turn's own tool results.
 
@@ -195,6 +216,8 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
     is in no tool result and is not arithmetic over two of them is wrapped so
     the reader can see WHICH one it is. The mark states a fact — this number is
     not in what the tools returned — and accuses the sentence of nothing."""
+    if log is not None and _benchmark_only(log):
+        return _auto_connected(segs, v, log)
     vals, used = figures.turn_pool(trail, fcache, log)
     if not vals:
         return segs
@@ -216,6 +239,35 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
             out.append({"t": "n", "s": raw, "v": "no", "auto": True,
                         "tool": ", ".join(used[:2]) or "this turn's tools",
                         "arg": "", "missing": [raw]})
+            pos = b
+        out.append({"t": "p", "s": text[pos:]})
+    return out
+
+
+def _auto_connected(segs: list, v: dict, log) -> list:
+    """The six benchmark tools: a printed number is verified only when it
+    connects to a fact of this turn's tool log (figures.scan_connected)."""
+    fs, dates = figures.facts(log), figures.date_strings(log)
+    skip = {float(s["gid"]) for s in segs if s.get("t") == "c" and s.get("gid")}
+    out: list = []
+    for seg in segs:
+        if seg.get("t") != "p":
+            out.append(seg)
+            continue
+        text, pos = seg["s"], 0
+        for a, b, raw, verdict, why in figures.scan_connected(text, fs, dates, skip):
+            if verdict == "date-ok":
+                continue                                  # a date the tools returned verbatim: not a figure, not counted
+            if verdict != "date-no":
+                v["fchecked"] += 1
+                v["fpassed"] += verdict == "ok"
+            if verdict == "ok":
+                continue
+            if a > pos:
+                out.append({"t": "p", "s": text[pos:a]})
+            out.append({"t": "n", "s": raw, "v": "no" if verdict in ("no", "date-no") else "na", "auto": True,
+                        "kind": "date" if verdict == "date-no" else "figure", "tool": "this turn's tools", "arg": "",
+                        "missing": [raw], "why": why})
             pos = b
         out.append({"t": "p", "s": text[pos:]})
     return out

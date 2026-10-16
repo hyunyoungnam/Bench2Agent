@@ -75,6 +75,24 @@ class LocationTests(unittest.TestCase):
             self.assertEqual([(l["check"], l["distribution"], l["data_available"]) for l in row], [("reviewed", "official_dataset", "yes: Hub dataset")])
             self.assertEqual(locations(cat["eidseg-2"]), [])                                # the homonym keeps its own (none)
 
+    def test_a_release_sentence_is_quotable_with_its_paper_and_nothing_else_is(self):
+        from bench2agent.core.repository import SOURCE, build_database, SqliteRepository
+        sentence = "Our dataset and code are available at https://github.com/oferidan1/LaVPR."
+        entry = {"id": "lavpr", "name": "LaVPR", "kind": "benchmark", "developers": [], "claims": [
+                    {"claim_id": "2602.03253#lavpr", "arxiv_base": "2602.03253", "edition": "eccv-2026", "title": "LaVPR", "noun": "benchmark",
+                     "evidence": "We introduce LaVPR, a benchmark.", "label": "E"}],
+                 "reviewed_locations": [{"url": "https://github.com/oferidan1/LaVPR", "host": "github", "distribution": "official_code_repository",
+                                         "data_available": "not verified", "basis": "the introducing paper links it",
+                                         "paper_id": "2602.03253", "release_sentence": sentence}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "x.sqlite"
+            build_database({"schema_version": 1, "source": SOURCE, "snapshot_id": "t", "generated_at": "2026-10-16", "benchmarks": [entry], "editions": {}, "papers": []}, db)
+            repo = SqliteRepository(db)
+            with repo.session():
+                self.assertIsNotNone(repo.verify_quote("2602.03253", "Our dataset and code are available at https://github.com/oferidan1/LaVPR."))
+                self.assertIsNone(repo.verify_quote("2602.03253", "Our dataset and code are available at https://github.com/someone-else/LaVPR."))
+                self.assertIsNone(repo.verify_quote("2401.00001", "Our dataset and code are available at https://github.com/oferidan1/LaVPR."))
+
 
 if __name__ == "__main__":
     unittest.main()

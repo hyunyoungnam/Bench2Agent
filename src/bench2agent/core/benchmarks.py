@@ -35,7 +35,8 @@ LINK_NOTE = ("locations: our mapping from this benchmark id to where the artifac
              "(checked_at null means the date is not recorded in this snapshot); check=none: an "
              "author-registered homepage; check=reviewed: a location reviewed against the introducing paper "
              "or its authors, with its distribution (official code / dataset / project page, or a "
-             "third-party distribution) and whether data is available there stated. An empty list is no "
+             "third-party distribution) and whether data is available there stated; release_sentence, when "
+             "present, is the introducing paper's own verbatim sentence linking it (quotable with its paper_id). An empty list is no "
              "confirmed location, not none. "
              "introducing_paper: the reviewed introducing paper in this corpus, null when there is "
              "none; it is a paper, not a download location. Neither ranks or filters anything.")
@@ -49,7 +50,8 @@ def locations(entry: dict, checked_at: str | None = None) -> list[dict]:
         out.append({"url": entry["url"], "host": "web", "check": "none", "checked_at": None})
     for r in entry.get("reviewed_locations") or []:
         out.append({"url": r["url"], "host": r["host"], "check": "reviewed", "checked_at": r.get("checked_at"),
-                    "distribution": r["distribution"], "data_available": r["data_available"], "basis": r["basis"]})
+                    "distribution": r["distribution"], "data_available": r["data_available"], "basis": r["basis"],
+                    **({"paper_id": r["paper_id"], "release_sentence": r["release_sentence"]} if r.get("release_sentence") else {})})
     return out
 
 
@@ -141,7 +143,8 @@ def catalogue(root: Path) -> list[dict]:
     for loc in read_json(root / "config/introduced_locations.json", {}).get("locations", []):
         e = out.get(remap.get(loc["benchmark_id"], loc["benchmark_id"]))
         if e is not None:
-            e.setdefault("reviewed_locations", []).append({k: loc.get(k) for k in ("url", "host", "distribution", "data_available", "basis", "checked_at", "reviewed_by")})
+            e.setdefault("reviewed_locations", []).append({k: loc.get(k) for k in ("url", "host", "distribution", "data_available", "basis", "checked_at", "reviewed_by",
+                                                                                    "paper_id", "release_sentence") if loc.get(k) is not None})
     return list(out.values())
 
 
