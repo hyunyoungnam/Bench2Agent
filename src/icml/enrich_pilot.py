@@ -387,7 +387,10 @@ def classify_url(url: str) -> tuple[str, str | None]:
     u = url.rstrip(".,;:").replace("http://", "https://")
     if not u.startswith("http"):
         u = "https://" + u
-    p = urllib.parse.urlsplit(u)
+    try:
+        p = urllib.parse.urlsplit(u)
+    except ValueError:                     # a malformed URL in a paper ("Invalid IPv6 URL"): not a location
+        return "other", u
     host, parts = p.netloc.lower().removeprefix("www."), [x for x in p.path.split("/") if x]
     if host == "github.com" and len(parts) >= 2:
         return "gh", f"{parts[0]}/{parts[1].removesuffix('.git')}"
