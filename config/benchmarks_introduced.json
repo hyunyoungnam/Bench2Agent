@@ -183095,8 +183095,7 @@
           "title": "SymmetricDiffusers: Learning Discrete Diffusion Models over Finite Symmetric Groups",
           "noun": "dataset",
           "evidence": "We created the Noisy MNIST dataset by adding i.i.d.",
-          "label": "T",
-          "retained": "The claim stands on the reviewed sentence (label T, a training-resource dataset made by the authors). The loss is a match decision, not a text change: an individual match record with the official id is the pending mechanism (Codex 2026-10-15); the global threshold is not lowered for one case."
+          "label": "T"
         }
       ],
       "developers": [
