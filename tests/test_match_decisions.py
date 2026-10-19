@@ -68,12 +68,20 @@ class LocationTests(unittest.TestCase):
                  "claims": [{"claim_id": "2601.00001#eidseg", "arxiv_base": "2601.00001", "edition": "cvpr-2026", "evidence": "y"}]}]}))
             (root / "config/introduced_locations.json").write_text(json.dumps({"locations": [
                 {"benchmark_id": "eidseg", "url": "https://huggingface.co/datasets/huilihuang413/EIDSeg", "host": "huggingface",
-                 "distribution": "official_dataset", "data_available": "yes: Hub dataset", "basis": "owner profile name is an author",
-                 "checked_at": "2026-10-16", "reviewed_by": "Claude Code (AI review)"}]}))
+                 "artifact": "data_repository", "verification": "AI individual review", "data_status": "dataset page checked",
+                 "basis": "the introducing paper links it", "checked_at": "2026-10-16", "reviewed_by": "Claude Code (AI review)"}]}))
             cat = {e["id"]: e for e in catalogue(root)}
             row = locations(cat["eidseg"])
-            self.assertEqual([(l["check"], l["distribution"], l["data_available"]) for l in row], [("reviewed", "official_dataset", "yes: Hub dataset")])
+            self.assertEqual([(l["check"], l["artifact"], l["verification"], l["data_status"]) for l in row],
+                             [("reviewed", "data_repository", "AI individual review", "dataset page checked")])
             self.assertEqual(locations(cat["eidseg-2"]), [])                                # the homonym keeps its own (none)
+
+    def test_a_revision_built_with_the_earlier_location_schema_still_serves(self):
+        from bench2agent.core.benchmarks import locations
+        old = {"reviewed_locations": [{"url": "https://github.com/oferidan1/LaVPR", "host": "github", "distribution": "official_code_repository",
+                                       "data_available": "not verified", "basis": "the introducing paper links it", "checked_at": "2026-10-16"}]}
+        row = locations(old)[0]
+        self.assertEqual((row["artifact"], row["data_status"], row["check"]), ("code_repository", "not verified", "reviewed"))
 
     def test_a_release_sentence_is_quotable_with_its_paper_and_nothing_else_is(self):
         from bench2agent.core.repository import SOURCE, build_database, SqliteRepository
@@ -81,8 +89,8 @@ class LocationTests(unittest.TestCase):
         entry = {"id": "lavpr", "name": "LaVPR", "kind": "benchmark", "developers": [], "claims": [
                     {"claim_id": "2602.03253#lavpr", "arxiv_base": "2602.03253", "edition": "eccv-2026", "title": "LaVPR", "noun": "benchmark",
                      "evidence": "We introduce LaVPR, a benchmark.", "label": "E"}],
-                 "reviewed_locations": [{"url": "https://github.com/oferidan1/LaVPR", "host": "github", "distribution": "official_code_repository",
-                                         "data_available": "not verified", "basis": "the introducing paper links it",
+                 "reviewed_locations": [{"url": "https://github.com/oferidan1/LaVPR", "host": "github", "artifact": "code_repository",
+                                         "verification": "AI individual review", "data_status": "not verified", "basis": "the introducing paper links it",
                                          "paper_id": "2602.03253", "release_sentence": sentence}]}
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "x.sqlite"

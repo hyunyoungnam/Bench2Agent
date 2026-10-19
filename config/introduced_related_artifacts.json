@@ -1,0 +1,61 @@
+{
+ "about": "Official artifacts of an introducing paper that are not the benchmark's location (leaderboards, tools, models); kept, not served.",
+ "artifacts": [
+  {
+   "pair": "moleculariq|ml-jku/molecularIQ_leaderboard",
+   "url": "https://huggingface.co/spaces/ml-jku/molecularIQ_leaderboard",
+   "kind": "related artifact",
+   "note": "leaderboard space",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "omnilabel|samschulter/omnilabeltools",
+   "url": "https://github.com/samschulter/omnilabeltools",
+   "kind": "related artifact",
+   "note": "evaluation toolkit; the data is elsewhere",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "boom|Datadog/Toto-Open-Base-1.0",
+   "url": "https://huggingface.co/Datadog/Toto-Open-Base-1.0",
+   "kind": "related artifact",
+   "note": "Toto's model weights; Boom's data is datasets/Datadog/BOOM",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "hipho|https://phyarena.github.io",
+   "url": "https://phyarena.github.io/",
+   "kind": "related artifact",
+   "note": "leaderboard page; the benchmark's repository is SciYu/HiPhO",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "metaothello|hfm|aviralchawla/metaothello",
+   "url": "https://huggingface.co/aviralchawla/metaothello",
+   "kind": "related artifact",
+   "note": "model and probes; the dataset is the separate HF dataset link",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "creed|hfm|insilicomedicine/C3LM",
+   "url": "https://huggingface.co/insilicomedicine/C3LM",
+   "kind": "related artifact",
+   "note": "a model (C3LM); CREED is datasets/insilicomedicine/CREED",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "lr-bench|gh|Gnociew/RATE-Reviewer-Assignment",
+   "url": "https://github.com/Gnociew/RATE-Reviewer-Assignment",
+   "kind": "related artifact",
+   "note": "the method's repository; LR-bench is the HF dataset in the same sentence",
+   "review_ref": "audit"
+  },
+  {
+   "pair": "mercury|hfm|api/datasets",
+   "url": "https://huggingface.co/api/datasets/Elfsong/Mercury/croissant",
+   "kind": "related artifact",
+   "note": "a Croissant metadata API URL",
+   "review_ref": "audit"
+  }
+ ]
+}

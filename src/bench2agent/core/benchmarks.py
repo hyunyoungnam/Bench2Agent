@@ -33,10 +33,13 @@ HOSTS = (("hf", "huggingface", "https://huggingface.co/datasets/"),
 LINK_NOTE = ("locations: our mapping from this benchmark id to where the artifact lives. "
              "check=api: the Hub/GitHub id answered the API when the registry was last checked "
              "(checked_at null means the date is not recorded in this snapshot); check=none: an "
-             "author-registered homepage; check=reviewed: a location reviewed against the introducing paper "
-             "or its authors, with its distribution (official code / dataset / project page, or a "
-             "third-party distribution) and whether data is available there stated; release_sentence, when "
-             "present, is the introducing paper's own verbatim sentence linking it (quotable with its paper_id). An empty list is no "
+             "author-registered homepage; check=reviewed: a location individually reviewed against the introducing "
+             "paper, with three separate attributes: artifact (code_repository / data_repository / project_page), "
+             "verification (how it was confirmed) and data_status (what was seen about the data: 'data files checked' "
+             "means a file list was read, not that records were downloaded or validated; 'route named, not followed' "
+             "and 'not verified' say no data was checked; 'not released' says so). release_sentence is the "
+             "introducing paper's own verbatim sentence linking it (quotable with its paper_id); evidence_at_url is text "
+             "at the location itself, not the paper, and is never quoted as the paper. An empty list is no "
              "confirmed location, not none. "
              "introducing_paper: the reviewed introducing paper in this corpus, null when there is "
              "none; it is a paper, not a download location. Neither ranks or filters anything.")
@@ -49,9 +52,14 @@ def locations(entry: dict, checked_at: str | None = None) -> list[dict]:
     if entry.get("url"):
         out.append({"url": entry["url"], "host": "web", "check": "none", "checked_at": None})
     for r in entry.get("reviewed_locations") or []:
+        # revisions built before 2026-10-19 store `distribution` / `data_available`; they keep serving, read in the new shape
+        artifact = r.get("artifact") or {"official_code_repository": "code_repository", "official_dataset": "data_repository",
+                                         "official_project_page": "project_page"}.get(r.get("distribution"), r.get("distribution"))
         out.append({"url": r["url"], "host": r["host"], "check": "reviewed", "checked_at": r.get("checked_at"),
-                    "distribution": r["distribution"], "data_available": r["data_available"], "basis": r["basis"],
-                    **({"paper_id": r["paper_id"], "release_sentence": r["release_sentence"]} if r.get("release_sentence") else {})})
+                    "artifact": artifact, "verification": r.get("verification") or "AI individual review",
+                    "data_status": r.get("data_status") or r.get("data_available") or "not verified", "basis": r["basis"],
+                    **({"paper_id": r["paper_id"], "release_sentence": r["release_sentence"]} if r.get("release_sentence") else {}),
+                    **({"evidence_at_url": r["evidence_at_url"]} if r.get("evidence_at_url") else {})})
     return out
 
 
@@ -143,8 +151,9 @@ def catalogue(root: Path) -> list[dict]:
     for loc in read_json(root / "config/introduced_locations.json", {}).get("locations", []):
         e = out.get(remap.get(loc["benchmark_id"], loc["benchmark_id"]))
         if e is not None:
-            e.setdefault("reviewed_locations", []).append({k: loc.get(k) for k in ("url", "host", "distribution", "data_available", "basis", "checked_at", "reviewed_by",
-                                                                                    "paper_id", "release_sentence") if loc.get(k) is not None})
+            e.setdefault("reviewed_locations", []).append({k: loc.get(k) for k in ("url", "host", "artifact", "verification", "data_status", "basis", "checked_at",
+                                                                                    "reviewed_by", "paper_id", "release_sentence", "evidence_at_url", "judgment")
+                                                           if loc.get(k) is not None})
     return list(out.values())
 
 

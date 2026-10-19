@@ -315,6 +315,10 @@ def names_in(text: str, names: list[str]) -> bool:
 DATA_ROUTE = re.compile(r"huggingface\.co/datasets/|drive\.google\.com|zenodo\.org|figshare|kaggle\.com/datasets|dropbox\.com|\bdownload\b", re.I)
 
 
+CONFIRMING = frozenset()          # rule v3 confirms nothing: a name at the URL is a candidate (MIMIC-CXR-VQA vs EHRXQA, 2026-10-19);
+                                  # a location is confirmed only by a reviewed entry in config/introduced_locations.json
+
+
 def decide_v3(cand: dict, in_v2: dict | None, existence: dict, text: str, aliases: list[str]) -> tuple[str, str]:
     if in_v2 is None:
         return "excluded", "v2 filters (another's data, a license, a cited source, or untied in a multi-link sentence)"
@@ -331,10 +335,10 @@ def decide_v3(cand: dict, in_v2: dict | None, existence: dict, text: str, aliase
     if "related_page" in in_v2["tags"] and not route:
         return "related_artifact", "leaderboard / tool / demo / evaluation code by the sentence, no data route there"
     if cand["kind"] == "hfd":
-        return "data_location", "a Hub dataset whose card names it"
+        return "candidate:data_repository", "a Hub dataset whose card names it (a name is not a relation: review decides)"
     if cand["kind"] == "gh":
-        return "code_repository", "README names it" + ("; a data route is named in the README (not followed)" if route else "")
-    return "project_page", "the page names it"
+        return "candidate:code_repository", "README names it" + ("; a data route is named in the README (not followed)" if route else "") + " (review decides)"
+    return "candidate:project_page", "the page names it (review decides)"
 
 
 def main() -> int:
