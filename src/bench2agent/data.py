@@ -33,9 +33,11 @@ from bench2agent.core.revisions import FORMAT_V2, RevisionError
 MEMBER = "data/processed/" + SNAPSHOT
 DB_MEMBER = "data/processed/" + DATABASE
 # A release-pinned default keeps first-run downloads reproducible and checked.
-# data-20261013 is a data-v1 bundle; it installs through the legacy import.
-DEFAULT_URL = "https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261013/bench2agent-data.tar.gz"
-DEFAULT_SHA256 = "9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2"
+# data-20261019 is a data-v2 bundle (database + manifest) of revision
+# 8503cf1b1f7bee99. The earlier data-20261013 (v1) still installs with its
+# explicit --url/--sha256 through the legacy import.
+DEFAULT_URL = "https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261019/bench2agent-data.tar.gz"
+DEFAULT_SHA256 = "ff4c39a2555e868b71d8feae5147d4e2aab85dc7d77467172e7a3b33b6be3aad"
 
 
 def digest(path: Path) -> str:

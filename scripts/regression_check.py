@@ -98,6 +98,16 @@ FIGURES["66c4aa1cc0c564e7"] = {   # run 12: the NeurIPS 2024 parse lost in run 1
     'libero_adoption': {'others': 195, 'self': 3, 'undetermined': 0, 'before_claim': 0},
     'relbench_2_adoption': {'others': 3, 'self': 1, 'undetermined': 0, 'unattributed': 8},
 }
+# 2026-10-19, data release data-20261019: 66c4aa1cc0c564e7 plus the six reviewed
+# arXiv match decisions (88,172 observations) and 89 reviewed locations.
+FIGURES["8503cf1b1f7bee99"] = {
+    'robotics_latest': {'parsed': 513, 'LIBERO': 82, 'SIMPLER': 41, 'Meta-World': 29},
+    'iclr_cifar10': [('iclr-2020', 103, 547), ('iclr-2021', 135, 717), ('iclr-2022', 141, 838), ('iclr-2023', 166, 1241), ('iclr-2024', 179, 1894), ('iclr-2025', 197, 3060), ('iclr-2026', 168, 4252)],
+    'latest_all': {'parsed': 27481, 'GSM8K': 1122, 'CIFAR-10': 844, 'MMLU': 800},
+    'computer_vision_latest': {'parsed': 2828, 'COCO': 163, 'POPE': 75, 'Video-MME': 69},
+    'libero_adoption': {'others': 195, 'self': 3, 'undetermined': 0, 'before_claim': 0},
+    'relbench_2_adoption': {'others': 3, 'self': 1, 'undetermined': 0, 'unattributed': 8},
+}
 FIGURES["ddae8df2d9caf403"] = {**FIGURES["a4a18c3dbaf3ca0b"],
                                "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
                                "latest_all": {"parsed": 27459, "GSM8K": 1121, "CIFAR-10": 843, "MMLU": 800},

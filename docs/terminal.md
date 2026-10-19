@@ -5,7 +5,7 @@ editions, and which newly introduced benchmarks other researchers adopt.
 Answers carry computed counts, dataset coverage and original paper evidence.
 Usage frequency describes adoption; it does not measure benchmark quality.
 
-Python 3.10+ is required. Install and sign in to the official Claude Code or Codex CLI separately before starting the conversation. These commands describe Bench2Agent 0.4.0, available on PyPI.
+Python 3.10+ is required. Install and sign in to the official Claude Code or Codex CLI separately before starting the conversation. These commands describe Bench2Agent 0.5.0, available on PyPI.
 The runtime uses only Python's standard library;
 no GPU, search engine, VS Code extension or extraction pipeline is needed.
 
@@ -43,7 +43,7 @@ already exist". Add `--force`; the installed package provides the same
 An installable wheel can be shared without the source checkout:
 
 ```bash
-uv tool install ./bench2agent-0.4.0-py3-none-any.whl
+uv tool install ./bench2agent-0.5.0-py3-none-any.whl
 ```
 
 The wheel includes code, not the research corpus. It runs from any working
@@ -147,15 +147,23 @@ removes its old commands after migration; with pip, use
 Use a separately distributed snapshot or Bench2Agent data bundle:
 
 ```bash
-# The published bundle (GitHub release data-20261013, about 63 MB):
+# The published bundle (GitHub release data-20261019, about 45 MB):
 bench2agent data install
-# Or select an explicit source:
+# Or select an explicit source, e.g. the earlier data-20261013 for reproduction:
 bench2agent data install --url https://github.com/hyunyoungnam/Bench2Agent/releases/download/data-20261013/bench2agent-data.tar.gz \
     --sha256 9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2
 # Or a local copy:
 bench2agent data install --file ./bench2agent-data.tar.gz
 bench2agent data status
 ```
+
+Installed data is never replaced automatically, and a code upgrade does not
+download new data. After upgrading the code, run `bench2agent data install` to
+install and activate the new release. Saved conversations keep the revision
+they started on, so start a new conversation (`/new`) to use the new data. An
+MCP client (Claude Code, Codex) keeps the revision its Bench2Agent server
+started with: restart the client to read the active revision. Bench2Agent
+0.4.0 cannot install a data format v2 bundle such as data-20261019.
 
 A revision is one SQLite database (`benchmark_snapshot.sqlite`) and its
 manifest. Queries read that file and nothing else; each tool call reads one
@@ -535,7 +543,7 @@ Code versions, data snapshots, and PyPI publication are explained in the
 ```bash
 python -m pip install build
 python -m build
-python -m pip install dist/bench2agent-0.4.0-py3-none-any.whl
+python -m pip install dist/bench2agent-0.5.0-py3-none-any.whl
 ```
 
 The CI workflow tests Python 3.10 and 3.14, builds distribution artifacts,

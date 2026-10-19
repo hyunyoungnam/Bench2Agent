@@ -2,7 +2,7 @@
 
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/Bench2Agent?filter=v*&label=release)](https://github.com/hyunyoungnam/Bench2Agent/releases)
 [![PyPI](https://img.shields.io/pypi/v/bench2agent)](https://pypi.org/project/bench2agent/)
-[![Data release](https://img.shields.io/badge/data-2026--10--13-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261013)
+[![Data release](https://img.shields.io/badge/data-2026--10--19-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261019)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
 
 Ask which benchmarks researchers evaluate on, how usage changes across years,
@@ -37,7 +37,7 @@ bench2agent
 ```
 
 Choose **one** installation method. On the first interactive launch,
-Bench2Agent automatically downloads the research-data bundle (about 63 MB),
+Bench2Agent automatically downloads the research-data bundle (about 45 MB),
 verifies its checksum and installs it as a data revision. Subsequent
 launches reuse the data. No GPU, database server, Bench2Agent account or API key
 is needed for the CLI-login route. Model usage follows your AI account's limits.
@@ -64,36 +64,42 @@ from a Claude or ChatGPT subscription.
 
 ## Ask a question
 
-Two shortened answers selected after testing four English prompts through MCP
-with the **2026-10-07 data snapshot**. Counts were cross-checked against the
-returned tool results; model wording can vary.
+Two shortened answers from the terminal with Claude Code on the **2026-10-19
+data release** (revision `8503cf1b1f7bee99`). Model wording varies; the counts
+come from the tools and match the returned results.
 
 > **You:** What benchmarks are researchers using in robotics lately?
 >
-> **Bench2Agent:** Among 509 analysed papers labelled robotics,
-> [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) appears in 80
-> evaluation papers ([introducing paper](https://arxiv.org/abs/2306.03310)),
+> **Bench2Agent:** Among 513 parsed papers labeled robotics (ICLR 2026, ICML
+> 2026 and NeurIPS 2025),
+> [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) is used for
+> evaluation in 82 ([introducing paper](https://arxiv.org/abs/2306.03310)),
 > [SIMPLER](https://github.com/simpler-env/SimplerEnv) in 41
 > ([introducing paper](https://arxiv.org/abs/2405.05941)), and
-> [Meta-World](https://github.com/Farama-Foundation/Metaworld) in 29. This covers
-> ICLR 2026, ICML 2026, and NeurIPS 2025. Unlabelled papers, including CoRL,
-> are outside this field filter.
+> [Meta-World](https://github.com/Farama-Foundation/Metaworld) in 29. CoRL,
+> CVPR, ICCV and ECCV carry no field labels, so they are outside this field
+> filter.
 
 > **You:** How has CIFAR-10 usage changed at ICLR from 2024 to 2026?
 >
-> **Bench2Agent:** Its stated evaluation use fell from 94.3 to 64.8 to 38.9
-> per 1,000 analysed papers: 178 of 1,888 in 2024, 197 of 3,038 in 2025,
-> and 165 of 4,237 in 2026. The counts use papers with parsed full text;
-> usage in unparsed papers is unknown.
+> **Bench2Agent:** Stated evaluation use went from 179 of 1,894 parsed papers
+> in 2024 to 197 of 3,060 in 2025 and 168 of 4,252 in 2026, or 94.5, 64.4 and
+> 39.5 per 1,000. The count stayed roughly flat while ICLR grew; both steps are
+> a significant fall under the within-venue test. Usage in papers without
+> parsed full text is unknown.
 
 You can also ask which newly introduced benchmarks other authors use, then
 ask for the evidence behind a result. In the standalone terminal, `/sources`
-shows the original sentences and paper links. Quotes and figures are checked;
-anything the checker cannot verify is marked in the answer.
+shows the original sentences and paper links. Quotes and figures are checked
+against the tool results of the same turn. A number the checker cannot connect
+to a tool result is marked `[unverified figure]`: it could not be confirmed,
+which does not mean it is wrong.
 
 Answers include repository, dataset or homepage links and reviewed introducing
 papers where available. Locations are our mapping; a repository link does not
 guarantee a direct data download. Missing links mean no confirmed location.
+Individually reviewed locations also state what was seen about the data, where
+and when.
 
 ## Use the tools inside Claude Code or Codex
 
@@ -112,10 +118,11 @@ interface. [MCP setup and scripted queries](https://github.com/hyunyoungnam/Benc
 
 ## Data coverage
 
-The **2026-10-13 data release** contains **61 editions of 11 conferences**,
-**87,048 parsed paper-edition observations** and **9,332 benchmark/dataset
-entries**, including 8,768 entries with reviewed introduction claims.
-Revision: `e41da62f2fb3616f`.
+The **2026-10-19 data release** contains **61 editions of 11 conferences**,
+**88,172 parsed paper-edition observations** and **9,334 benchmark/dataset
+entries**, including 8,770 entries with reviewed introduction claims and 89
+with an individually reviewed code or data location (an AI review against the
+introducing paper's own release sentence). Revision: `8503cf1b1f7bee99`.
 
 | Venue | Included editions |
 |---|---|
@@ -132,7 +139,7 @@ Revision: `e41da62f2fb3616f`.
 | NEURIPS | 2020 · 2021 · 2022 · 2023 · 2024 · 2025 |
 
 Counts come from explicitly stated evaluation or training use in parsed arXiv
-HTML, with the analysed editions and denominator reported for each query.
+HTML, with the analyzed editions and denominator reported for each query.
 Missing or unparsed papers remain unknown. Field filters match labels that
 name a research field, each with its origin (the primary area the authors
 declared at submission, the topic an AAAI track states, or a derived topic);
@@ -142,20 +149,30 @@ introduction claims in the expanded editions are not yet reviewed, so
 introduction discovery is less complete than usage coverage. “New” means a
 reviewed claim in this corpus, not the first public release worldwide.
 
-A data revision is one SQLite database, identified by a hash of its content;
-the released 2026-10-13 bundle still carries the JSON it was built from, which
-installs through a one-time conversion. Each conversation and its tools and
-checks stay on one immutable revision.
+A data revision is one SQLite database with its manifest, identified by a
+hash of its content. The 2026-10-19 bundle (data format v2) needs Bench2Agent
+0.5.0 or later; the 2026-10-13 bundle (format v1) still installs from its
+explicit URL through a one-time conversion. Each conversation and its tools
+and checks stay on one immutable revision.
 External benchmarks' actual questions, labels and images are separate downloads.
 [Data rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md) · [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md)
 
 ## Updates and web development
 
-Version **0.4.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.4.0/)
-and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.4.0).
-Update code using your installation method; update research data separately
-with `bench2agent data install`. Earlier installed revisions remain available
-for saved chats. [Migration and data management](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
+Version **0.5.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.5.0/)
+and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.5.0).
+Code and research data update separately:
+
+1. Update the code with your installation method (rerun its install command).
+2. Run `bench2agent data install` to download and activate the new data.
+   Installed data is never replaced automatically.
+3. Start a new conversation (`/new`) to use it. Saved conversations keep the
+   revision they started on.
+4. If you use the tools inside Claude Code or Codex, restart that client so
+   its Bench2Agent server reads the new revision.
+
+Version 0.4.0 cannot install the new bundle and keeps working with the
+2026-10-13 data. [Migration and data management](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
 The interface plan is **terminal first, then a designed local browser
 workspace** using the same AI CLI login, tools, research data and verifier.
