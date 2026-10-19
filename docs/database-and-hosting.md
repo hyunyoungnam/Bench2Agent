@@ -1,9 +1,13 @@
 # Bench2Agent database and web service design
 
-Bench2Agent will serve terminal conversations, MCP clients and a hosted web
-conversation through the same benchmark tools. A relational database will hold
-papers, benchmark identities, stated uses and their evidence. Collection runs
-will add or revise records; agents will query a published data revision.
+Bench2Agent has two interface tracks: a terminal and a designed browser
+workspace over one local conversation service, with terminal implementation
+first. This direction was clarified with the owner on 2026-10-15: a browser
+interface does not require paid hosting or a public multi-user service.
+Browser assets, a small loopback API, the database and the user's existing
+AI CLI run on the user's PC. The browser's interaction and delivery plan is
+in [browser-interface.md](browser-interface.md). It is a target, not a newly
+shipped feature; the existing hosted visitor prototype remains separate.
 
 This is the implementation design, kept current. State as of 2026-10-13
 (Bench2Agent 0.4.0 released; the checkout at 0.5.0.dev0): the application
@@ -13,21 +17,24 @@ from the JSON + SQLite bundle keep serving); the terminal, the stdio MCP
 server and the optional HTTP MCP and web host all pin one revision per
 conversation. The working database that will hold processing state is kept
 apart from the published export (see *Next steps*).
-`bench2agent serve` starts the local browser prototype. This design supports a
-future Mac server and Linux deployment.
+`bench2agent serve` starts the earlier paper-evidence browser, and
+`bench2agent web serve` starts the earlier hosted visitor prototype. Neither
+is already the planned local conversation workspace. A proposed
+`bench2agent --web` launcher is not implemented. A Mac or Linux server is an
+optional later deployment, not a dependency of either local interface.
 
 ## Shared tools and separate interfaces
 
 ```mermaid
 flowchart LR
     CLI[Terminal conversation] --> Agent[Conversation engine]
-    Web[Web conversation] --> API[Web API]
+    Web[Local browser workspace] --> API[Loopback API]
     API --> Agent
     Client[MCP client] --> MCP[MCP transport]
     Agent --> Tools[Benchmark query service]
     MCP --> Tools
     Tools --> Store[Repository interface]
-    Store --> DB[(SQLite or PostgreSQL)]
+    Store --> DB[(Published SQLite revision)]
     Worker[Collection and review worker] --> Draft[(Working database)]
     Draft --> Publish[Validate and publish revision]
     Publish --> DB
@@ -46,7 +53,7 @@ when server write concurrency requires it. Counts and statistical comparisons
 share one implementation, checked against fixture expectations and pinned
 figures of published revisions (`scripts/regression_check.py`).
 
-Both local and hosted answers carry the dataset revision, complete tool
+Answers from both interfaces carry the dataset revision, complete tool
 arguments, analysed editions, denominators and evidence IDs. Every tool call
 in a conversation uses its pinned revision, including follow-up questions and
 answer verification. A new revision becomes available to new conversations;
@@ -57,7 +64,8 @@ existing conversations continue on their original revision.
 | Deployment | Initial storage | Conditions for expansion |
 |---|---|---|
 | Installed terminal or local MCP | Read-only SQLite data bundle; local conversation files | No database server or additional runtime dependency |
-| First hosted service on one Mac or Linux machine | SQLite research data; separate application store for users, sessions and jobs | Read-heavy research queries and a single publishing worker |
+| Local browser workspace (target) | Same research data and common conversation persistence contract; loopback API | Web dependencies optional; adapt the existing stores for cross-interface resume |
+| Optional later hosted service on one Mac or Linux machine | SQLite research data; separate application store for sessions and jobs | Separate deployment decision, visitor isolation and provider conditions |
 | Multiple collection writers or application servers | PostgreSQL for central metadata and application state; SQLite exports for local users | Concurrent writes, shared job coordination or several service instances |
 
 The current corpus does not require PostgreSQL solely because it contains
@@ -150,7 +158,44 @@ Publication must prevent an answer from mixing partially imported editions or
 different review revisions. Previous published data remains addressable for
 saved conversations and regression checks.
 
-## Hosted conversations
+## Local browser conversations (target)
+
+The browser should be a polished research interface: conversation first,
+structured benchmark cards and comparisons, and evidence/details opened on
+demand. Do not make a chart dashboard the entry point or imitate terminal
+text in a web shell. Scope, missing coverage, links and verification should
+be easier to read and inspect; richer presentation must not add new counting
+rules or quality claims. See [the interface specification](browser-interface.md).
+
+A thin local API calls the common terminal conversation service, which owns
+connector selection, tool execution, revision pinning, verification,
+cancellation and conditional saves. Existing native CLI connectors use the
+local machine owner's login. Do not create per-visitor runtimes or add a
+provider login-code relay for this local mode. Sharing conversations across
+interfaces requires adapting the current terminal files and web store; keep
+IDs, ownership, connector, revision and evidence trails intact. It is a target,
+not an already implemented migration.
+
+Reuse the current FastAPI/static-page work where useful, with web packages
+remaining optional. The local API may call the common service in-process;
+HTTP MCP is not required as a loopback hop within the application. Keep MCP
+available for external clients and preserve the same six query tools.
+
+Serve page assets and API from one loopback origin and protect local
+mutations/origins/hosts without adding a user account. No paid backend is
+required; AI-plan or explicit API costs are unchanged. Installation and a
+running local process are still required. Browser launch must not implicitly
+enable LAN/public access or expose the local CLI to remote visitors.
+
+The older paper-evidence browser remains available. A new browser direction
+does not make the current hosted conversation code a working local launcher;
+wire and verify it before changing command documentation or release claims.
+
+## Deferred hosted conversation prototype
+
+The rest of this section records the earlier public-host design and existing
+prototype. It is optional future work, not a gate for the local browser.
+"Local = terminal / hosted = web" is no longer the product direction.
 
 Use a separate ASGI web API, initially FastAPI with Uvicorn, for conversations
 and streamed tool/answer events. It calls the same tools and the same
@@ -206,7 +251,11 @@ MCP server records every call, and a provider API key with Bench2Agent's own
 loop. What each route permits, what was executed and what a public host can
 offer is in [account-connections.md](account-connections.md).
 
-## Where to run the private test host
+## Optional later private test host
+
+These hosting options apply only if remote multi-user operation is resumed.
+They are not required to deliver the local browser interface; the earlier
+owner sign-in check is deferred with that deployment.
 
 The host is one FastAPI process plus a `/data` directory (installed data
 revisions, and the web store with visitor sessions, conversations and
@@ -225,7 +274,7 @@ then marks the session cookie Secure), the official Claude Code CLI installed
 on the host for the visitors' runtimes, and `BENCH2AGENT_WEB_TURNS_PER_DAY`
 and the runtime caps set to what the machine allows.
 
-## Future Mac server
+## Optional future Mac server
 
 The Mac can host the API, query database, collection worker and web frontend.
 When model inference uses provider APIs, these services do not require a local
@@ -251,7 +300,11 @@ backups use its backup mechanism or frozen published files; PostgreSQL offers
 [dump and continuous-archive options](https://www.postgresql.org/docs/current/backup.html).
 Collection and model-call logs remain distinct from user-visible evidence.
 
-## Implementation sequence
+## Earlier implementation sequence (history)
+
+This dated sequence records the storage and hosted-prototype work already
+attempted. The current interface priority is terminal first, then the local
+browser described above; the hosted and Mac deployment steps are deferred.
 
 1. Import the present JSON snapshot into normalized SQLite tables without
    losing existing IDs, claims, evidence, unresolved mentions or coverage.
@@ -323,7 +376,7 @@ is a later extension, with source revisions, input/output contracts and
 reference-result tests per adapter. See the
 [Paper2Agent paper](https://arxiv.org/abs/2509.06917v2).
 
-## Next steps (agreed 2026-10-13)
+## Next steps (data plan 2026-10-13; interface direction revised 2026-10-15)
 
 1. Documentation aligned with the released state (this revision of the file).
 2. **Done (2026-10-13):** SQLite is the only query backend and the revision
@@ -359,6 +412,12 @@ reference-result tests per adapter. See the
 5. Revision retention: recent, active, referenced and in-use revisions are
    kept; leases live outside revision directories and share one lock with
    the delete decision.
-6. The owner's private hosted sign-in check, in parallel.
+6. Design the local conversation browser, then integrate the common terminal
+   conversation service, connectors and persistence. Visual work can proceed
+   alongside data work; runtime integration follows stable common behavior.
+   Verify the same scoped facts in both interfaces and inspect the rendered
+   browser at desktop and narrow widths. See
+   [browser-interface.md](browser-interface.md). The earlier hosted sign-in
+   check is deferred and is not a delivery gate.
 7. Benchmark metadata at three levels and the first record adapters (GSM8K,
    MATH-500) with file-level verification and a retrieval manifest.

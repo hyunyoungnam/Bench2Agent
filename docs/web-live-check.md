@@ -1,5 +1,11 @@
 # Private hosted sign-in check
 
+**Deferred as of 2026-10-15.** This guide exercises the earlier remote-visitor
+prototype. It is not the acceptance check for the planned local browser,
+which reuses the same PC owner's CLI login and conversation service as the
+terminal. No hosted sign-in test is required to deliver that interface; see
+[browser-interface.md](browser-interface.md) for its delivery criteria.
+
 The packaged web code is a directory-isolation prototype under one OS user.
 It has not completed a real hosted sign-in. Run this owner-only check on a
 private machine; it does not establish public multi-user readiness or approval

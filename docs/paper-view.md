@@ -1,5 +1,12 @@
 # The paper-reading surface — principles
 
+**Scope clarification, 2026-10-15:** this file governs the existing paper
+evidence screens and their source-handling principles. The new local browser
+is a benchmark-first conversational workspace; its entry flow, layout and
+delivery criteria are in [browser-interface.md](browser-interface.md).
+Historical conference-first navigation and page-build constraints below do
+not define the new workspace.
+
 These sections were the core of the maintainers' build notes until 2026-10-02,
 when the project re-centred on benchmarks. They
 are moved here verbatim, not retired: the cards, the selected-set views, the

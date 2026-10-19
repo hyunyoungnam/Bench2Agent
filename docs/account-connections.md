@@ -1,5 +1,14 @@
 # Connecting an AI account to Bench2Agent
 
+**Direction update, 2026-10-15:** terminal and browser are now two interfaces
+over one local application, terminal implementation first. The planned local
+browser reuses the machine owner's installed CLI connector and login; it does
+not require a new hosted visitor runtime or a sign-in relay. See
+[browser-interface.md](browser-interface.md). The local launcher is not yet
+implemented. Public multi-user hosting is deferred; the hosting research and
+dated execution reports below do not block the local browser and are not a
+fresh verification of provider terms.
+
 Bench2Agent's own work is the data: the pinned revision, the six tools, the
 counting rules and the verification of every quote and figure. The model
 that reads the tools and writes the prose comes from an account the user
@@ -92,7 +101,10 @@ listed), which the checker does not derive. Quotes: 15 of 15 verbatim.
 The terminal, through the same layer (`bench2agent ask --connector claude`),
 gave the CIFAR-10 series with the same figures.
 
-## The two sides, as built now
+## Earlier interface split (prototype history, superseded direction)
+
+The labels below describe the earlier implementation, not the target split
+between terminal and local browser. Keep them as prototype history.
 
 **Local = the terminal.** `pip install bench2agent` (the current code is not
 on PyPI yet; install from the repository or a built wheel until a release),

@@ -416,15 +416,23 @@ Local data stays on your machine. Questions and returned tool evidence are sent
 to your chosen model provider during inference. API authentication for the
 independent terminal is separate from ChatGPT/Claude subscription login.
 
-## Hosted conversation (web)
+## Browser interface direction (planned)
 
-Bench2Agent has two sides. **Local is the terminal**: `pip install` on a
-machine where Claude Code or Codex is signed in, then `bench2agent`.
-**Hosted is the web**: a visitor opens the address, connects their own Claude
-account, asks, and reads the sources and verification marks; no Bench2Agent
-account, no API key, nothing to install. Today the hosted side is a
-directory-isolation prototype: visitors are kept apart by runtime directory
-and environment under one OS user, not by an OS-user or container
+The two tracks are terminal and browser interfaces over one local application,
+with terminal implementation first. The planned browser runs on your PC,
+uses the same installed Claude Code or Codex login, and presents benchmark
+cards, comparisons and source evidence alongside the conversation. It needs
+no dedicated paid backend or Bench2Agent account, but does require local
+installation and a running process. See [browser-interface.md](browser-interface.md).
+
+The proposed `bench2agent --web` launcher is not implemented. The commands in
+the following section start the earlier hosted visitor prototype, not this
+planned local workspace. Public multi-user hosting is deferred.
+
+## Earlier hosted conversation prototype (deferred)
+
+The hosted prototype separates visitors by runtime directory and environment
+under one OS user, not by an OS-user or container
 boundary. The web never uses the host's own
 logins. [account-connections.md](account-connections.md) records what each
 route permits, what was executed, and what remains before public operation.

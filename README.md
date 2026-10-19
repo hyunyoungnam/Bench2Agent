@@ -157,10 +157,16 @@ Update code using your installation method; update research data separately
 with `bench2agent data install`. Earlier installed revisions remain available
 for saved chats. [Migration and data management](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
-The optional web/HTTP MCP modules are development prototypes. Hosted Claude
-sign-in uses directory separation under one OS user; real hosted sign-in,
-strong visitor isolation and public operation are still unvalidated.
-This release provides the **local terminal and MCP**, not a public web service.
+The interface plan is **terminal first, then a designed local browser
+workspace** using the same AI CLI login, tools, research data and verifier.
+The browser will run on your PC; a dedicated paid web backend is not required.
+Its launcher and shared-history integration are planned, not available in
+this release. [Browser interface plan](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/browser-interface.md).
+
+The existing optional web/HTTP MCP modules are development prototypes. The
+earlier hosted visitor prototype is deferred; hosted sign-in, strong visitor
+isolation and public operation remain unvalidated. This release provides the
+**local terminal and MCP**.
 [Account connections](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/account-connections.md).
 
 Code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE).
