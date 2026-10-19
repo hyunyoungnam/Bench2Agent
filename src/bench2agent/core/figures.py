@@ -360,7 +360,7 @@ def family(metric: str) -> str:
 
 
 # the unit right after a number sets its family
-_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:회차|에디션|editions?(?![A-Za-z]))", EDITIONS),
+_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:(?:회차|에디션)(?!\s*별)|editions?(?![A-Za-z]))", EDITIONS),   # "에디션별로는" (by edition) is no unit
                (r"\s*(?:편\s*(?:이|가|이\s*)?\s*파싱|parsed\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?parsed)", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
                (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
                (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*%", {"percent"}),
@@ -485,6 +485,11 @@ def _mentions(text: str, surf: tuple, _unused=None) -> set[str] | None:
 def _clause(text: str, a: int, b: int) -> tuple[str, str]:
     start = max(text.rfind(ch, 0, a) for ch in ("\n", ". ", "。", "|", "; ", "·", "(", "—", ", ", " + ", "→"))
     start = 0 if start < 0 else start + 1
+    pair = re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d[\d,]*(?:\.\d+)?", text[b:])
+    if pair:                                                # "10 of 4252 parsed papers in iclr-2026": the count shares
+        b2 = b + pair.end()                                 # what follows its denominator
+        ends = [i for i in (text.find(ch, b2) for ch in ("\n", ". ", "|", ";", ", ", "(", ")", " + ", "—", " – ")) if i >= 0]
+        return text[start:a], text[b:min(min(ends) if ends else len(text), b2 + 30)]
     ends = [i for i in (text.find(ch, b) for ch in ("\n", ". ", "|", ";", ", ", "(", ")", " + ", "—", " – ")) if i >= 0]
     return text[start:a], text[b:min(min(ends) if ends else len(text), b + 30)]
 
@@ -535,7 +540,14 @@ def _context_cues(before: str, after: str) -> dict:
     for rx, kind, val in _CONTEXT_WORDS:
         if re.search(rx, before + " " + right_after, re.I):
             c[kind] = val
-    eds = {f"{v}-{y}" for v, y in re.findall(r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)", (before + " " + after).lower())}
+    rx = r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)"
+    eds = {f"{v}-{y}" for v, y in re.findall(rx, before.lower())}
+    # after the number, an edition followed by another number is that number's ("…before_claim 0
+    # 에디션별로는 neurips-2025에 타 저자 3편": neurips-2025 is the 3's); a trailing one is this one's
+    low = after.lower()
+    for m in re.finditer(rx, low):
+        if not re.search(r"\d", re.sub(rx, " ", low[m.end():])):
+            eds.add(f"{m.group(1)}-{m.group(2)}")
     if eds:
         c["edition"] = eds
     return c

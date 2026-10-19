@@ -122,6 +122,24 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts("### ToyBench\niclr-2026 에디션은 4,252편 파싱되었습니다.", self.lg), [("4,252", "ok")])
         self.assertEqual(verdicts("### ToyBench\niclr-2026 에디션은 4,000편 파싱되었습니다.", self.lg), [("4,000", "no")])
 
+    def test_an_edition_that_leads_the_next_number_is_not_this_numbers_context(self):
+        # 2026-10-19 MM-NIAH: "…before_claim 0 에디션별로는 neurips-2025에 타 저자 3편" (no full stop after the
+        # anchor) read neurips-2025 as the 0's edition; it belongs to the 3
+        self.assertEqual(verdicts("### ToyBench\n평가 타저자 5편 에디션별로는 iclr-2026에 12편", self.lg)[0], ("5", "ok"))
+        # "0 에디션별로는" is "0, by edition", not "0 editions"
+        self.assertEqual(verdicts("### ToyBench\n학습 타저자 7 에디션별로는 iclr-2026에 12편", self.lg)[0], ("7", "ok"))
+        # a trailing edition still qualifies its number: no false pass for "10/4252 iclr-2026" (iclr-2026 is 12)
+        self.assertEqual(verdicts("### ToyBench\n- 사용 10/4252 iclr-2026", self.lg), [("10", "no"), ("4252", "ok")])
+        self.assertEqual(verdicts("### ToyBench\n- 사용 10/4252 iclr-2025", self.lg), [("10", "ok"), ("4252", "no")])
+        # the count of "N of M parsed papers in <edition>" shares the edition after its denominator
+        self.assertEqual(verdicts("### ToyBench\n- 10 of 4252 parsed papers in iclr-2026", self.lg), [("10", "no"), ("4252", "ok")])
+        self.assertEqual(verdicts("### ToyBench\n- 12 of 4252 parsed papers in iclr-2026", self.lg), [("12", "ok"), ("4252", "ok")])
+        self.assertNotEqual(verdicts("### ToyBench\n사용 10편 iclr-2026", self.lg), [("10", "ok")])
+        from bench2agent.core import chat
+        from bench2agent.core.verify import Verifier
+        segs, v = chat.segment('⟦new_benchmarks:{}|ToyBench 평가 타저자 5편⟧ 에디션별로는 iclr-2026에 12편', None, Verifier.__new__(Verifier), [], self.lg)
+        self.assertEqual([s["v"] for s in segs if s["t"] == "n"][0], "ok")
+
     def test_an_anchor_with_no_number_is_plain_text_not_an_unverified_figure(self):
         from bench2agent.core import chat
         from bench2agent.core.verify import Verifier
