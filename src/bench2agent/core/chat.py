@@ -141,9 +141,26 @@ def segment(text: str, store: Store, ver: Verifier,
     v = {"checked": 0, "passed": 0, "fchecked": 0, "fpassed": 0}
     fcache: dict = {}
     pos = 0
+    # the answer with every figure anchor replaced by its own claim text, so an anchored number is read in
+    # place (its table row and column, clause, paragraph, section) while its facts stay those of its call
+    inline, spans, last = [], {}, 0
+    prose_at = {}                                        # text offset of a prose piece -> its offset in the inlined answer
+    for m in _ANCHOR.finditer(text):
+        prose_at[last] = sum(len(x) for x in inline)
+        inline.append(text[last:m.start()])
+        if not m.group(1) and m.group(3) and m.group(3) != "arxiv":
+            start = sum(len(x) for x in inline)
+            inline.append(m.group(5).strip())
+            spans[m.start()] = (start, start + len(m.group(5).strip()))
+        else:
+            inline.append(" ")
+        last = m.end()
+    prose_at[last] = sum(len(x) for x in inline)
+    inline.append(text[last:])
+    inline_text = "".join(inline)
     for m in _ANCHOR.finditer(text):
         if m.start() > pos:
-            segs.append({"t": "p", "s": text[pos:m.start()]})
+            segs.append({"t": "p", "s": text[pos:m.start()], "inline_at": prose_at.get(pos)})
         pos = m.end()
         if m.group(1):                                   # ⟦gid|quote⟧
             gid, quote = int(m.group(1)), m.group(2).strip()
@@ -176,8 +193,11 @@ def segment(text: str, store: Store, ver: Verifier,
                          "url": "https://arxiv.org/abs/" + arg if valid_id else None,
                          "venue": _VENUE.get(venue, venue), "year": year})
             continue
-        fig = (_anchored_connected(tool, arg, claim, log) if log is not None and _benchmark_only(log)
+        fig = (_anchored_connected(tool, arg, claim, log, (inline_text, spans.get(m.start()))) if log is not None and _benchmark_only(log)
                and figures.RECOMPUTABLE.get(tool) == "json" else figures.check(tool, arg, claim, fcache, log))
+        if fig["state"] == "na" and not fig.get("n"):
+            segs.append({"t": "p", "s": claim})          # an anchor with no number in it states no figure: plain text, unmarked
+            continue
         if fig["state"] != "na":                         # 'na' claims nothing
             v["fchecked"] += 1
             v["fpassed"] += fig["state"] == "ok"
@@ -185,23 +205,31 @@ def segment(text: str, store: Store, ver: Verifier,
                      "arg": arg, "missing": fig.get("missing") or [],
                      "why": fig.get("why")})
     if pos < len(text):
-        segs.append({"t": "p", "s": text[pos:]})
-    return _auto_figures(segs, v, trail, fcache, log), v
+        segs.append({"t": "p", "s": text[pos:], "inline_at": prose_at.get(pos)})
+    out = _auto_figures(segs, v, trail, fcache, log, inline_text)
+    for sg in out:
+        sg.pop("inline_at", None)
+    return out, v
 
 
 def _benchmark_only(log) -> bool:
     return bool(log.entries) and all(figures.RECOMPUTABLE.get(e.get("name")) == "json" for e in log.entries)
 
 
-def _anchored_connected(tool: str, arg: str, claim: str, log) -> dict:
-    """An anchored claim: its numbers must connect to facts of THAT call."""
+def _anchored_connected(tool: str, arg: str, claim: str, log, context=None) -> dict:
+    """An anchored claim: its numbers must connect to facts of THAT call, read in place when
+    `context` (the inlined answer, the claim's span in it) is given."""
     key = figures.canonical_args(arg)
     fs = [f for f in figures.facts(log) if f["ctx"].get("tool") == tool and f["ctx"].get("args") == key]
     nums = figures.claimed(claim)
     if not fs:
         return {"state": "no", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
                 "why": "this turn did not call the tool with these arguments"}
-    found = [x for x in figures.scan_connected(claim, fs, figures.date_strings(log), set()) if not x[3].startswith("date")]
+    if context and context[1]:
+        whole, (a0, b0) = context
+        found = [x for x in figures.scan_connected(whole, fs, figures.date_strings(log), set()) if a0 <= x[0] < b0 and not x[3].startswith("date")]
+    else:
+        found = [x for x in figures.scan_connected(claim, fs, figures.date_strings(log), set()) if not x[3].startswith("date")]
     if not found:
         return {"state": "na", "tool": tool, "arg": arg, "n": 0, "why": "no figure in the claim"}
     bad = [x for x in found if x[3] != "ok"]
@@ -209,7 +237,7 @@ def _anchored_connected(tool: str, arg: str, claim: str, log) -> dict:
             "n": len(found), "missing": [x[2] for x in bad], "why": "; ".join(sorted({x[4] for x in bad})) or None}
 
 
-def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
+def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None, inline_text: str | None = None) -> list:
     """Check every printed number against this turn's own tool results.
 
     Numbers that hold up stay plain prose and are only counted; a number that
@@ -217,7 +245,7 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
     the reader can see WHICH one it is. The mark states a fact — this number is
     not in what the tools returned — and accuses the sentence of nothing."""
     if log is not None and _benchmark_only(log):
-        return _auto_connected(segs, v, log)
+        return _auto_connected(segs, v, log, inline_text)
     vals, used = figures.turn_pool(trail, fcache, log)
     if not vals:
         return segs
@@ -244,18 +272,26 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None) -> list:
     return out
 
 
-def _auto_connected(segs: list, v: dict, log) -> list:
+def _auto_connected(segs: list, v: dict, log, inline_text: str | None = None) -> list:
     """The six benchmark tools: a printed number is verified only when it
-    connects to a fact of this turn's tool log (figures.scan_connected)."""
+    connects to a fact of this turn's tool log (figures.scan_connected). The
+    whole answer is read once, anchors inlined, so a number keeps its table
+    row and column, clause and section across an anchor next to it."""
     fs, dates = figures.facts(log), figures.date_strings(log)
     skip = {float(s["gid"]) for s in segs if s.get("t") == "c" and s.get("gid")}
+    whole = figures.scan_connected(inline_text, fs, dates, skip) if inline_text else None
     out: list = []
     for seg in segs:
         if seg.get("t") != "p":
             out.append(seg)
             continue
         text, pos = seg["s"], 0
-        for a, b, raw, verdict, why in figures.scan_connected(text, fs, dates, skip):
+        at = seg.get("inline_at")
+        if whole is not None and at is not None:
+            found = [(a - at, b - at, raw, verdict, why) for a, b, raw, verdict, why in whole if at <= a and b <= at + len(text)]
+        else:
+            found = figures.scan_connected(text, fs, dates, skip)
+        for a, b, raw, verdict, why in found:
             if verdict == "date-ok":
                 continue                                  # a date the tools returned verbatim: not a figure, not counted
             if verdict != "date-no":

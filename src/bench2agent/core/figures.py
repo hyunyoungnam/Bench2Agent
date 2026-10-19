@@ -360,7 +360,9 @@ def family(metric: str) -> str:
 
 
 # the unit right after a number sets its family
-_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:회차|에디션|editions?(?![A-Za-z]))", EDITIONS), (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
+_UNIT_AFTER = [(r"\s*(?:개\s*)?(?:회차|에디션|editions?(?![A-Za-z]))", EDITIONS),
+               (r"\s*(?:편\s*(?:이|가|이\s*)?\s*파싱|parsed\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?parsed)", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
+               (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
                (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*%", {"percent"}),
                (r"\s*(?:건|개|items?(?![A-Za-z]))", _ANY)]
 # words BEFORE the number: a specific word beats a generic one; among specific ones the nearest wins
@@ -368,7 +370,7 @@ _SPECIFIC_WORDS = [
     (r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}),
     (r"‰|per\s*1,?000|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE), (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
-    (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "total", "catalogue_entries"}),
+    (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unattributed_papers", "unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
     (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"}), (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
     (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"})]
@@ -502,9 +504,9 @@ def _section(text: str, a: int, surf, raw=None) -> set[str] | None:
 
 def _metric_cues(before: str, after: str) -> set | None:
     unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
-    if unit is None and re.match(r"\s*/\s*\d", after):
-        return set(USAGE)                                      # "0/547": an edition's use count ...
-    if unit is None and re.search(r"\d\s*/\s*$", before):
+    if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after):
+        return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
+    if unit is None and re.search(r"\d\s*(?:/|(?<![A-Za-z])of)\s*$", before):
         return set(DENOM)                                      # ... over its denominator
     best = None
     for rx, fam in _SPECIFIC_WORDS:

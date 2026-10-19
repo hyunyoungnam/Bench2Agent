@@ -113,6 +113,35 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts("ToyBench: 타저자 2025편", self.lg), [("2025", "no")])
         self.assertEqual(verdicts("ICLR 2026에서 ToyBench 12편", self.lg), [("12", "ok")])
 
+    def test_the_policy_example_form_n_of_m_parsed_papers_is_read_like_n_slash_m(self):
+        # 2026-10-19: the policy's own example "LIBERO 82 of 513 parsed papers" had no cue for either number
+        self.assertEqual(verdicts("### ToyBench\niclr-2025 10 of 3059 parsed papers", self.lg), [("10", "ok"), ("3059", "ok")])
+        self.assertEqual(verdicts("### ToyBench\niclr-2025 12 of 3059 parsed papers", self.lg), [("12", "no"), ("3059", "ok")])
+        self.assertEqual(verdicts("ToyBench: one of 12 papers", self.lg)[0][1], "na")        # "of" after a word, not a number
+        # an edition's parsed count right before "파싱/parsed" is its denominator, not a use count ("에디션" names the edition)
+        self.assertEqual(verdicts("### ToyBench\niclr-2026 에디션은 4,252편 파싱되었습니다.", self.lg), [("4,252", "ok")])
+        self.assertEqual(verdicts("### ToyBench\niclr-2026 에디션은 4,000편 파싱되었습니다.", self.lg), [("4,000", "no")])
+
+    def test_an_anchor_with_no_number_is_plain_text_not_an_unverified_figure(self):
+        from bench2agent.core import chat
+        from bench2agent.core.verify import Verifier
+        from bench2agent import cli
+        segs, v = chat.segment('See ⟦new_benchmarks:{}|the figures⟧ for details.', None, Verifier.__new__(Verifier), [], self.lg)
+        out = cli.render({"segs": segs, "verified": v})
+        self.assertIn("the figures", out)
+        self.assertNotIn("[unverified figure]", out)
+        self.assertEqual(v["fchecked"], 0)
+
+    def test_an_anchored_table_cell_is_read_with_its_row_and_column(self):
+        # 2026-10-19: the model anchored each table cell; the cell alone ("5") says nothing, its row and header do
+        from bench2agent.core import chat
+        from bench2agent.core.verify import Verifier
+        table = ("| Benchmark | Other authors (evaluation) |\n|---|---|\n"
+                 '| ToyBench | ⟦new_benchmarks:{}|5⟧ |\n| OtherBench | ⟦new_benchmarks:{}|5⟧ |')
+        segs, v = chat.segment(table, None, Verifier.__new__(Verifier), [], self.lg)
+        self.assertEqual([s["v"] for s in segs if s["t"] == "n"], ["ok", "no"])          # ToyBench 5 holds; OtherBench's is 3
+        self.assertEqual((v["fchecked"], v["fpassed"]), (2, 1))
+
     def test_the_terminal_marks_an_unverified_date_apart_from_figures(self):
         from bench2agent import cli
         out = cli.render({"segs": [{"t": "p", "s": "확인 "}, {"t": "n", "s": "2026-10-17", "v": "no", "kind": "date"}, {"t": "p", "s": "입니다."}]})
