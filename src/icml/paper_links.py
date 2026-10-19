@@ -134,7 +134,7 @@ def cmd_candidates(rules: str = "v1") -> None:
                         seen.add(key)
                         tags = [("named" if named else "unnamed"), ("multi_intro_paper" if per_paper[c["arxiv_base"]] > 1 else "single_intro_paper"),
                                 *(["homonym"] if e.get("homonym_of") else []), f"host:{kind}", *extra_tags]
-                        fh.write(json.dumps({"pair": f"{e['id']}|{key[2]}", "benchmark_id": e["id"], "name": e["name"], "kind": kind,
+                        fh.write(json.dumps({"pair": f"{e['id']}|{kind}|{key[2]}", "benchmark_id": e["id"], "name": e["name"], "kind": kind,
                                              "id": rid if kind != "project" else None, "url": url, "paper_id": c["arxiv_base"],
                                              "edition": c["edition"], "paper_title": c.get("title"), "sentence": sent[:600], "tags": tags},
                                             ensure_ascii=False) + "\n")
@@ -162,6 +162,8 @@ class Halt(Exception):
 
 def _get(url: str, headers: dict, max_bytes: int = 400_000) -> tuple[int | None, dict, bytes, str | None]:
     """(status, selected headers, body, error). status None = no answer (network)."""
+    import urllib.parse
+    url = urllib.parse.quote(url, safe=":/?&=%#@+,;~!$'()*[]")     # a non-ASCII character in a paper's URL
     req = urllib.request.Request(url, headers={"User-Agent": UA, **headers})
     keep = ("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Used", "X-RateLimit-Reset", "Retry-After", "Content-Type")
     try:
@@ -212,7 +214,7 @@ def check_hub(kind: str, rid: str) -> dict:
             return {**rec, "existence": "exists", "why": "metadata not parsed (large listing)"}
         return {**rec, "existence": "exists", "gated": bool(d.get("gated")), "name": d.get("id")}
     if st == 401:
-        return {**rec, "existence": "exists (gated or private to anonymous callers)"}
+        return {**rec, "existence": "unknown: 401 (private, gated or missing)"}      # the Hub answers 401 for missing repositories too
     if st == 404:
         return {**rec, "existence": "gone"}
     if st == 429:
@@ -291,6 +293,48 @@ def cmd_sample(force: bool = False) -> None:
     SAMPLE.write_text(json.dumps({"fixed_at": _now(), "seed": SEED, "n": len(picked), "pairs": picked}, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"sample {len(picked)} distinct pairs:", dict(collections.Counter(p["stratum"] for p in picked)))
     print("tags covered:", dict(collections.Counter(t for p in picked for t in p["tags"])))
+
+
+# ---------------------------------------------------------------- rule v3 (data/work/links/criteria_v3.md)
+
+def names_in(text: str, names: list[str]) -> bool:
+    from .taxonomy import dataset_key
+    folded = dataset_key(text)
+    for n in names:
+        k = dataset_key(n)
+        if not k:
+            continue
+        if len(k) <= 4:
+            if re.search(r"(?<![A-Za-z0-9])" + re.escape(n) + r"(?![A-Za-z0-9])", text):
+                return True
+        elif k in folded:
+            return True
+    return False
+
+
+DATA_ROUTE = re.compile(r"huggingface\.co/datasets/|drive\.google\.com|zenodo\.org|figshare|kaggle\.com/datasets|dropbox\.com|\bdownload\b", re.I)
+
+
+def decide_v3(cand: dict, in_v2: dict | None, existence: dict, text: str, aliases: list[str]) -> tuple[str, str]:
+    if in_v2 is None:
+        return "excluded", "v2 filters (another's data, a license, a cited source, or untied in a multi-link sentence)"
+    ex = (existence or {}).get("existence", "")
+    if not ex.startswith("exists"):
+        return "unconfirmed", f"existence: {ex or 'not checked'}"
+    if not text:
+        return "unconfirmed", "nothing could be read at the URL"
+    if not names_in(text, [cand["name"], *aliases]):
+        return "unconfirmed", "the text there does not name the benchmark"
+    route = bool(DATA_ROUTE.search(text))
+    if cand["kind"] in ("hfm", "hfs"):
+        return "related_artifact", "a Hugging Face model or Space"
+    if "related_page" in in_v2["tags"] and not route:
+        return "related_artifact", "leaderboard / tool / demo / evaluation code by the sentence, no data route there"
+    if cand["kind"] == "hfd":
+        return "data_location", "a Hub dataset whose card names it"
+    if cand["kind"] == "gh":
+        return "code_repository", "README names it" + ("; a data route is named in the README (not followed)" if route else "")
+    return "project_page", "the page names it"
 
 
 def main() -> int:
