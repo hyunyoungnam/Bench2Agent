@@ -499,7 +499,9 @@ def common_options(parser, *, child=False):
     parser.add_argument("--language", choices=["auto", "ko", "en"], default=default)
     parser.add_argument("--resume", nargs="?", const="latest", default=default, metavar="ID")
     parser.add_argument("--connector", choices=["api", "claude", "codex"], default=default,
-                        help="how the question runs: a provider API key (default), or the official Claude Code / Codex CLI with its own login")
+                        help="how the question runs: the official Claude Code / Codex CLI with its own login (an interactive start "
+                             "uses the signed-in one and asks when both are), or api for your own provider key; a scripted run "
+                             "uses this flag or the saved choice")
     parser.add_argument("--json", action="store_true", default=argparse.SUPPRESS if child else False)
 
 

@@ -66,7 +66,8 @@ def main():
         assert status["format"] == "bench2agent-data-v2" and status["database"]["available"]
         assert status["files"] == ["benchmark_snapshot.json", "benchmark_snapshot.sqlite"]
         built = json.loads(run(["data", "sqlite", str(snapshot), "--out", str(root / "built.sqlite")]))
-        assert built["paper_observations"] == 1 and built["db_schema_version"] == 1
+        from bench2agent.core.repository import DB_SCHEMA_VERSION
+        assert built["paper_observations"] == 1 and built["db_schema_version"] == DB_SCHEMA_VERSION
         bundled = json.loads(run(["data", "bundle", "--out", str(root / "bundle.tar.gz")]))
         assert bundled["format"] == "bench2agent-data-v2"
         reinstalled = json.loads(run(["--home", str(root / "second"), "data", "install", "--file", str(root / "bundle.tar.gz")]))
