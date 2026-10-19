@@ -140,6 +140,17 @@ class ConnectedFigureTests(unittest.TestCase):
         segs, v = chat.segment('⟦new_benchmarks:{}|ToyBench 평가 타저자 5편⟧ 에디션별로는 iclr-2026에 12편', None, Verifier.__new__(Verifier), [], self.lg)
         self.assertEqual([s["v"] for s in segs if s["t"] == "n"][0], "ok")
 
+    def test_a_word_right_before_a_pair_and_a_rate_header_say_what_is_counted(self):
+        # 2026-10-19 README CIFAR-10 answer: "parsed 3059 of 3830 accepted" was read as a use count over a
+        # denominator, and a "Per 1000 parsed papers" column as a denominator
+        self.assertEqual(verdicts("### ToyBench\nICLR 2025 parsed 3059 of 3830 accepted", self.lg)[0], ("3059", "ok"))
+        self.assertEqual(verdicts("### ToyBench\nICLR 2025 parsed 3000 of 3830 accepted", self.lg)[0], ("3000", "no"))
+        lg = log(SCOPE, NEW, ("benchmark_trend", {"benchmark": "toybench"}, {"id": "toybench", "name": "ToyBench", "results": [
+            {"edition": "iclr-2025", "papers": 10, "parsed_papers": 3059, "per_1000": 3.269}]}))
+        table = "| Edition | Papers | Per 1000 parsed papers |\n|---|---|---|\n| iclr-2025 | 10 | 3.27 |"
+        self.assertEqual(verdicts("### ToyBench\n" + table, lg)[1], ("3.27", "ok"))
+        self.assertEqual(verdicts("### ToyBench\n" + table.replace("3.27", "3.59"), lg)[1], ("3.59", "no"))
+
     def test_an_anchor_with_no_number_is_plain_text_not_an_unverified_figure(self):
         from bench2agent.core import chat
         from bench2agent.core.verify import Verifier

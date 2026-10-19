@@ -368,7 +368,7 @@ _UNIT_AFTER = [(r"\s*(?:개\s*)?(?:(?:회차|에디션)(?!\s*별)|editions?(?![A
 # words BEFORE the number: a specific word beats a generic one; among specific ones the nearest wins
 _SPECIFIC_WORDS = [
     (r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}),
-    (r"‰|per\s*1,?000|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE), (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
+    (r"‰|per\s*1,?000(?:\s+(?:parsed\s+)?papers?)?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed papers" is one rate phrase (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unattributed_papers", "unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
@@ -509,8 +509,9 @@ def _section(text: str, a: int, surf, raw=None) -> set[str] | None:
 
 def _metric_cues(before: str, after: str) -> set | None:
     unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
-    if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after):
+    if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after) and not re.search(r"(?:분모|파싱|parsed|매칭|matched)\s*$", before, re.I):
         return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
+        # ... unless a word right before says what it is ("parsed 1894 of 2296 accepted")
     if unit is None and re.search(r"\d\s*(?:/|(?<![A-Za-z])of)\s*$", before):
         return set(DENOM)                                      # ... over its denominator
     best = None
