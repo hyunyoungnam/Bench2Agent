@@ -35,4 +35,4 @@ include = ["bench2agent*"]
 
 [tool.setuptools.package-data]
 "bench2agent.web" = ["static/*.html", "static/*.js"]
-"bench2agent.workspace" = ["static/*.html", "static/*.js", "static/*.css"]
+"bench2agent.workspace" = ["static/*.html", "static/*.js", "static/*.css", "static/fonts/*.woff2", "static/fonts/*.txt"]

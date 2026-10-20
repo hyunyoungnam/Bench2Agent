@@ -280,7 +280,7 @@ class Handler(BaseHTTPRequestHandler):
             file = (STATIC / name).resolve()
             if STATIC.resolve() not in file.parents or not file.is_file():
                 return self._send(404, {"error": "Not found."})
-            kind = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+            kind = {".woff2": "font/woff2", ".txt": "text/plain"}.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
             return self._send(200, file.read_bytes(), kind + ("; charset=utf-8" if kind.startswith("text/") or kind.endswith("javascript") else ""))
         if not self._guard(api=True):
             return

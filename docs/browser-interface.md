@@ -136,6 +136,17 @@ save has started, the cancel reports that it is too late. The details panel
 (Benchmarks, Compare, Evidence, Scope & data) is built from the answer's own
 recorded tool results, never from its prose.
 
+Design (2026-10-20, following Anthropic's frontend-design guidance): reading
+serif Source Serif 4 for answers, titles and quoted sentences, Atkinson
+Hyperlegible Next for interface, numbers and identifiers (both OFL, bundled
+in `workspace/static/fonts` with their licences, about 100 KB; Hangul falls
+back to the system face). One device carries the identity: verbatim quotes
+and the benchmark names in evidence sentences are highlighted, figures the
+checker could not match carry a dotted pencil underline. Evidence entries are
+ledger rows with count, denominator and a share bar, not cards; no uppercase
+labels. Bar widths are set through the CSSOM because the page's policy
+refuses inline styles.
+
 Checked: unit tests (guards, idempotent resend, dropped client, API cancel,
 terminal/browser continuation and stale-copy refusal); a live Claude Code
 question through the API (six tool calls, saved); a live cancel (nothing
