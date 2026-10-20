@@ -52,6 +52,34 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts("There are 63 of them.", self.lg), [("63", "na")])
         self.assertEqual(verdicts("ToyBench는 5번째로 소개", self.lg), [("5", "na")])     # a name alone says where, not what
 
+    def test_unattributed_coverage_is_neither_missing_labels_nor_non_use(self):
+        # Reproduced on the robotics response (513 observations, 221 with
+        # unresolved mentions). The old checker accepted "unlabelled 221".
+        # Old saved tool logs contain only the legacy field name.
+        for metrics in ({"unattributed_papers": 221},
+                        {"unattributed_papers": 221, "papers_with_unattributed_benchmark_mentions": 221}):
+            lg = log(("benchmark_usage", {"role": "evaluates_on"}, {
+                "role": "evaluates_on", "coverage": {
+                    "parsed_papers": 513, "field_labelled_papers": 513,
+                    "unlabelled_papers": 0, **metrics}, "results": []}))
+            for claim in ("미라벨 논문 221편", "Unlabelled papers: 221", "분모 221편",
+                          "221 papers state no benchmark", "벤치마크 사용 미명시 논문 221편"):
+                self.assertNotEqual(verdicts(claim, lg), [("221", "ok")], claim)
+            self.assertEqual(verdicts("Unlabelled papers: 0", lg), [("0", "ok")])
+            self.assertEqual(verdicts("미귀속 논문 221편", lg), [("221", "ok")])
+            self.assertEqual(verdicts("unattributed_papers: 221", lg), [("221", "ok")])
+            # This diagnostic spans all roles even in an evaluation query.
+            self.assertNotEqual(verdicts("평가 미귀속 논문 221편", lg), [("221", "ok")])
+
+    def test_scope_unattributed_observations_do_not_verify_benchmark_adoption(self):
+        lg = log(("benchmark_adoption", {"benchmark": "toybench"}, {
+            "id": "toybench", "name": "ToyBench", "unattributed_using_papers": 18,
+            "coverage": {"unattributed_papers": 221,
+                         "papers_with_unattributed_benchmark_mentions": 221}}))
+        self.assertEqual(verdicts("ToyBench: 미귀속 18편", lg), [("18", "ok")])
+        self.assertEqual(verdicts("ToyBench: 미귀속 221편", lg), [("221", "no")])
+        self.assertEqual(verdicts("미귀속 논문 221편", lg), [("221", "na")])  # unit is ambiguous
+
     def test_a_section_heading_names_the_benchmark(self):
         text = "### OtherBench\n- 타저자 3편, 자기 2편\n### ToyBench\n- 타저자 3편"
         self.assertEqual(verdicts(text, self.lg), [("3", "ok"), ("2", "ok"), ("3", "no")])

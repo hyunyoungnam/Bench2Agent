@@ -25,6 +25,14 @@ from . import revisions
 from .repository import (CONTENT_HASH_RULE, DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SqliteRepository, Unavailable,
                          build_database, content_sha256)
 ROLES = ("evaluates_on", "trains_on")
+COVERAGE_UNATTRIBUTED_NOTE = (
+    "coverage.papers_with_unattributed_benchmark_mentions counts paper-edition observations with at least one "
+    "unresolved benchmark mention (an unreviewed name or an unattributed homonym), across all roles and "
+    "benchmarks in the selected scope. These observations may also have attributed evaluation or training use. "
+    "It is not a count of papers with no stated benchmark, non-use, or missing field labels. "
+    "coverage.unattributed_papers is a compatibility alias for the same count, not an additional group. "
+    "Neither this count nor its complement establishes how many papers state no benchmark."
+)
 # Where a registered benchmark lives is OUR mapping (config/benchmarks.json):
 # a Hub dataset id or a GitHub repo, shown only when it answered the API at
 # the registry's last check, or an author-registered homepage, never checked.
@@ -570,14 +578,17 @@ class BenchmarkStore:
         papers = self.repo().observations(eds, topic, a.get("paper_ids"), authors=authors)
         denominators = collections.Counter(p["edition"] for p in papers)
         cov = {ed: {**data["editions"][ed], "in_scope_parsed": denominators[ed]} for ed in sorted(eds)}
+        with_unattributed = sum(bool(p.get("unattributed")) for p in papers)
         return papers, {"topic": topic, "editions": cov,
                         "parsed_papers": len(papers),
                         "field_labelled_papers": sum(bool(p.get("fields")) for p in papers),
-                        "unattributed_papers": sum(bool(p.get("unattributed")) for p in papers),
+                        "papers_with_unattributed_benchmark_mentions": with_unattributed,
+                        "unattributed_papers": with_unattributed,  # compatibility alias, not a disjoint group
                         "note": "Denominators include every successfully parsed paper in this scope, "
                                 "including those with no stated benchmark. Latest editions differ by venue. "
                                 "Pooled counts are paper-edition observations. Field filters cover labelled papers only; "
-                                "zero in-scope papers is not proof a venue has no papers in that field."}
+                                "zero in-scope papers is not proof a venue has no papers in that field. "
+                                + COVERAGE_UNATTRIBUTED_NOTE}
 
     def _require(self, data: dict) -> dict | None:
         if not data["available"]:

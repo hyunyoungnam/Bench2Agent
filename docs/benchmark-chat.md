@@ -63,6 +63,20 @@ labels at all; zero matches there do not establish absence of that field.
 The scope response gives accepted, arXiv-matched, parsed and field-labelled
 totals, the papers per label origin, and each field's origins.
 
+In a query's `coverage`, `papers_with_unattributed_benchmark_mentions`
+counts **paper-edition observations with at least one unresolved benchmark
+mention**: an unreviewed name or a homonym whose identity could not be
+attributed. `unattributed_papers` is retained as a compatibility alias for
+the same count. This diagnostic spans all benchmark names and roles in the
+selected scope, including when the query asks only for evaluation use.
+It overlaps confirmed use: a paper may evaluate on a known benchmark and
+also mention an unresolved one. It does not count papers with no stated
+benchmark, papers not using a benchmark, or papers missing field labels.
+Do not add the alias to the canonical field, subtract it from the parsed
+denominator to infer non-use, or infer non-use from a limited list of
+benchmark rows. A specific benchmark's `unattributed_using_papers` is a
+different metric: unique using papers, not scope-wide observations.
+
 A year-over-year trend is a comparison inside one data revision. The same
 edition can differ between revisions because the data or the rules changed
 (an identity fix, a field-label rule, a reparse); such a difference is a

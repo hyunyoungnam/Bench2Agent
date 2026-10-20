@@ -346,8 +346,9 @@ _VENUES = ("aaai", "acl", "corl", "cvpr", "eccv", "emnlp", "iccv", "iclr", "icml
 # metric families — never pooled: a number is connected inside ONE family
 USAGE = {"papers", "n_papers", "using_papers"}                                       # paper-edition observations
 ADOPTION = {"others", "self", "undetermined", "sum:groups", "unattributed_using_papers", "before_claim"}   # unique papers
-DENOM = {"parsed_papers", "total_papers", "arxiv_matched", "in_scope_parsed", "field_labelled_papers", "unattributed_papers", "unlabelled_papers"}
-TOTALS = DENOM | {"total", "catalogue_entries", "count:venues"}
+UNATTRIBUTED_OBSERVATIONS = {"papers_with_unattributed_benchmark_mentions", "unattributed_papers"}
+DENOM = {"parsed_papers", "total_papers", "arxiv_matched", "in_scope_parsed", "field_labelled_papers", "unlabelled_papers"}
+TOTALS = DENOM | UNATTRIBUTED_OBSERVATIONS | {"total", "catalogue_entries", "count:venues"}
 EDITIONS = {"count:editions", "count:by_edition", "editions", "n_editions"}
 RATE = {"per_1000", "share_per_1000", "rate_per_1000"}
 _COUNTS = USAGE | ADOPTION                                                           # what a bare "papers" unit can mean
@@ -356,6 +357,7 @@ _ANY = _COUNTS | {"count:*", "catalogue_entries", "total", "total_benchmarks"}
 
 def family(metric: str) -> str:
     return ("usage" if metric in USAGE else "adoption" if metric in ADOPTION else "denominator" if metric in DENOM
+            else "unattributed_observations" if metric in UNATTRIBUTED_OBSERVATIONS
             else "editions" if metric in EDITIONS else "rate" if metric in RATE else metric)
 
 
@@ -371,8 +373,10 @@ _SPECIFIC_WORDS = [
     (r"‰|per\s*1,?000(?:\s+(?:parsed\s+)?papers?)?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed papers" is one rate phrase (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
-    (r"미라벨|라벨\s*없|unlabell?ed", {"unattributed_papers", "unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
-    (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"}), (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
+    (r"미라벨|라벨\s*없|unlabell?ed", {"unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
+    (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS),
+    (r"papers_with_unattributed_benchmark_mentions|unattributed_papers", UNATTRIBUTED_OBSERVATIONS),
+    (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
     (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"})]
 _GENERIC_WORDS = [(r"사용|(?<![A-Za-z])uses?(?![A-Za-z])|usage|관측|observations?", USAGE)]
 _CONTEXT_WORDS = [(r"타\s*저자|다른\s*저자|(?<![A-Za-z])others?(?![A-Za-z])", "group", "others"), (r"자기|자체\s*저자|(?<![A-Za-z])self(?![A-Za-z])", "group", "self"),
@@ -386,7 +390,8 @@ def fold(name: str) -> str:
 
 def facts(log: TurnLog) -> list[dict]:
     """(value, metric, context) for every number in the turn's benchmark tool results. A value inside one
-    benchmark's result (its counts, its coverage) carries that benchmark's id; scope-wide values carry none."""
+    benchmark's result carries its id, except the scope-wide unresolved-observation diagnostic.
+    That diagnostic also spans all roles, regardless of the query's selected role."""
     out: list[dict] = []
 
     def walk(o, ctx, key):
@@ -419,6 +424,10 @@ def facts(log: TurnLog) -> list[dict]:
             for v in o:
                 walk(v, ctx, key)
         elif isinstance(o, (int, float)) and not isinstance(o, bool):
+            if key in UNATTRIBUTED_OBSERVATIONS:
+                # Coverage spans all benchmarks and roles, even when nested
+                # in a single-benchmark or evaluation/training result.
+                ctx = {k: v for k, v in ctx.items() if k not in {"benchmark_id", "surfaces", "role"}}
             out.append({"value": float(o), "metric": key or "", "ctx": ctx})
 
     for e in log.entries:
@@ -528,6 +537,8 @@ def _metric_cues(before: str, after: str) -> set | None:
         return word
     if word is None:
         return unit
+    if word & UNATTRIBUTED_OBSERVATIONS and unit in (_COUNTS, _ANY):
+        return word                                             # paper-edition diagnostic, not adoption by the "papers" unit
     narrowed = {x for x in word if x in unit or ("count:*" in unit and x.startswith("count:"))}
     if narrowed:
         return narrowed
@@ -612,6 +623,8 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     fams = {family(f["metric"]) for f in cand}
     if {"usage", "adoption"} <= fams and "metric" in c and c["metric"] >= _COUNTS:
         return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
+    if {"unattributed_observations", "adoption"} <= fams:
+        return "na", "scope-wide unresolved observations or a benchmark's unique unattributed papers is not stated"
     hits = [f for f in cand if round(f["value"], dp) == round(v, dp)]
     benchmark_stat = any(family(f["metric"]) not in ("denominator", "editions") for f in hits)
     if c.get("benchmark_ids") is None and benchmark_stat and len({f["ctx"].get("benchmark_id") for f in hits if f["ctx"].get("benchmark_id")}) > 1 \

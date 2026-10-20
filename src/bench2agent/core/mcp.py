@@ -954,7 +954,7 @@ def t_citations(a: dict) -> dict:
 
 _GID = {"type": "integer", "description":
         "global paper id (gid) as returned by the other tools"}
-from .benchmarks import BenchmarkStore
+from .benchmarks import BenchmarkStore, COVERAGE_UNATTRIBUTED_NOTE
 
 # The served store: pinned to the revision active when this process started
 # (or the one `bench2agent mcp --revision` names). A publish during the
@@ -1000,7 +1000,7 @@ def _benchmark_tools():
         ("benchmark_adoption", S.adoption, "Unique using papers for a reviewed introduction: evaluation/training and other/self/unknown authors separately. Introducing papers excluded; homonyms need local citation attribution.", {**_SCOPE, "benchmark": {"type": "string"}}, ["benchmark"]),
         ("benchmark_evidence", S.evidence, "Paginated using papers and their verbatim role sentences for a benchmark. Cite these with arxiv anchors; inspect before advising what to evaluate on.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, ["benchmark"]),
     ]
-    return [{"name": name, "description": desc, "fn": fn,
+    return [{"name": name, "description": desc + (" " + COVERAGE_UNATTRIBUTED_NOTE if name != "benchmark_scope" else ""), "fn": fn,
              "inputSchema": {"type": "object", "properties": props, "required": required}}
             for name, fn, desc, props, required in specs]
 

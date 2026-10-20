@@ -181,6 +181,40 @@ class BenchmarkQuestions(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.trend({"benchmark": "Mirage"})
 
+    def test_unattributed_coverage_counts_overlapping_observations_not_non_use(self):
+        def change(data):
+            both = next(p for p in data["papers"] if p["paper_id"] == "2501.00002")
+            # This paper already has confirmed evaluation AND training use.
+            # Two unresolved mentions still count as just one observation.
+            both["unattributed"] = [
+                {"key": "hom:mirage", "role": "evaluates_on", "reason": "homonym",
+                 "candidates": ["mirage-old", "mirage-new"]},
+                {"key": "provisional", "reason": "unreviewed"},
+            ]
+            other = next(p for p in data["papers"] if p["paper_id"] == "2501.00006")
+            # The coverage diagnostic is not filtered to the requested role.
+            other["unattributed"] = [{"key": "hom:mirage", "role": "trains_on", "reason": "homonym",
+                                      "candidates": ["mirage-old", "mirage-new"]}]
+        self.edit(change)
+        evaluation = self.store.usage({"topic": "robotics", "role": "evaluates_on"})
+        training = self.store.usage({"topic": "robotics", "role": "trains_on"})
+        for result in (evaluation, training):
+            coverage = result["coverage"]
+            self.assertEqual(coverage["parsed_papers"], 7)
+            self.assertEqual(coverage["field_labelled_papers"], 7)
+            self.assertEqual(coverage["papers_with_unattributed_benchmark_mentions"], 2)
+            self.assertEqual(coverage["unattributed_papers"], 2)  # compatibility alias
+            self.assertIn("may also have attributed", coverage["note"])
+            self.assertIn("not a count of papers with no stated benchmark", coverage["note"])
+            self.assertIn("all roles", coverage["note"])
+        self.assertEqual(evaluation["results"][0]["papers"], 4)
+        overlap = self.store.evidence({"benchmark": "fresh", "paper_ids": ["2501.00002"]})
+        self.assertEqual(overlap["total"], 1)
+        self.assertEqual(overlap["coverage"]["papers_with_unattributed_benchmark_mentions"], 1)
+        empty = self.store.usage({"paper_ids": ["2501.00007"]})
+        self.assertEqual(empty["coverage"]["papers_with_unattributed_benchmark_mentions"], 0)
+        self.assertEqual(empty["coverage"]["parsed_papers"], 1)
+
     def test_trend_includes_observed_zero_and_normalizes(self):
         result = self.store.trend({"benchmark": "toy", "topic": "robotics"})
         self.assertEqual([r["per_1000"] for r in result["results"]], [250, 142.857])
@@ -281,6 +315,11 @@ class AccountStatus(unittest.TestCase):
         tools = {t["name"]: t for t in listed}
         self.assertTrue(tools["benchmark_usage"]["annotations"]["readOnlyHint"])
         self.assertFalse(tools["benchmark_usage"]["annotations"]["destructiveHint"])
+        for name, tool in tools.items():
+            if name in {"benchmark_usage", "benchmark_trend", "new_benchmarks", "benchmark_adoption", "benchmark_evidence"}:
+                self.assertIn("papers_with_unattributed_benchmark_mentions", tool["description"])
+                self.assertIn("may also have attributed", tool["description"])
+                self.assertIn("not a count of papers with no stated benchmark", tool["description"])
 
 
 if __name__ == "__main__":
