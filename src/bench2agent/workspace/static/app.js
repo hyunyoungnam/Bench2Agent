@@ -566,7 +566,7 @@ function scopeTab(m) {
     html += `<h3 class="section">Lookup ${cov.call}: ${esc(scopeText(cov.args))}</h3>` +
       `<dl class="facts"><dt>Field filter</dt><dd>${esc(cov.topic || "none")}</dd><dt>Use</dt><dd>${cov.role === "trains_on" ? "training" : cov.role ? "evaluation" : "–"}</dd>` +
       `<dt>Denominator</dt><dd>${fmt(cov.parsed_papers)} parsed papers in ${plural(eds, "edition")}</dd>` +
-      `<dt>No stated use</dt><dd>${plural(cov.unattributed_papers || 0, "paper")}, still counted in the denominator</dd></dl>` + editionsTable(cov.editions, true);
+      `<dt>Unresolved names</dt><dd>${plural(cov.papers_with_unattributed_benchmark_mentions ?? cov.unattributed_papers ?? 0, "paper")} with at least one benchmark name not attributed to a benchmark; not a count of papers that use none</dd></dl>` + editionsTable(cov.editions, true);
   }
   if (!m.coverages.length && m.scope) html += `<h3 class="section">Installed editions</h3>` + editionsTable(m.scope.editions, false);
   for (const n of m.notes) html += `<p class="note">${esc(n)}</p>`;
