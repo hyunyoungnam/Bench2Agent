@@ -55,3 +55,6 @@ data/interim/mentions/
 # Downloaded research papers stay local.
 /source/paper/
 /source/papers/
+
+# institutional annual report drafts (not for the public repository)
+2026_report/
