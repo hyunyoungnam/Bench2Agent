@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -33,6 +34,40 @@ def write_json(path: Path, value: dict) -> None:
     finally:
         if pending is not None:
             pending.unlink(missing_ok=True)
+
+
+CANCELLED = "The question was cancelled; nothing was saved."
+
+
+class TurnControl:
+    """Withdrawal of one question, the same rule for every interface. A
+    cancel accepted before the save starts withdraws the question: nothing is
+    saved and the CLI's own session is not resumed, so the next question sees
+    only the saved turns. Once the save has started the cancel is too late and
+    says so. A closed browser tab or a dropped connection is not a cancel."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._saving = False
+
+    def cancel(self) -> str:
+        """"cancelled" when accepted, "too_late" when the save has begun."""
+        with self._lock:
+            if self._saving:
+                return "too_late"
+            self._cancelled = True
+            return "cancelled"
+
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def begin_save(self) -> bool:
+        with self._lock:
+            if self._cancelled:
+                return False
+            self._saving = True
+            return True
 
 
 class Session:
@@ -115,7 +150,7 @@ class Session:
         with (self.directory / (cid + ".json")).open(encoding="utf-8") as source:
             return json.load(source)
 
-    def ask(self, question: str, emit) -> dict:
+    def ask(self, question: str, emit, control: TurnControl | None = None) -> dict:
         from bench2agent.core import chat, mcp
         from bench2agent.core.policy import BENCHMARK_SYSTEM
         from bench2agent.core.verify import Verifier
@@ -147,9 +182,11 @@ class Session:
                 run = conn.ask(root=self.root, revision=store.revision, question=question, system=system,
                                history=self.doc["messages"] if name == "api" else self.doc["turns"],
                                provider_session=self.doc.get("provider_session") or (self.doc["model"] if name == "api" else None),
-                               emit=emit, cancelled=lambda: False, tool_log=tool_log)
+                               emit=emit, cancelled=control.cancelled if control else (lambda: False), tool_log=tool_log)
             except ConnectorError as exc:
                 self._drop_provider_session()
+                if control is not None and control.cancelled():
+                    raise providers.Cancelled(CANCELLED) from None
                 raise providers.ProviderError(str(exc)) from None
             if store.data().get("snapshot_id") != sid:
                 raise ValueError("The dataset changed during this answer. Start a new turn; this answer was not saved.")
@@ -170,6 +207,9 @@ class Session:
         updated.pop("provider_session", None)
         if name != "api" and run.provider_session and not run.unverifiable:
             updated["provider_session"] = run.provider_session
+        if control is not None and not control.begin_save():
+            self._drop_provider_session()                  # the CLI session holds the withdrawn turn
+            raise providers.Cancelled(CANCELLED)
         try:
             self._save(updated)
         except ValueError:
@@ -184,7 +224,8 @@ def conversations(root: Path) -> list[dict]:
         try:
             with path.open(encoding="utf-8") as source:
                 doc = json.load(source)
-            result.append({key: doc.get(key) for key in ("id", "title", "provider", "model", "ts")})
+            result.append({**{key: doc.get(key) for key in ("id", "title", "provider", "model", "ts", "connector")},
+                           "turns": len(doc.get("turns") or [])})
         except (OSError, ValueError, AttributeError):
             continue
     return sorted(result, key=lambda doc: doc.get("ts") or 0, reverse=True)

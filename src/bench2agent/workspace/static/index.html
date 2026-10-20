@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Benchmark workspace</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app" class="app">
+  <aside id="sidebar" class="sidebar" aria-label="Conversations">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Benchmark workspace</span>
+    </div>
+    <div class="new-chat">
+      <label for="connector" class="field-label">Answer with</label>
+      <div class="new-chat-row">
+        <select id="connector" aria-label="Signed-in AI CLI"></select>
+        <button id="new-chat" class="btn btn-primary" type="button">New</button>
+      </div>
+    </div>
+    <nav id="chat-list" class="chat-list" aria-label="Saved conversations"></nav>
+    <div id="data-badge" class="data-badge"></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button id="toggle-sidebar" class="btn btn-ghost only-narrow" type="button" aria-controls="sidebar" aria-expanded="false">Conversations</button>
+      <h1 id="chat-title" class="chat-title">Ask about evaluation benchmarks</h1>
+      <span id="chat-meta" class="chat-meta"></span>
+    </header>
+    <section id="thread" class="thread" aria-live="polite"></section>
+    <section id="empty" class="empty" hidden>
+      <h2>What do researchers evaluate on?</h2>
+      <p>Answers come from tested query tools over parsed conference papers. Figures are checked against the tools' results; anything that could not be confirmed is marked.</p>
+      <div class="examples">
+        <button class="example" type="button">Which benchmarks do recent robotics papers evaluate on most?</button>
+        <button class="example" type="button">How has CIFAR-10 usage changed at ICLR from 2024 to 2026?</button>
+        <button class="example" type="button">Which newly introduced benchmarks are used by other authors?</button>
+      </div>
+    </section>
+    <form id="composer" class="composer" autocomplete="off">
+      <textarea id="question" rows="2" maxlength="4000" placeholder="Ask about benchmarks, usage across editions, new benchmarks or the evidence behind a result" aria-label="Question"></textarea>
+      <div class="composer-row">
+        <span id="composer-note" class="composer-note">Runs on this computer with your signed-in AI CLI.</span>
+        <button id="send" class="btn btn-primary" type="submit">Ask</button>
+      </div>
+    </form>
+  </main>
+
+  <aside id="details" class="details" aria-label="Answer details" hidden>
+    <header class="details-head">
+      <div>
+        <div class="details-kicker">From the tool results of this answer</div>
+        <h2 id="details-title" class="details-title">Details</h2>
+      </div>
+      <button id="close-details" class="btn btn-ghost" type="button" aria-label="Close details">Close</button>
+    </header>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="benchmarks" type="button">Benchmarks</button>
+      <button class="tab" role="tab" data-tab="compare" type="button">Compare</button>
+      <button class="tab" role="tab" data-tab="evidence" type="button">Evidence</button>
+      <button class="tab" role="tab" data-tab="scope" type="button">Scope &amp; data</button>
+    </div>
+    <div id="details-body" class="details-body"></div>
+  </aside>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

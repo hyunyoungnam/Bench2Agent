@@ -433,9 +433,10 @@ cards, comparisons and source evidence alongside the conversation. It needs
 no dedicated paid backend or Bench2Agent account, but does require local
 installation and a running process. See [browser-interface.md](browser-interface.md).
 
-The proposed `bench2agent --web` launcher is not implemented. The commands in
-the following section start the earlier hosted visitor prototype, not this
-planned local workspace. Public multi-user hosting is deferred.
+A first `bench2agent --web` slice exists in the development checkout, not in
+0.5.0 ([current state](browser-interface.md#current-state-development-checkout-2026-10-20)).
+The commands in the following section start the earlier hosted visitor
+prototype, not this local workspace. Public multi-user hosting is deferred.
 
 ## Earlier hosted conversation prototype (deferred)
 

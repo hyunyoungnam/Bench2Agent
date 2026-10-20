@@ -1,7 +1,8 @@
 # Terminal and browser interfaces
 
-Direction agreed with the owner on 2026-10-15. **This is a target design, not
-a claim that the local conversation browser or its launcher has shipped.**
+Direction agreed with the owner on 2026-10-15. **This is a target design; a
+first working slice exists in the development checkout (0.6.0.dev0) and is not
+part of any release.** See *Current state* below for what is built and checked.
 The terminal implementation comes first; both interfaces belong to one local
 application. The browser can offer a more polished visual experience while
 using the same data and answer rules. Public hosting is a separate decision.
@@ -26,8 +27,8 @@ can show instructions or a labeled demo, but cannot by itself execute the
 user's installed CLI.
 
 The browser launcher should open the page automatically and handle startup,
-an occupied port and shutdown clearly. `bench2agent --web` is a proposed
-command, **not currently supported**. The existing `bench2agent web serve`
+an occupied port and shutdown clearly. `bench2agent --web` starts it in the
+development checkout (not in 0.5.0). The existing `bench2agent web serve`
 starts the earlier hosted visitor prototype; `bench2agent serve` starts the
 paper-evidence browser. Neither command is already the target product merely
 because it opens a browser. Existing `server` extras can be reused for an
@@ -116,6 +117,37 @@ user out of their globally installed CLI or delete its configuration.
 Keep ingestion and publication jobs apart from conversation requests. The UI
 may install a verified published data bundle through the common data manager;
 it does not scrape conferences or rebuild the corpus inside an HTTP request.
+
+## Current state (development checkout, 2026-10-20)
+
+Built (`src/bench2agent/workspace/`, standard library only): `bench2agent --web
+[--port N] [--no-open]` starts a loopback server, prints the address with a
+key minted for this launch and opens the browser (on WSL through the Windows
+side; the address is printed if opening fails). Requests must carry the
+expected Host, no foreign Origin, and the launch key on every API call; no
+CORS. The page calls the same conversation service as the terminal
+(`Session.ask`) and the same conversation files, so a conversation continues
+in either interface; a copy read before another interface saved is refused.
+Questions run as jobs apart from HTTP: a reload reattaches, a resend with the
+same request id never runs twice, a closed tab does not cancel. Cancel and
+save follow `session.TurnControl`, shared with the terminal: accepted before
+the save, nothing is saved and the CLI's own session is not resumed; once the
+save has started, the cancel reports that it is too late. The details panel
+(Benchmarks, Compare, Evidence, Scope & data) is built from the answer's own
+recorded tool results, never from its prose.
+
+Checked: unit tests (guards, idempotent resend, dropped client, API cancel,
+terminal/browser continuation and stale-copy refusal); a live Claude Code
+question through the API (six tool calls, saved); a live cancel (nothing
+saved, no CLI process left); the same conversation continued from the
+terminal and read back by the page; the wheel installed outside the checkout
+serves the page and API; screenshots at desktop width and 540 px reviewed
+(headless Edge clamps below about 500 px).
+
+Not yet: Windows-native locking (the conversation lock uses fcntl; on native
+Windows only the conditional save protects), keyboard-only and contrast
+review, an empty/disconnected-CLI review with a real signed-out CLI, the old
+hosted store's conversations (kept, not migrated), and release documentation.
 
 ## Delivery order and acceptance
 

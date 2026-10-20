@@ -19,8 +19,9 @@ conversation. The working database that will hold processing state is kept
 apart from the published export (see *Next steps*).
 `bench2agent serve` starts the earlier paper-evidence browser, and
 `bench2agent web serve` starts the earlier hosted visitor prototype. Neither
-is already the planned local conversation workspace. A proposed
-`bench2agent --web` launcher is not implemented. A Mac or Linux server is an
+is the planned local conversation workspace; its first slice,
+`bench2agent --web`, exists in the development checkout only
+([browser-interface.md](browser-interface.md)). A Mac or Linux server is an
 optional later deployment, not a dependency of either local interface.
 
 ## Shared tools and separate interfaces

@@ -555,10 +555,33 @@ def cmd_service(args, root: Path) -> int:
     return handlers[args.command](args)
 
 
+def cmd_workspace(args, root: Path) -> int:
+    """The local browser workspace: same conversations, connectors, data and checks as the terminal."""
+    from bench2agent.workspace.server import make_server, open_browser
+    require_data(root, interactive=sys.stdin.isatty())
+    httpd, workspace, token = make_server(root, port=args.port)
+    url = f"http://127.0.0.1:{httpd.server_address[1]}/?token={token}"
+    print("Workspace: " + url, flush=True)
+    print("Runs on this computer only. Keep this terminal open; Ctrl+C stops the workspace.", flush=True)
+    if not args.no_open and not open_browser(url):
+        print("Open the address above in your browser.", flush=True)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        workspace.shutdown()
+        httpd.server_close()
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="bench2agent", description=__doc__)
     parser.add_argument("--version", action="version", version="Bench2Agent " + __version__)
     common_options(parser)
+    parser.add_argument("--web", action="store_true", help="open the local browser workspace instead of the terminal conversation")
+    parser.add_argument("--port", type=int, default=8790, help="preferred port for --web (another free port if taken)")
+    parser.add_argument("--no-open", action="store_true", help="with --web: print the address without opening a browser")
     commands = parser.add_subparsers(dest="command")
     chat = commands.add_parser("chat", help="start a conversation (also the default)")
     common_options(chat, child=True)
@@ -685,6 +708,8 @@ def main(argv=None) -> int:
         os.environ["BENCH2AGENT_HOME"] = args.home
     from bench2agent.core.paths import ROOT
     try:
+        if getattr(args, "web", False) and not getattr(args, "fn", None):
+            return cmd_workspace(args, ROOT)
         return getattr(args, "fn", cmd_chat)(args, ROOT)
     except KeyboardInterrupt:
         return 130
