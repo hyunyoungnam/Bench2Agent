@@ -1,5 +1,5 @@
 "use strict";
-/* Local benchmark workspace. Everything in the evidence panel comes from the
+/* Bench2Agent local workspace. Everything in the evidence panel comes from the
    structured tool results recorded for that answer, never from the model's
    prose. Verbatim quotes are highlighted; figures the checker could not match
    to this answer's tool results carry a pencil mark, as in the terminal.

@@ -149,7 +149,7 @@ class ServerTests(Base):
         self.assertEqual(self.call("OPTIONS", "/api/state")[0], 405)
         status, page = self.call("GET", "/", token=False)
         self.assertEqual(status, 200)
-        self.assertIn(b"Benchmark workspace", page)
+        self.assertIn(b"<title>Bench2Agent</title>", page)
         status, state = self.call("GET", "/api/state", origin=f"http://localhost:{self.port}")
         self.assertEqual(status, 200)
         self.assertEqual([c["name"] for c in state["connectors"] if c["connected"]], ["claude"])
