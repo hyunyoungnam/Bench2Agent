@@ -644,7 +644,9 @@ class WebHostTests(unittest.TestCase):
                 self.assertTrue(visitors.status(self.alice["user_id"])["pending_cleanup"])
                 r = self.client.post("/api/connect/claude/start", headers=self.h(self.alice))
                 self.assertEqual(r.status_code, 400)                                  # still closing: no new work
-                self.assertEqual(visitors.finish_pending(), [self.alice["user_id"]])  # the retry
+                # the retry: this call, or the end of the sign-in process just before it (_on_process_end),
+                # whichever claims it first; removal still runs exactly once (two rmtree calls below)
+                self.assertIn(visitors.finish_pending(), ([self.alice["user_id"]], []))
             self.assertFalse(runtime.exists())
             self.assertFalse(visitors.status(self.alice["user_id"])["pending_cleanup"])
             self.assertEqual(len(calls), 2)
