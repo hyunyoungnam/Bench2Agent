@@ -21,6 +21,15 @@ failure is recorded as unchecked, never as "gone".
     python3 -m icml.paper_links check          # network; resumable
     python3 -m icml.paper_links sample         # fixes 60 distinct pairs (refuses to redo)
     python3 -m icml.paper_links report
+    python3 -m icml.paper_links front          # offline: labelled links in the front matter (2026-10-20)
+    python3 -m icml.paper_links front-check    # network; existence + the text at each URL, for review
+
+The front matter: AAAI 2026 and other papers put "Code — URL", "Datasets —
+URL" lines between the abstract and the first section. The HTML parser keeps
+only the abstract and the sections, so the sentence rules never saw them;
+`front` reads them from the archived arXiv HTML of the introducing paper. A
+front-matter line is the paper's own release statement, but a candidate is
+still not a location until it is individually reviewed.
 
 Outputs in the Git-ignored data/work/links/.
 """
@@ -46,6 +55,11 @@ OUT = ROOT / "data" / "work" / "links"
 CANDIDATES = OUT / "candidates.jsonl"
 CHECKS = OUT / "checks.jsonl"
 SAMPLE = OUT / "audit_sample.json"
+FRONT = OUT / "candidates_front.jsonl"
+FRONT_TEXTS = OUT / "front_texts.jsonl"
+FRONT_REVISION = "8503cf1b1f7bee99"       # the active revision whose catalogue sets the pool (2026-10-20)
+FRONT_LABEL = re.compile(r"^(code(?:\s+and\s+data(?:sets?)?)?|data(?:sets?)?(?:\s+and\s+code)?|benchmark|project(?:\s+page)?|homepage|website|"
+                         r"resources?|github|repository)\b[^:—–\-]{0,24}?\s*[:—–\-]\s*(https?://\S+)$", re.I)
 REVISION = "41f946529d84bd69"            # the candidate catalogue the pool is drawn from (installed, inactive)
 SEED = 20261016
 UA = "bench2agent-links/0.1 (research; benchmark locations)"
@@ -195,6 +209,7 @@ def check_github(repo: str, token: str) -> dict:
             return {**rec, "existence": "exists", "why": "metadata not parsed"}      # a 200 answer is the existence fact
         moved = d.get("full_name") and d["full_name"].lower() != repo.lower()
         return {**rec, "existence": "exists", "full_name": d.get("full_name"), "moved": bool(moved), "archived": d.get("archived"),
+                "description": d.get("description"),
                 "fork": d.get("fork"), "owner_type": (d.get("owner") or {}).get("type"), "pushed_at": d.get("pushed_at")}
     if st in (404, 451):
         return {**rec, "existence": "gone" if st == 404 else "unavailable (451)"}
@@ -266,6 +281,115 @@ def cmd_check(limit: int) -> None:
                 lim = res.get("limits") or {}
                 print(f"  {n} checked; github remaining {lim.get('X-RateLimit-Remaining')}", flush=True)
     rows = list(read_jsonl(CHECKS))
+    print(f"checked this run {n}; recorded {len(rows)}:", dict(collections.Counter((r['key'].split(':')[0], r['existence']) for r in rows)))
+
+
+# ---------------------------------------------------------------- front matter (2026-10-20)
+
+def front_lines(html_text: str) -> list[tuple[str, str]]:
+    """(label line as printed, url) for labelled links between the abstract and the first section."""
+    import html as _html
+    a = html_text.find('class="ltx_abstract')
+    end = html_text.find('class="ltx_section"')
+    start = html_text.find("</div>", a) if a >= 0 else 0
+    region = html_text[start:end if end > 0 else start + 80000]
+    out = []
+    for m in re.finditer(r"<p\b[^>]*>(.*?)</p>", region, re.S):
+        line = re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", "", m.group(1)))).strip()   # as printed: tags removed, nothing added
+        hit = FRONT_LABEL.match(line)
+        if hit:
+            out.append((line, hit.group(2).rstrip(".,;:)]")))
+    return out
+
+
+def cmd_front() -> None:
+    import gzip
+    from .enrich_pilot import classify_url
+    from .taxonomy import dataset_key
+    db = ROOT / "data/revisions" / FRONT_REVISION / "benchmark_snapshot.sqlite"
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    located = {r[0] for r in con.execute("SELECT id FROM benchmarks WHERE COALESCE(hf,'')!='' OR COALESCE(gh,'')!='' OR COALESCE(url,'')!='' "
+                                         "OR extra LIKE '%reviewed_locations%'")}
+    cat = json.loads((ROOT / "config/benchmarks_introduced.json").read_text(encoding="utf-8"))["benchmarks"]
+    pool = [e for e in cat if e["claims"] and e["id"] not in located]
+    per_paper = collections.Counter(c["arxiv_base"] for e in cat for c in e["claims"])
+    OUT.mkdir(parents=True, exist_ok=True)
+    n, seen, papers = 0, set(), set()
+    with FRONT.open("w", encoding="utf-8") as fh:
+        for e in pool:
+            names = {dataset_key(x) for x in [e["name"], *(e.get("aliases") or [])] if dataset_key(x)}
+            for c in e["claims"]:
+                path = ROOT / "data/raw/html" / f"{c['arxiv_base']}.html.gz"
+                if not path.exists():
+                    continue
+                for line, url in front_lines(gzip.open(path, "rt", encoding="utf-8", errors="ignore").read()):
+                    kind, rid = classify_url(url)
+                    if kind not in ("gh", "hfd", "hfm", "hfs", "project"):
+                        continue
+                    key = (e["id"], kind, rid if kind != "project" else url.lower().rstrip("/"))
+                    if key in seen:
+                        continue
+                    seen.add(key); papers.add(c["arxiv_base"])
+                    label = re.split(r"\s*[:—–\-]\s*", line, maxsplit=1)[0]
+                    named = any(x and x in dataset_key(url) for x in names)
+                    tags = ["front_matter", f"label:{label.lower()}", ("named_in_url" if named else "unnamed_in_url"),
+                            ("multi_intro_paper" if per_paper[c["arxiv_base"]] > 1 else "single_intro_paper"),
+                            *(["homonym"] if e.get("homonym_of") else []), f"host:{kind}"]
+                    fh.write(json.dumps({"pair": f"{e['id']}|{kind}|{key[2]}", "benchmark_id": e["id"], "name": e["name"], "aliases": e.get("aliases") or [],
+                                         "kind": kind, "id": rid if kind != "project" else None, "url": url, "paper_id": c["arxiv_base"],
+                                         "edition": c["edition"], "paper_title": c.get("title"), "sentence": line, "label": label, "tags": tags},
+                                        ensure_ascii=False) + "\n")
+                    n += 1
+    rows = list(read_jsonl(FRONT))
+    print(f"[front] pool {len(pool)} benchmarks without a location; {n} candidate pairs for {len({r['benchmark_id'] for r in rows})} benchmarks in {len(papers)} papers")
+    print("editions:", dict(collections.Counter(r["edition"] for r in rows).most_common(8)))
+    print("tags:", dict(collections.Counter(t for r in rows for t in r["tags"])))
+
+
+def cmd_front_check(limit: int) -> None:
+    """Existence (as `check`) and the text at the URL for review: a GitHub README, a Hub card, a page."""
+    token = _github_token()
+    if not token:
+        raise SystemExit("GITHUB_API_TOKEN is not set in .env")
+    done = {r["key"] for r in read_jsonl(FRONT_TEXTS)} if FRONT_TEXTS.exists() else set()
+    todo, seen = [], set()
+    for r in read_jsonl(FRONT):
+        key = f"{r['kind']}:{r['id'] or r['url'].lower().rstrip('/')}"
+        if key not in done and key not in seen:
+            seen.add(key); todo.append((key, r))
+    print(f"{len(todo)} to check ({len(done)} cached)", flush=True)
+    n, t_last = 0, 0.0
+
+    def pace():
+        nonlocal t_last
+        wait = 1.0 - (time.time() - t_last)
+        if wait > 0:
+            time.sleep(wait)                                 # at most one request a second, all hosts together
+        t_last = time.time()
+    with FRONT_TEXTS.open("a", encoding="utf-8") as fh:
+        for key, r in todo[:limit]:
+            try:
+                pace()
+                res = check_github(r["id"], token) if r["kind"] == "gh" else check_hub(r["kind"], r["id"]) if r["kind"] in ("hfd", "hfm", "hfs") else check_page(r["url"])
+                text = res.pop("text", None)
+                if res.get("existence") == "exists" and r["kind"] == "gh":
+                    pace()
+                    st, _, body, _ = _get(f"https://api.github.com/repos/{res.get('full_name') or r['id']}/readme",
+                                          {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28"}, 60000)
+                    text = body.decode("utf-8", "replace") if st == 200 else None
+                elif res.get("existence") == "exists" and r["kind"] in ("hfd", "hfm", "hfs"):
+                    pace()
+                    prefix = {"hfd": "datasets/", "hfs": "spaces/", "hfm": ""}[r["kind"]]
+                    st, _, body, _ = _get(f"https://huggingface.co/{prefix}{r['id']}/raw/main/README.md", {}, 60000)
+                    text = body.decode("utf-8", "replace") if st == 200 else None
+            except Halt as e:
+                print(f"stopped at {key}: {e}", flush=True)
+                break
+            except Exception as e:  # noqa: BLE001 — one item's failure is recorded, never ends the run
+                res, text = {"existence": "unchecked", "why": f"{type(e).__name__}", "checked_at": _now()}, None
+            fh.write(json.dumps({"key": key, **res, "text": (text or "")[:60000]}, ensure_ascii=False) + "\n"); fh.flush()
+            n += 1
+    rows = list(read_jsonl(FRONT_TEXTS))
     print(f"checked this run {n}; recorded {len(rows)}:", dict(collections.Counter((r['key'].split(':')[0], r['existence']) for r in rows)))
 
 
@@ -343,7 +467,7 @@ def decide_v3(cand: dict, in_v2: dict | None, existence: dict, text: str, aliase
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("command", choices=["candidates", "check", "sample"])
+    ap.add_argument("command", choices=["candidates", "check", "sample", "front", "front-check"])
     ap.add_argument("--limit", type=int, default=10 ** 6)
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--rules", choices=["v1", "v2"], default="v1")
@@ -352,6 +476,10 @@ def main() -> int:
         cmd_candidates(a.rules)
     elif a.command == "check":
         cmd_check(a.limit)
+    elif a.command == "front":
+        cmd_front()
+    elif a.command == "front-check":
+        cmd_front_check(a.limit)
     else:
         cmd_sample(a.force)
     return 0

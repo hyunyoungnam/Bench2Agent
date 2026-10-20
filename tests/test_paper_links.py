@@ -54,3 +54,22 @@ class NameIsNotRelationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrontMatterTests(unittest.TestCase):
+    """2026-10-20: AAAI-style "Code and Datasets — URL" lines sit between the abstract and the first section,
+    where the HTML parser keeps nothing; EIDSeg's own link was missed that way."""
+    HTML = ('<div class="ltx_abstract"><p class="ltx_p">We release data at https://example.org/in-abstract.</p></div>'
+            '<div class="ltx_logical-block"><div class="ltx_para">'
+            '<p class="ltx_p"><span class="ltx_text ltx_font_bold">Code and Datasets</span> — '
+            '<span class="ltx_ref ltx_nolink ltx_url ltx_ref_self">https://github.com/HUILIHUANG413/EIDSeg</span></p>'
+            '<p class="ltx_p"><span class="ltx_text ltx_font_bold">Extended version</span> — '
+            '<span class="ltx_ref ltx_url">https://arxiv.org/abs/2511.06456</span></p>'
+            '<p class="ltx_p"><span class="ltx_text ltx_font_bold">Code</span>: <span class="ltx_url">https://github.com/x/AIGI-VC.</span></p>'
+            '</div></div><section class="ltx_section"><p class="ltx_p">Code — https://github.com/not/front</p></section>')
+
+    def test_labelled_release_lines_between_the_abstract_and_the_first_section(self):
+        from icml.paper_links import front_lines
+        self.assertEqual(front_lines(self.HTML), [
+            ("Code and Datasets — https://github.com/HUILIHUANG413/EIDSeg", "https://github.com/HUILIHUANG413/EIDSeg"),
+            ("Code: https://github.com/x/AIGI-VC.", "https://github.com/x/AIGI-VC")])
