@@ -105,6 +105,30 @@ class ParenthesesAndTotals(unittest.TestCase):
         self.assertNotIn(("12,097", "ok"), self.verdicts("12,097 listed papers", self.SCOPE))   # no explicit total: never summed here
 
 
+class KoreanPairsAndDiagnostics(unittest.TestCase):
+    # live terminal answer (Claude Code, 2026-10-21, ICLR CIFAR-10 on 1e1fa171722da693): right numbers marked contradicted
+    TREND = ("benchmark_trend", {"benchmark": "cifar-10", "venue": "iclr"}, {"id": "cifar-10", "name": "CIFAR-10", "role": "evaluates_on",
+             "coverage": {"papers_with_unattributed_benchmark_mentions": 4185}, "results": [
+                 {"edition": "iclr-2024", "papers": 179, "parsed_papers": 1894}, {"edition": "iclr-2025", "papers": 197, "parsed_papers": 3060}]})
+    SCOPE = ("benchmark_scope", {}, {"editions": {"iclr-2024": {"total_papers": 2296}, "iclr-2025": {"total_papers": 3827}}})
+
+    def verdicts(self, text):
+        lg = log(self.TREND, self.SCOPE)
+        return [(r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
+
+    def test_a_korean_whole_then_part_pair_is_not_read_as_use_counts(self):
+        text = "## CIFAR-10\n분석된 논문 수는 2024년 2,296편 중 1,894편, 2025년 3,827편 중 3,060편입니다."
+        out = dict(self.verdicts(text))
+        self.assertEqual((out["1,894"], out["3,060"]), ("ok", "ok"))
+        self.assertNotIn("no", (out["2,296"], out["3,827"]))
+        self.assertEqual(dict(self.verdicts("## CIFAR-10\n2025년 3,827편 중 3,061편입니다."))["3,061"], "no")   # wrong part: contradicted
+        self.assertEqual(dict(self.verdicts("## CIFAR-10\n2025년 3,827편 중 197편이 평가에 썼습니다."))["197"], "ok")
+
+    def test_an_edition_word_does_not_make_an_item_count_an_edition_count(self):
+        out = dict(self.verdicts("세 에디션을 합쳐 4,185건의 논문-에디션 관측에 해결되지 않은 벤치마크 언급이 있습니다."))
+        self.assertEqual(out["4,185"], "ok")
+
+
 class TerminalMarks(unittest.TestCase):
     def test_only_a_contradiction_reads_as_a_difference(self):
         from bench2agent.cli import render

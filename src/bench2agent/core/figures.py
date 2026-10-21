@@ -605,6 +605,12 @@ def _metric_cues(before: str, after: str) -> set | None:
     unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
     if unit == PERCENT:
         return set(PERCENT)                            # a percent is never a paper count or a per-1,000 rate
+    # Korean pairs run whole-then-part: "2,296편 중 1,894편". The whole is a denominator or listed total; the part
+    # is a use count or an analyzed count, whichever the edition's own values hold (never a third measure).
+    if re.match(r"\s*편\s*중\s*\d", after):
+        return set(DENOM) | {"__whole__"}            # listed or analyzed: confirmed when it matches, never contradicted
+    if re.search(r"\d\s*편\s*중\s*$", before) and not re.search(r"(?:분모|파싱|분석|parsed|analy[sz]ed|매칭|matched)", before.split("중")[-1], re.I):
+        return set(USAGE) | {"parsed_papers", "in_scope_parsed", "arxiv_matched"}
     if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after) and not re.search(r"(?:분모|파싱|parsed|매칭|matched)\s*$", before, re.I):
         return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
         # ... unless a word right before says what it is ("parsed 1894 of 2296 accepted")
@@ -616,6 +622,10 @@ def _metric_cues(before: str, after: str) -> set | None:
             if best is None or m.end() > best[0]:
                 best = (m.end(), fam)
     word = set(best[1]) if best else None
+    if word and word <= EDITIONS and re.match(r"\s*(?:건|편|papers?(?![A-Za-z]))", after):
+        word = None                                    # "세 에디션을 합쳐 4,185건": an edition word does not say what 4,185 items are
+    if re.match(r"\s*(?:건|편|papers?)?\s*(?:의\s*)?(?:논문[-\s]?에디션\s*관측|paper-edition\s+observations?)\S*\s*(?:에\s*)?(?:해결되지\s*않은|미해소|미귀속|unresolved)", after, re.I):
+        return set(UNATTRIBUTED_OBSERVATIONS)          # "4,185건의 논문-에디션 관측에 해결되지 않은 … 언급": the scope diagnostic
     if word is None:
         for rx, fam in _GENERIC_WORDS:
             if re.search(rx, before, re.I):
@@ -714,6 +724,9 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     guessed = "metric" in c and "__generic__" in c["metric"]
     if guessed:
         c = {**c, "metric": c["metric"] - {"__generic__"}}
+    whole = "metric" in c and "__whole__" in c["metric"]
+    if whole:
+        c = {**c, "metric": c["metric"] - {"__whole__"}}
     if c.get("ambiguous_name"):
         return "na", "the name means several benchmark ids"
     if not (any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY)):
@@ -749,6 +762,8 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
         return "ok", "connected"
     if cand and guessed:
         return "na", "only a generic word says what it counts"
+    if whole:
+        return "na", "the whole of a pair can be a listed or an analyzed total"
     # a contradiction needs a fixed context: what is counted, and for which benchmark or edition (a scope-wide
     # measure such as the number of editions needs neither). "ICLR 2026 (183 papers)" names neither inside its
     # clause, so a different value there is unverified, never contradicted.
