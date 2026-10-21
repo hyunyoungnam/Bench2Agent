@@ -67,6 +67,7 @@ from a Claude or ChatGPT subscription.
 Two shortened answers from the terminal with Claude Code on the **2026-10-19
 data release** (revision `8503cf1b1f7bee99`). Model wording varies; the counts
 come from the tools and match the returned results.
+Shares below are shown as percentages of those same analyzed-paper counts.
 
 > **You:** What benchmarks are researchers using in robotics lately?
 >
@@ -83,8 +84,8 @@ come from the tools and match the returned results.
 > **You:** How has CIFAR-10 usage changed at ICLR from 2024 to 2026?
 >
 > **Bench2Agent:** Stated evaluation use went from 179 of 1,894 parsed papers
-> in 2024 to 197 of 3,060 in 2025 and 168 of 4,252 in 2026, or 94.5, 64.4 and
-> 39.5 per 1,000. The count stayed roughly flat while ICLR grew; both steps are
+> in 2024 to 197 of 3,060 in 2025 and 168 of 4,252 in 2026, or 9.5%, 6.4% and
+> 4.0%. The count stayed roughly flat while ICLR grew; both steps are
 > a significant fall under the within-venue test. Usage in papers without
 > parsed full text is unknown.
 

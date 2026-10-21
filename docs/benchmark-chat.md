@@ -37,7 +37,7 @@ paper. This adapter does not edit the source catalog or extraction outputs.
 | Question | Tools | Checks |
 |---|---|---|
 | What do researchers test on now in a field? | `benchmark_scope`, `benchmark_usage` | Exact field label; latest analyzed edition per venue; evaluation role; denominator and verbatim evidence |
-| Is a benchmark becoming more or less common? | `benchmark_trend` | Per-1,000 parsed-paper rates; comparisons within a venue; observed zeros separated from missing scope |
+| Is a benchmark becoming more or less common? | `benchmark_trend` | Percentages of analyzed papers; comparisons within a venue; observed zeros separated from missing scope |
 | Which benchmarks are new? | `new_benchmarks` | Reviewed claims, including body-only names and entries without subsequent uptake; evaluation benchmarks separate from training resources |
 | Are other researchers adopting one? | `benchmark_adoption` | Other/self/undetermined author names; evaluation/training separate; introducing papers excluded; unresolved homonyms reported |
 | Which introduced benchmarks have the most uptake? | `new_benchmarks(sort="adoption")` | External evaluation use, or training use for datasets; counts across all installed editions; introduction filters do not filter using papers; prior-use flags retained |
@@ -46,6 +46,15 @@ paper. This adapter does not edit the source catalog or extraction outputs.
 `benchmark_info` remains the older abstract-name inventory and location lookup.
 It does not establish evaluation use. Existing paper and dataset CSV endpoints
 retain their original meaning: inventories are not dataset observation exports.
+
+Usage and trend shares use `share_percent`: percent of the analyzed papers
+in that query/edition, rounded to one decimal (halves up). Terminal prose and
+the browser both use `%`; the raw use count and denominator stay visible.
+A missing/zero denominator gives no percentage; a positive share below 0.1%
+is displayed as `<0.1%`, with its count. `per_1000` remains a compatibility
+field for older clients and saved results, not the default answer unit.
+Verification derives percentages only from a benchmark's count and its own
+query/edition denominator; it never combines figures from separate calls.
 
 All successfully parsed papers, including those without a stated benchmark,
 enter each edition's denominator. Pooled usage counts are paper-edition

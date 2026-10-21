@@ -30,6 +30,69 @@ class ConnectedFigureTests(unittest.TestCase):
     def setUp(self):
         self.lg = log(SCOPE, NEW, TREND)
 
+    def test_percentages_keep_their_benchmark_role_and_unit(self):
+        # A saved legacy result has no share_percent. Its own counts still
+        # verify a percentage; a per-1,000 value cannot stand in for one.
+        lg = log(("benchmark_usage", {"role": "evaluates_on"}, {
+            "role": "evaluates_on", "coverage": {"parsed_papers": 200}, "results": [
+                {"id": "toybench", "name": "ToyBench", "papers": 10, "per_1000": 50},
+                {"id": "otherbench", "name": "OtherBench", "papers": 20, "per_1000": 100}]}),
+                 ("benchmark_usage", {"role": "trains_on"}, {
+            "role": "trains_on", "coverage": {"parsed_papers": 200}, "results": [
+                {"id": "toybench", "name": "ToyBench", "papers": 20, "per_1000": 100}]}))
+        self.assertEqual(verdicts("ToyBench evaluation share: 5.0%", lg), [("5.0", "ok")])
+        self.assertEqual(verdicts("ToyBench 평가 사용 비율: 5.0%", lg), [("5.0", "ok")])
+        self.assertEqual(verdicts("ToyBench evaluation share: 50.0%", lg), [("50.0", "no")])
+        self.assertEqual(verdicts("OtherBench evaluation share: 5.0%", lg), [("5.0", "no")])
+        self.assertEqual(verdicts("ToyBench training share: 5.0%", lg), [("5.0", "no")])
+        self.assertEqual(verdicts("ToyBench evaluation share changed by 5.0 percentage points", lg), [("5.0", "na")])
+        table = "| Benchmark | Evaluation share of analyzed papers (%) |\n|---|---|\n| ToyBench | 5.0% |"
+        self.assertEqual(verdicts(table, lg), [("5.0", "ok")])
+
+    def test_percentages_use_the_same_edition_and_never_another_calls_denominator(self):
+        lg = log(("benchmark_trend", {"benchmark": "toybench"}, {
+            "id": "toybench", "name": "ToyBench", "role": "evaluates_on", "results": [
+                {"edition": "iclr-2025", "papers": 10, "parsed_papers": 200},
+                {"edition": "iclr-2026", "papers": 10, "parsed_papers": 100}]}))
+        self.assertEqual(verdicts("ToyBench ICLR 2025 evaluation share: 5.0%", lg), [("5.0", "ok")])
+        self.assertEqual(verdicts("ToyBench ICLR 2026 evaluation share: 5.0%", lg), [("5.0", "no")])
+        # Even matching numbers elsewhere in the turn do not establish a ratio.
+        lg = log(("benchmark_scope", {}, {"parsed_papers": 200}),
+                 ("benchmark_usage", {}, {"results": [{"id": "toybench", "name": "ToyBench", "papers": 10}]}))
+        self.assertEqual(verdicts("ToyBench share: 5.0%", lg), [("5.0", "na")])
+        for n in (None, 0):
+            lg = log(("benchmark_trend", {}, {"id": "toybench", "name": "ToyBench", "results": [
+                {"edition": "iclr-2025", "papers": 0, "parsed_papers": n, "share_percent": None}]}))
+            self.assertEqual(verdicts("ToyBench ICLR 2025 share: 0.0%", lg), [("0.0", "na")])
+
+    def test_an_anchored_percentage_cannot_use_a_different_queries_share(self):
+        from bench2agent.core import chat
+        from bench2agent.core.verify import Verifier
+        lg = log(*[("benchmark_usage", {"topic": topic}, {
+            "role": "evaluates_on", "coverage": {"parsed_papers": n}, "results": [
+                {"id": "toybench", "name": "ToyBench", "papers": 10}]})
+                   for topic, n in (("robotics", 200), ("computer vision", 100))])
+        text = '⟦benchmark_usage:{"topic":"robotics"}|ToyBench evaluation share: 10.0%⟧'
+        segs, _ = chat.segment(text, None, Verifier.__new__(Verifier), [], lg)
+        self.assertEqual([s["v"] for s in segs if s["t"] == "n"], ["no"])
+
+    def test_percentage_rounding_and_anchors_use_the_turns_own_counts(self):
+        from bench2agent.core import chat
+        from bench2agent.core.metrics import percentage
+        from bench2agent.core.verify import Verifier
+        self.assertEqual(percentage(1, 16), 6.3)  # 6.25%, halves up like the browser
+        lg = log(("benchmark_usage", {"topic": "robotics"}, {
+            "role": "evaluates_on", "coverage": {"parsed_papers": 16}, "results": [
+                {"id": "toybench", "name": "ToyBench", "papers": 1, "share_percent": 6.3}]}))
+        self.assertEqual(verdicts("ToyBench evaluation share: 6.3%", lg), [("6.3", "ok")])
+        self.assertEqual(verdicts("ToyBench evaluation share: 6.25%", lg), [("6.25", "ok")])
+        self.assertEqual(verdicts("ToyBench evaluation share: 6.4%", lg), [("6.4", "no")])
+        self.assertEqual(verdicts("ToyBench evaluation share: <0.1%", lg), [("0.1", "na")])
+        for value, state in (("6.3", "ok"), ("62.5", "no")):
+            text = '⟦benchmark_usage:{"topic":"robotics"}|ToyBench evaluation share: ' + value + '%⟧'
+            segs, v = chat.segment(text, None, Verifier.__new__(Verifier), [], lg)
+            self.assertEqual([s["v"] for s in segs if s["t"] == "n"], [state])
+
     def test_an_edition_count_is_checked_against_the_edition_count_not_any_63(self):
         self.assertEqual(len(SCOPE[2]["editions"]), 61)
         self.assertEqual(verdicts("- 분석된 에디션: 63개 (ICLR 1965–2025)", self.lg), [("63", "no")])

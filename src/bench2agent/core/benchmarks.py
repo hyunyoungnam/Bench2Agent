@@ -23,6 +23,7 @@ from pathlib import Path
 
 from .paths import ROOT
 from . import revisions
+from .metrics import percentage
 from .repository import (CONTENT_HASH_RULE, DATABASE, MIN_CLIENT_VERSION, SNAPSHOT, SOURCE, SqliteRepository, Unavailable,
                          build_database, content_sha256)
 ROLES = ("evaluates_on", "trains_on")
@@ -707,13 +708,15 @@ class BenchmarkStore:
         cat = {e["id"]: e for e in data["benchmarks"]}
         limit = max(1, min(int(a.get("limit", 10)), 100))
         results = [{"id": bid, "name": cat[bid]["name"], "kind": cat[bid].get("kind"),
-                    "papers": len(ps), "per_1000": round(len(ps) / len(papers) * 1000, 3),
+                    "papers": len(ps), "share_percent": percentage(len(ps), len(papers)),
+                    "per_1000": round(len(ps) / len(papers) * 1000, 3),  # compatibility for older clients
                     **self._links(data, cat[bid]),
                     "evidence": [self._paper(p, bid, role) for p in ps[:2]]}
                    for bid, ps in sorted(counts.items(), key=lambda x: (-len(x[1]), x[0]))[:limit]]
         return {**self._base(data), "role": role, "coverage": coverage, "results": results,
                 "total_benchmarks": len(counts), "truncated": len(counts) > limit,
-                "note": "Counts measure explicitly stated use, not quality. Missing stated roles do not prove non-use. "
+                "note": "share_percent is the percentage of analyzed papers in this query (one decimal); use percentages in answers. "
+                        "Counts measure explicitly stated use, not quality. Missing stated roles do not prove non-use. "
                         + LINK_NOTE}
 
     @_pinned
@@ -746,7 +749,8 @@ class BenchmarkStore:
         for ed, cov in coverage["editions"].items():
             n, k = cov["in_scope_parsed"], counts[ed]
             results.append({"edition": ed, "papers": k, "parsed_papers": n,
-                            "per_1000": round(k / n * 1000, 3) if n else None})
+                            "share_percent": percentage(k, n),
+                            "per_1000": round(k / n * 1000, 3) if n else None})  # legacy client compatibility
         venues = collections.defaultdict(list)
         for r in results:
             venues[r["edition"].rsplit("-", 1)[0]].append(r)
@@ -768,7 +772,9 @@ class BenchmarkStore:
         return {**self._base(data), "id": entry["id"], "name": entry["name"], "role": role,
                 **self._links(data, entry),
                 "coverage": coverage, "results": results, "comparisons": comparisons,
-                "rule": "Within venue: two-proportion z, abs(z) >= 2.576; 0 to >=8 papers is appearing."}
+                "rule": "Within venue: two-proportion z, abs(z) >= 2.576; 0 to >=8 papers is appearing.",
+                "note": "share_percent is the percentage of analyzed papers in each edition (one decimal); use percentages in answers. "
+                        "A missing denominator means an unavailable percentage, not zero."}
 
     @_pinned
     def adoption(self, a: dict) -> dict:

@@ -24,6 +24,9 @@ from __future__ import annotations
 
 import re
 import json
+from decimal import Decimal, ROUND_HALF_UP
+
+from .metrics import percentage
 
 # tool -> the kind of argument it takes
 RECOMPUTABLE = {"field_trend": "topic", "gap_scan": "topic",
@@ -351,6 +354,7 @@ DENOM = {"parsed_papers", "total_papers", "arxiv_matched", "in_scope_parsed", "f
 TOTALS = DENOM | UNATTRIBUTED_OBSERVATIONS | {"total", "catalogue_entries", "count:venues"}
 EDITIONS = {"count:editions", "count:by_edition", "editions", "n_editions"}
 RATE = {"per_1000", "share_per_1000", "rate_per_1000"}
+PERCENT = {"share_percent", "percent"}
 _COUNTS = USAGE | ADOPTION                                                           # what a bare "papers" unit can mean
 _ANY = _COUNTS | {"count:*", "catalogue_entries", "total", "total_benchmarks"}
 
@@ -358,20 +362,22 @@ _ANY = _COUNTS | {"count:*", "catalogue_entries", "total", "total_benchmarks"}
 def family(metric: str) -> str:
     return ("usage" if metric in USAGE else "adoption" if metric in ADOPTION else "denominator" if metric in DENOM
             else "unattributed_observations" if metric in UNATTRIBUTED_OBSERVATIONS
-            else "editions" if metric in EDITIONS else "rate" if metric in RATE else metric)
+            else "editions" if metric in EDITIONS else "rate" if metric in RATE
+            else "percentage" if metric in PERCENT else metric)
 
 
 # the unit right after a number sets its family
 _UNIT_AFTER = [(r"\s*(?:개\s*)?(?:(?:회차|에디션)(?!\s*별)|editions?(?![A-Za-z]))", EDITIONS),   # "에디션별로는" (by edition) is no unit
                (r"\s*(?:편\s*(?:이|가|이\s*)?\s*파싱|parsed\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?parsed)", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
                (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
-               (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*%", {"percent"}),
+               (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*(?:%|퍼센트)", PERCENT),
                (r"\s*(?:개\s*)?files?(?![A-Za-z])", {"n_files"}),          # a paper link's file list: "96 files"
                (r"\s*(?:건|개|items?(?![A-Za-z]))", _ANY)]
 # words BEFORE the number: a specific word beats a generic one; among specific ones the nearest wins
 _SPECIFIC_WORDS = [
     (r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}),
     (r"‰|per\s*1,?000(?:\s+(?:parsed(?:\s+papers?)?|papers?))?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed (papers)" is one rate phrase
+    (r"%|percent(?:age)?|백분율|퍼센트|비율|share(?:\s+of\s+(?:(?:analy[sz]ed|parsed)\s+)?papers?)?", PERCENT),
     (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
@@ -449,7 +455,7 @@ def facts(log: TurnLog) -> list[dict]:
                 out.append({"value": float(fixed["n_files"]), "metric": "n_files",
                             "ctx": {**c, "link_url": _norm_url(fixed.get("url")), "address": "corrected"}})
 
-    def walk(o, ctx, key):
+    def walk(o, ctx, key, denominator=None):
         if isinstance(o, dict):
             c = dict(ctx)
             if isinstance(o.get("id"), str) and isinstance(o.get("name"), str):
@@ -459,9 +465,24 @@ def facts(log: TurnLog) -> list[dict]:
                 c["edition"] = o["edition"].lower()
             if isinstance(o.get("role"), str) and o["role"] in _ROLE_KEYS:
                 c["role"] = o["role"]
+            # Usage rows share ONLY their own call's denominator. Trend rows
+            # carry their edition's denominator; never borrow from another row/call.
+            if c.get("tool") == "benchmark_usage" and isinstance(o.get("coverage"), dict):
+                denominator = o["coverage"].get("parsed_papers")
+            n = o.get("parsed_papers") if "parsed_papers" in o else denominator if c.get("tool") == "benchmark_usage" else None
+            p = o.get("papers")
+            has_percentage = (c.get("tool") in {"benchmark_usage", "benchmark_trend"} and c.get("benchmark_id")
+                              and isinstance(p, (int, float)) and not isinstance(p, bool)
+                              and isinstance(n, (int, float)) and not isinstance(n, bool) and n > 0)
+            if has_percentage:
+                # Also works on saved pre-percentage tool logs. Use counts,
+                # not the rounded per_1000 value or arbitrary pooled values.
+                out.append({"value": percentage(p, n, places=None), "metric": "share_percent", "ctx": dict(c)})
             if key in {"editions", "by_edition", "by_year"} or (o and all(_EDITION.fullmatch(str(k)) for k in o)):
                 out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c})
             for k, v in o.items():
+                if k == "share_percent" and has_percentage:
+                    continue                           # the exact ratio above avoids rounding a share twice
                 if k == "introducing_paper" and isinstance(v, dict) and v.get("links"):
                     link_facts(v["links"], dict(c))                     # the paper's links: their file counts are facts
                     continue
@@ -478,12 +499,12 @@ def facts(log: TurnLog) -> list[dict]:
                     cc["role"] = k
                 if k in _GROUP_KEYS:
                     cc["group"] = k
-                walk(v, cc, k)
+                walk(v, cc, k, denominator)
         elif isinstance(o, list):
             if key:
                 out.append({"value": float(len(o)), "metric": f"count:{key}", "ctx": ctx})
             for v in o:
-                walk(v, ctx, key)
+                walk(v, ctx, key, denominator)
         elif isinstance(o, (int, float)) and not isinstance(o, bool):
             if key in UNATTRIBUTED_OBSERVATIONS:
                 # Coverage spans all benchmarks and roles, even when nested
@@ -579,6 +600,8 @@ def _section(text: str, a: int, surf, raw=None) -> set[str] | None:
 
 def _metric_cues(before: str, after: str) -> set | None:
     unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
+    if unit == PERCENT:
+        return set(PERCENT)                            # a percent is never a paper count or a per-1,000 rate
     if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after) and not re.search(r"(?:분모|파싱|parsed|매칭|matched)\s*$", before, re.I):
         return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
         # ... unless a word right before says what it is ("parsed 1894 of 2296 accepted")
@@ -710,7 +733,11 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
         return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
     if {"unattributed_observations", "adoption"} <= fams:
         return "na", "scope-wide unresolved observations or a benchmark's unique unattributed papers is not stated"
-    hits = [f for f in cand if round(f["value"], dp) == round(v, dp)]
+    def rounded(value):
+        if c.get("metric") and c["metric"] <= PERCENT:
+            return float(Decimal(str(value)).quantize(Decimal(1).scaleb(-dp), rounding=ROUND_HALF_UP))
+        return round(value, dp)
+    hits = [f for f in cand if rounded(f["value"]) == rounded(v)]
     benchmark_stat = any(family(f["metric"]) not in ("denominator", "editions") for f in hits)
     if c.get("benchmark_ids") is None and benchmark_stat and len({f["ctx"].get("benchmark_id") for f in hits if f["ctx"].get("benchmark_id")}) > 1 \
             and all(f["ctx"].get("benchmark_id") for f in hits):
@@ -720,7 +747,7 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     if cand and guessed:
         return "na", "only a generic word says what it counts"
     if cand:
-        vals = sorted({round(f["value"], dp) for f in cand})[:4]
+        vals = sorted({rounded(f["value"]) for f in cand})[:4]
         return "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}"
     return "na", "no tool result has this context"
 
@@ -753,7 +780,10 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
             continue
         if re.search(r"HTTP\s*$", text[max(0, m.start() - 6):m.start()]):
             continue                                            # an HTTP status code, not a figure
-        if re.search(r"(?:more|fewer|less)\s+than\s*$|at\s+(?:least|most)\s*$", text[max(0, m.start() - 14):m.start()], re.I) \
+        if re.match(r"\s*(?:percentage\s+points?|percent\s+points?|%p\b|퍼센트\s*포인트)", text[m.end():], re.I):
+            out.append((m.start(), m.end(), m.group(0), "na", "a percentage-point change is not a usage share"))
+            continue
+        if re.search(r"(?:more|fewer|less)\s+than\s*$|at\s+(?:least|most)\s*$|[<>≤≥]=?\s*$", text[max(0, m.start() - 14):m.start()], re.I) \
                 or re.match(r"\s*(?:편|개|건)?\s*(?:이상|이하|초과|미만)", text[m.end():m.end() + 8]):
             out.append((m.start(), m.end(), m.group(0), "na", "a comparison, not a stated value"))
             continue                                            # "more than 4": not judged as "exactly 4"

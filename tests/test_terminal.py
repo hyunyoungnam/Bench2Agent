@@ -374,7 +374,7 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(status["passed"], 0)
 
     def scripted(self, provider):
-        final = 'Toy: ⟦benchmark_usage:{"topic":"robotics"}|1 paper, 500 per 1,000 parsed papers⟧. '
+        final = 'Toy: ⟦benchmark_usage:{"topic":"robotics"}|1 paper, 50.0%⟧. '
         final += "⟦arxiv:2501.00001|" + QUOTE + "⟧"
         def openai(call_id, name, args):
             return {"status": "completed", "output": [{"type": "reasoning", "id": "r" + call_id,

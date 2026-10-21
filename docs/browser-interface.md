@@ -78,6 +78,9 @@ additional dependencies.
   not invent a location, treat unknown as zero, or rank on link coverage.
 - Separate evaluation from training, external from self/unknown adoption,
   and data-location links from introducing-paper links. Explain absent links.
+- Usage shares use percentages in both answers and panels, with the same
+  analyzed-paper denominator and one-decimal rounding. A missing denominator
+  stays unavailable; small positive shares appear as `<0.1%`, not zero use.
 - A passed figure check is a mechanical comparison to the turn's evidence,
   not a benchmark-quality rating or a guarantee that every semantic binding
   is correct. Keep the source, edition, role and denominator inspectable.

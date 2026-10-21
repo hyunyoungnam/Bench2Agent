@@ -105,7 +105,7 @@ function describeQuery(a, role) {
 function pct(papers, denom) {
   if (!denom || papers == null) return "–";
   const v = (100 * papers) / denom;
-  return v > 0 && v < 0.1 ? "<0.1%" : `${v.toFixed(1)}%`;
+  return v > 0 && v < 0.1 ? "<0.1%" : `${(Math.round(1000 * papers / denom) / 10).toFixed(1)}%`;
 }
 const TREND = { rising: "Rising", falling: "Falling", appearing: "Newly observed", no_detected_change: "No clear change", insufficient_scope: "Not enough data" };
 
@@ -478,7 +478,7 @@ function model(tools) {
       for (const x of r.results || []) {
         const c = card(x.id, x.name);
         absorb(c, x);
-        (c.usages = c.usages || []).push({ papers: x.papers, per_1000: x.per_1000, denom, role: r.role, scope: a });
+        (c.usages = c.usages || []).push({ papers: x.papers, denom, role: r.role, scope: a });
         addEvidence(x.id, x.evidence);
       }
     }

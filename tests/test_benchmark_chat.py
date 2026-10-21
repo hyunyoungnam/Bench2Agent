@@ -91,6 +91,7 @@ class BenchmarkQuestions(unittest.TestCase):
         self.assertEqual(result["coverage"]["parsed_papers"], 7)
         self.assertEqual(result["results"][0]["id"], "fresh")
         self.assertEqual(result["results"][0]["papers"], 4)
+        self.assertEqual(result["results"][0]["share_percent"], 57.1)
         self.assertEqual(result["results"][0]["per_1000"], 571.429)
         train = self.store.usage({"role": "trains_on"})
         self.assertEqual(train["results"][0]["papers"], 1)
@@ -217,12 +218,19 @@ class BenchmarkQuestions(unittest.TestCase):
 
     def test_trend_includes_observed_zero_and_normalizes(self):
         result = self.store.trend({"benchmark": "toy", "topic": "robotics"})
+        self.assertEqual([r["share_percent"] for r in result["results"]], [25.0, 14.3])
         self.assertEqual([r["per_1000"] for r in result["results"]], [250, 142.857])
         zero = self.store.trend({"benchmark": "unused"})
         self.assertEqual([r["papers"] for r in zero["results"]], [0, 0])
+        self.assertEqual([r["share_percent"] for r in zero["results"]], [0.0, 0.0])
         self.assertEqual(zero["comparisons"][0]["state"], "no_detected_change")
         with self.assertRaises(ValueError):
             self.store.usage({"topic": "unlabelled specialism"})
+
+    def test_an_unavailable_denominator_is_not_a_zero_percent_share(self):
+        result = self.store.trend({"benchmark": "toy", "paper_ids": []})
+        self.assertTrue(result["results"])
+        self.assertTrue(all(r["parsed_papers"] == 0 and r["share_percent"] is None for r in result["results"]))
 
     def test_missing_snapshot_is_unavailable_not_zero(self):
         import shutil
