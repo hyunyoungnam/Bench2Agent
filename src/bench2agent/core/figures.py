@@ -605,8 +605,8 @@ def _metric_cues(before: str, after: str) -> set | None:
     if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after) and not re.search(r"(?:분모|파싱|parsed|매칭|matched)\s*$", before, re.I):
         return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
         # ... unless a word right before says what it is ("parsed 1894 of 2296 accepted")
-    if unit is None and re.search(r"\d\s*(?:/|(?<![A-Za-z])of)\s*$", before):
-        return set(DENOM)                                      # ... over its denominator
+    if (unit is None or unit == _COUNTS) and re.search(r"\d\s*(?:/|(?<![A-Za-z])of)\s*$", before):
+        return set(DENOM)                                      # ... over its denominator ("13 of 237 papers": 237 is the denominator)
     best = None
     for rx, fam in _SPECIFIC_WORDS:
         for m in re.finditer(rx, before, re.I):

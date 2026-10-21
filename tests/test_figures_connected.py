@@ -251,6 +251,14 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts(text, lg), [("82", "ok"), ("513", "ok"), ("159.844", "ok")])
         self.assertEqual(verdicts(text.replace("82 of 513", "82 of 514"), lg)[1], ("514", "no"))
 
+    def test_the_number_after_of_is_the_pairs_denominator_even_with_a_papers_unit(self):
+        # found while fixing the figure states (2026-10-21): "13 of 237 papers" read 237 as a usage count -> contradicted
+        lg = log(("benchmark_usage", {"topic": "robotics"}, {"role": "evaluates_on", "coverage": {"parsed_papers": 237},
+                                                            "results": [{"id": "libero", "name": "LIBERO", "papers": 13}]}))
+        self.assertEqual(verdicts("LIBERO: 13 of 237 papers", lg), [("13", "ok"), ("237", "ok")])
+        self.assertEqual(verdicts("LIBERO: 13 of 238 papers", lg), [("13", "ok"), ("238", "no")])
+        self.assertEqual(verdicts("LIBERO: 13/237 papers", lg), [("13", "ok"), ("237", "ok")])
+
     def test_a_section_heading_names_the_benchmark(self):
         text = "### OtherBench\n- 타저자 3편, 자기 2편\n### ToyBench\n- 타저자 3편"
         self.assertEqual(verdicts(text, self.lg), [("3", "ok"), ("2", "ok"), ("3", "no")])
