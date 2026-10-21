@@ -10,9 +10,13 @@ and which new benchmarks other researchers adopt. Bench2Agent connects your
 signed-in Claude Code or Codex to tested benchmark tools and checks answers
 against the tool results and original paper evidence.
 
+Use it in a terminal or in a local browser workspace. Both interfaces share
+the same AI CLI login, conversations, research data and answer checks; the
+browser runs on your computer, without a hosted backend.
+
 **Usage frequency describes adoption, not benchmark quality.**
 
-[Install](#get-started) · [User guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md) · [Releases](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/releases.md)
+[Install](#get-started) · [Browser workspace](#local-browser-workspace) · [Data pipeline](#from-papers-to-evidence) · [User guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md) · [Releases](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/releases.md)
 
 ## Get started
 
@@ -20,23 +24,35 @@ You need **Python 3.10+** and **Claude Code or Codex installed and signed in**
 on your computer. Bench2Agent and the official AI CLI are separate installations.
 If needed, sign in using `claude auth login` or `codex login` first.
 
-Then install and start the terminal conversation:
+Install into an active Python environment; a virtual environment is recommended:
 
 ```bash
 python -m pip install --upgrade bench2agent
-bench2agent
 ```
 
-Use an active Python environment; a virtual environment is recommended. On
-macOS/Linux, [uv](https://docs.astral.sh/uv/getting-started/installation/)
+On macOS/Linux, [uv](https://docs.astral.sh/uv/getting-started/installation/)
 provides an alternative isolated installation:
 
 ```bash
 uv tool install --upgrade bench2agent
-bench2agent
 ```
 
-Choose **one** installation method. On the first interactive launch,
+Choose **one** installation method, then choose an interface:
+
+| Interface | Start | Use it for |
+|---|---|---|
+| Terminal | `bench2agent` | Ask questions and follow-ups, resume conversations, inspect sources with `/sources` |
+| Local browser (0.6.0) | `bench2agent --web` | Read answers beside benchmark cards, comparison tables, original evidence and data coverage |
+
+The browser launcher is part of **0.6.0, currently being prepared for release**.
+The published 0.5.0 package supports the terminal and MCP routes. From a
+development checkout with research data installed, try the browser with:
+
+```bash
+PYTHONPATH=src python3 -m bench2agent --web
+```
+
+On the first interactive launch,
 Bench2Agent automatically downloads the research-data bundle (about 45 MB),
 verifies its checksum and installs it as a data revision. Subsequent
 launches reuse the data. No GPU, database server, Bench2Agent account or API key
@@ -54,53 +70,100 @@ bench2agent --connector codex
 Ask a question, then a follow-up. `/sources` shows evidence, `/chats` lists
 saved conversations, `/resume ID` continues one, `/new` starts fresh, and
 Ctrl+C cancels an unfinished answer. Saved conversations keep their data
-revision after updates. The supported, tested terminal platform is Linux/WSL;
-macOS follows the same POSIX path. Native Windows CLI cancellation has not yet
-been validated.
+revision after updates and can be continued in either interface. Linux/WSL
+is tested; macOS follows the same POSIX path. Native Windows CLI cancellation
+has not yet been validated.
 
 API access is an explicit alternative: `bench2agent --connector api` prompts
 for the provider and a hidden, session-only API key. API billing is separate
 from a Claude or ChatGPT subscription.
 
-## Ask a question
+## Local browser workspace
 
-Two shortened answers from the terminal with Claude Code on the **2026-10-19
-data release** (revision `8503cf1b1f7bee99`). Model wording varies; the counts
-come from the tools and match the returned results.
-Shares below are shown as percentages of those same analyzed-paper counts.
+Ask **“Which benchmarks do recent robotics papers evaluate on most?”** and open
+the evidence panel to inspect the answer's counts and scope:
 
-> **You:** What benchmarks are researchers using in robotics lately?
->
-> **Bench2Agent:** Among 513 parsed papers labeled robotics (ICLR 2026, ICML
-> 2026 and NeurIPS 2025),
-> [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) is used for
-> evaluation in 82 ([introducing paper](https://arxiv.org/abs/2306.03310)),
-> [SIMPLER](https://github.com/simpler-env/SimplerEnv) in 41
-> ([introducing paper](https://arxiv.org/abs/2405.05941)), and
-> [Meta-World](https://github.com/Farama-Foundation/Metaworld) in 29. CoRL,
-> CVPR, ICCV and ECCV carry no field labels, so they are outside this field
-> filter.
+![Local browser workspace answering the robotics question, with evaluation-use counts and percentages in the Compare panel](https://raw.githubusercontent.com/hyunyoungnam/Bench2Agent/main/docs/images/robotics-web.png)
 
-> **You:** How has CIFAR-10 usage changed at ICLR from 2024 to 2026?
->
-> **Bench2Agent:** Stated evaluation use went from 179 of 1,894 parsed papers
-> in 2024 to 197 of 3,060 in 2025 and 168 of 4,252 in 2026, or 9.5%, 6.4% and
-> 4.0%. The count stayed roughly flat while ICLR grew; both steps are
-> a significant fall under the within-venue test. Usage in papers without
-> parsed full text is unknown.
+*Actual local browser session using Claude Code and revision
+`1e1fa171722da693`; answer wording varies. The Compare panel is built from the
+recorded tool results, independently of the model's prose.*
 
-You can also ask which newly introduced benchmarks other authors use, then
-ask for the evidence behind a result. In the standalone terminal, `/sources`
-shows the original sentences and paper links. Quotes and figures are checked
-against the tool results of the same turn. A number the checker cannot connect
-to a tool result is marked `[unverified figure]`: it could not be confirmed,
-which does not mean it is wrong.
+Use **Benchmarks** for resource links and introducing papers, **Compare** for
+counts and percentages, **Evidence** for original paper sentences, and **Data
+coverage** for the conference editions, filters and analyzed-paper counts
+behind the answer. A percentage describes use among the analyzed papers,
+not every paper published at a conference.
 
-Answers include repository, dataset or homepage links and reviewed introducing
-papers where available. Locations are our mapping; a repository link does not
-guarantee a direct data download. Missing links mean no confirmed location.
-Individually reviewed locations also state what was seen about the data, where
-and when.
+The terminal uses the same tools and checks; `/sources` opens the evidence.
+Quotes are matched to their source paper, and numbers are checked against the
+same turn's tool results. A dotted underline in the browser, or an
+`[unverified figure]` in the terminal, means the checker could not connect a
+number to the evidence; it does not necessarily mean the number is wrong.
+
+Verified resource links and **links printed in a paper** are shown separately.
+The latter do not establish a benchmark connection. Resource observations say
+what was checked and when; a repository link or file listing does not guarantee
+that the benchmark data can be downloaded or that its records were validated.
+
+## From papers to evidence
+
+Conference sources provide the paper lists, titles, authors and source IDs.
+The pipeline resolves papers to arXiv, archives the available HTML and extracts
+structured evidence from it. Benchmark-use extraction is rule-based; the
+answering model chooses tools and explains their results rather than counting
+papers itself.
+
+| Information | What is extracted or retained |
+|---|---|
+| Paper text and structure | Sections, table and figure captions, table cells, references and inline citation links |
+| Benchmark identity | Matched benchmark names and spellings, stable catalog IDs and source-backed aliases; ambiguous names remain separate |
+| Evaluation and training use | Statements that the paper evaluates or trains on a benchmark, stored with the role and original evidence text and location |
+| Introduction claims | Sentences proposing a new benchmark or dataset; only reviewed claims enter the introduction catalog, with the review method recorded |
+| Resource links | URLs in release statements and front-matter lines such as “Code — URL”; individually reviewed benchmark locations remain distinct from unconfirmed paper links |
+| Source provenance | Archived HTML SHA-256 and arXiv version when known; evidence keeps its paper and location, and reviewed paper links also retain their source element and review record |
+
+References or name mentions alone do not establish use. Text assembled from
+table cells is labeled as assembled evidence rather than presented as a
+verbatim sentence. Introduction and location reviews performed by Claude Code
+are recorded as **AI reviews**, not human reviews.
+
+Dates describe different events: fetch and re-check times belong to the
+processing history; an **OAI datestamp** signals a metadata-record update, not
+a confirmed change to the paper's text. The arXiv version and HTML hash identify
+the source when known. Link observations have their own check dates, and each
+published database records its build time. Unknown dates stay unknown.
+
+## How the data is stored
+
+The builder writes directly to a **local SQLite database**, with normalized
+tables linked by paper and benchmark IDs:
+
+| Tables | Stored relationships |
+|---|---|
+| `editions`, `observations`, `observation_authors` | Conference and year, paper IDs, authors and coverage; one observation per paper and conference edition |
+| `benchmarks`, `benchmark_aliases`, `claims` | Benchmark identity, aliases and reviewed introduction evidence; resource records and paper links are retained as structured metadata |
+| `uses`, `use_roles`, `use_surfaces`, `evidence` | Which paper uses which benchmark, evaluation versus training, observed spellings and supporting passages |
+| `observation_labels` | Subject labels with their source, method and version, preserving conference tracks separately from research fields |
+| `unattributed`, `unattributed_candidates` | Mentions that cannot be assigned confidently, with candidate benchmark IDs and reasons |
+
+Raw HTML archives and intermediate extraction files stay in the build
+environment. A separate working database tracks processing stages, source
+versions, retries and review queues. The downloadable research database
+contains the catalog, observations, counts and evidence; it does not contain
+the processing queue, private conversations or the complete HTML archive.
+External benchmarks' actual questions, labels and images are separate downloads.
+
+Both interfaces query this database through the same `BenchmarkStore` and six
+MCP tools: coverage, usage, trends, introductions, adoption and evidence.
+**Usage** counts paper–edition observations; **adoption** counts unique papers
+and separates other authors, introducing authors and unknown relationships.
+
+Each installed database is an **immutable data revision** with a manifest,
+content hash and file checksums. New data installs alongside existing revisions;
+saved conversations keep the revision used for their first answer, so follow-up
+questions and answer checks remain on the same data. No database server is
+required. [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md) · [Counting and evidence rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md)
 
 ## Use the tools inside Claude Code or Codex
 
@@ -119,11 +182,17 @@ interface. [MCP setup and scripted queries](https://github.com/hyunyoungnam/Benc
 
 ## Data coverage
 
-The **2026-10-19 data release** contains **61 editions of 11 conferences**,
+The published **2026-10-19 data release** contains **61 editions of 11 conferences**,
 **88,172 parsed paper-edition observations** and **9,334 benchmark/dataset
 entries**, including 8,770 entries with reviewed introduction claims and 89
 with an individually reviewed code or data location (an AI review against the
 introducing paper's own release sentence). Revision: `8503cf1b1f7bee99`.
+
+The prepared **0.6.0 data**, revision `1e1fa171722da693` used in the screenshot,
+has the same paper and benchmark coverage. It expands individually reviewed
+resource locations to **315 benchmarks (336 links)** and adds **70 unique links
+printed in 65 papers**, attached to 74 benchmark entries. These paper links
+remain separate from verified resource locations.
 
 | Venue | Included editions |
 |---|---|
@@ -150,12 +219,9 @@ introduction claims in the expanded editions are not yet reviewed, so
 introduction discovery is less complete than usage coverage. “New” means a
 reviewed claim in this corpus, not the first public release worldwide.
 
-A data revision is one SQLite database with its manifest, identified by a
-hash of its content. The 2026-10-19 bundle (data format v2) needs Bench2Agent
+The 2026-10-19 bundle (data format v2) needs Bench2Agent
 0.5.0 or later; the 2026-10-13 bundle (format v1) still installs from its
-explicit URL through a one-time conversion. Each conversation and its tools
-and checks stay on one immutable revision.
-External benchmarks' actual questions, labels and images are separate downloads.
+explicit URL through a one-time conversion.
 [Data rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md) · [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md)
 
 ## Updates and web development
@@ -175,16 +241,16 @@ Code and research data update separately:
 Version 0.4.0 cannot install the new bundle and keeps working with the
 2026-10-13 data. [Migration and data management](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/terminal.md).
 
-The interface plan is **terminal first, then a designed local browser
-workspace** using the same AI CLI login, tools, research data and verifier.
-The browser will run on your PC; a dedicated paid web backend is not required.
-Its launcher and shared-history integration are planned, not available in
-this release. [Browser interface plan](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/browser-interface.md).
+The **0.6.0 local browser workspace** implements `bench2agent --web` with the
+same conversation service as the terminal. It runs a loopback API and bundled
+browser assets on your computer; a paid backend or hosted login is not required.
+The two interfaces share saved conversations and data revisions. Browser mode
+needs no `server` extra. [Browser guide](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/browser-interface.md).
 
 The existing optional web/HTTP MCP modules are development prototypes. The
 earlier hosted visitor prototype is deferred; hosted sign-in, strong visitor
-isolation and public operation remain unvalidated. This release provides the
-**local terminal and MCP**.
+isolation and public operation remain unvalidated; they are separate from the
+local terminal, browser and stdio MCP interfaces.
 [Account connections](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/account-connections.md).
 
 Code is licensed under [Apache-2.0](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE).
