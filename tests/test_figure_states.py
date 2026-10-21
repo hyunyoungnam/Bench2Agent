@@ -72,6 +72,28 @@ class FigureStates(unittest.TestCase):
 
 
 
+class ParenthesesAndTotals(unittest.TestCase):
+    SCOPE = ("benchmark_scope", {"query": "robotics"}, {"editions": {
+        "iclr-2026": {"total_papers": 5468, "arxiv_matched": 4290, "parsed_papers": 4252},
+        "icml-2026": {"total_papers": 6629, "arxiv_matched": 4893, "parsed_papers": 4863}}})
+    USAGE = ("benchmark_usage", {"topic": "robotics", "latest": True}, {"role": "evaluates_on", "coverage": {
+        "parsed_papers": 350, "editions": {"iclr-2026": {"in_scope_parsed": 183}, "icml-2026": {"in_scope_parsed": 167}}},
+        "results": [{"id": "libero", "name": "LIBERO", "papers": 82}]})
+
+    def verdicts(self, text, *entries):
+        lg = log(*entries)
+        return [(r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
+
+    def test_a_count_in_parentheses_without_its_measure_is_unverified_not_contradicted(self):
+        # live robotics answer (2026-10-21): "ICLR 2026 (183 papers)" read as a usage count and contradicted
+        out = self.verdicts("Only ICLR 2026 (183 papers) and ICML 2026 (167) carry the label.", self.USAGE)
+        self.assertNotIn("no", [v for _, v in out])
+        self.assertEqual(self.verdicts("ICLR 2026에서 이번 조건으로 분석한 논문은 183편", self.USAGE), [("183", "ok")])
+        self.assertEqual(self.verdicts("ICLR 2026에서 이번 조건으로 분석한 논문은 184편", self.USAGE), [("184", "no")])
+        self.assertEqual(self.verdicts("LIBERO: 82 of 350 analyzed papers", self.USAGE), [("82", "ok"), ("350", "ok")])
+        self.assertEqual(self.verdicts("LIBERO: 81 of 350 analyzed papers", self.USAGE)[0], ("81", "no"))   # still a contradiction
+
+
 class TerminalMarks(unittest.TestCase):
     def test_only_a_contradiction_reads_as_a_difference(self):
         from bench2agent.cli import render

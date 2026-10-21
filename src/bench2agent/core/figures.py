@@ -355,6 +355,7 @@ TOTALS = DENOM | UNATTRIBUTED_OBSERVATIONS | {"total", "catalogue_entries", "cou
 EDITIONS = {"count:editions", "count:by_edition", "editions", "n_editions"}
 RATE = {"per_1000", "share_per_1000", "rate_per_1000"}
 PERCENT = {"share_percent", "percent"}
+_SCOPE_WIDE = EDITIONS | UNATTRIBUTED_OBSERVATIONS | {"catalogue_entries", "count:venues", "total_benchmarks"}
 _COUNTS = USAGE | ADOPTION                                                           # what a bare "papers" unit can mean
 _ANY = _COUNTS | {"count:*", "catalogue_entries", "total", "total_benchmarks"}
 
@@ -368,7 +369,7 @@ def family(metric: str) -> str:
 
 # the unit right after a number sets its family
 _UNIT_AFTER = [(r"\s*(?:개\s*)?(?:(?:회차|에디션)(?!\s*별)|editions?(?![A-Za-z]))", EDITIONS),   # "에디션별로는" (by edition) is no unit
-               (r"\s*(?:편\s*(?:이|가|이\s*)?\s*파싱|parsed\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?parsed)", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
+               (r"\s*(?:편\s*(?:이|가|이\s*)?\s*(?:파싱|분석)|(?:parsed|analy[sz]ed)\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?(?:parsed|analy[sz]ed))", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
                (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
                (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*(?:%|퍼센트)", PERCENT),
                (r"\s*(?:개\s*)?files?(?![A-Za-z])", {"n_files"}),          # a paper link's file list: "96 files"
@@ -379,7 +380,7 @@ _SPECIFIC_WORDS = [
     (r"‰|per\s*1,?000(?:\s+(?:parsed(?:\s+papers?)?|papers?))?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed (papers)" is one rate phrase
     (r"%|percent(?:age)?|백분율|퍼센트|비율|share(?:\s+of\s+(?:(?:analy[sz]ed|parsed)\s+)?papers?)?", PERCENT),
     (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
-    (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
+    (r"분모|파싱|분석|parsed|analy[sz]ed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
     (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS),
@@ -746,6 +747,11 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
         return "ok", "connected"
     if cand and guessed:
         return "na", "only a generic word says what it counts"
+    # a contradiction needs a fixed context: what is counted, and for which benchmark or edition (a scope-wide
+    # measure such as the number of editions needs neither). "ICLR 2026 (183 papers)" names neither inside its
+    # clause, so a different value there is unverified, never contradicted.
+    if cand and not (c.get("benchmark_ids") or "edition" in c or ("metric" in c and set(c["metric"]) <= _SCOPE_WIDE)):
+        return "na", "which benchmark or edition this number is for is not stated"
     if cand:
         vals = sorted({rounded(f["value"]) for f in cand})[:4]
         return "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}"
