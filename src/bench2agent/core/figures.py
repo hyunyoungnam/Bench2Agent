@@ -624,7 +624,8 @@ def _metric_cues(before: str, after: str) -> set | None:
     word = set(best[1]) if best else None
     if word and word <= EDITIONS and re.match(r"\s*(?:건|편|papers?(?![A-Za-z]))", after):
         word = None                                    # "세 에디션을 합쳐 4,185건": an edition word does not say what 4,185 items are
-    if re.match(r"\s*(?:건|편|papers?)?\s*(?:의\s*)?(?:논문[-\s]?에디션\s*관측|paper-edition\s+observations?)\S*\s*(?:에\s*)?(?:해결되지\s*않은|미해소|미귀속|unresolved)", after, re.I):
+    if re.match(r"\s*(?:건|편|papers?)?\s*(?:의\s*)?(?:논문[-\s]?에디션\s*관측|paper-edition\s+observations?)\S*\s*(?:에\s*)?(?:해결되지\s*않은|미해소|미귀속|unresolved)", after, re.I) \
+            or re.match(r"\s*(?:papers?|paper-edition\s+observations?)\s+with\s+(?:an?\s+|at\s+least\s+one\s+)?(?:unresolved|unattributed)", after, re.I):   # the clause after a number is cut at 30 characters
         return set(UNATTRIBUTED_OBSERVATIONS)          # "4,185건의 논문-에디션 관측에 해결되지 않은 … 언급": the scope diagnostic
     if word is None:
         for rx, fam in _GENERIC_WORDS:
@@ -707,7 +708,8 @@ def _satisfies(f: dict, c: dict) -> bool:
     if ids is not None and ctx.get("benchmark_id") not in ids:
         return False                                   # a named benchmark: its own values only, never a scope-wide one
     if "edition" in c and ctx.get("edition") not in c["edition"]:
-        return False
+        if not (len(c["edition"]) > 1 and ctx.get("edition") is None):
+            return False                               # several named editions: their pooled value (no edition) also fits
     if "role" in c and ctx.get("role") != c["role"]:
         return False
     if "group" in c and ctx.get("group") != c["group"]:
@@ -732,13 +734,14 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     if not (any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY)):
         return "na", "no cue says what it counts"
     cand = [f for f in fs if _satisfies(f, c)]
-    if not cand and c.get("benchmark_ids") and "metric" in c and c["metric"] <= DENOM:
-        # "| LIBERO | 82 of 513 |": a denominator named as such, in a benchmark's row, when that benchmark has none of
-        # its own: the scope-wide one of the SAME call that returned the benchmark's row (never another call's)
+    named_denominator = bool(c.get("benchmark_ids")) and "metric" in c and c["metric"] <= DENOM
+    if named_denominator:
+        # "| LIBERO | 82 of 513 |": a denominator named as such, in a benchmark's row, may be the scope-wide one of a
+        # call that returned that benchmark (the usage call's pooled 513), never another call's
         calls = {(f["ctx"].get("tool"), f["ctx"].get("args")) for f in fs if f["ctx"].get("benchmark_id") in c["benchmark_ids"]}
         scoped = {k: x for k, x in c.items() if k != "benchmark_ids"}
-        cand = [f for f in fs if f["ctx"].get("benchmark_id") is None and (f["ctx"].get("tool"), f["ctx"].get("args")) in calls
-                and _satisfies(f, scoped)]
+        cand += [f for f in fs if f["ctx"].get("benchmark_id") is None and (f["ctx"].get("tool"), f["ctx"].get("args")) in calls
+                 and _satisfies(f, scoped) and f not in cand]
     if cand and c.get("metric") == {"n_files"}:
         if len({(f["ctx"].get("link_url"), f["ctx"].get("address")) for f in cand}) > 1:
             return "na", "which link or address the file count is for is not stated"
@@ -764,6 +767,10 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
         return "na", "only a generic word says what it counts"
     if whole:
         return "na", "the whole of a pair can be a listed or an analyzed total"
+    if named_denominator and len({(f["ctx"].get("tool"), f["ctx"].get("args")) for f in cand}) > 1:
+        return "na", "several lookups returned a denominator for this benchmark; which one is not stated"
+    if len(c.get("edition") or ()) > 1:
+        return "na", "several editions are named: a pooled value or one edition's is not stated"
     # a contradiction needs a fixed context: what is counted, and for which benchmark or edition (a scope-wide
     # measure such as the number of editions needs neither). "ICLR 2026 (183 papers)" names neither inside its
     # clause, so a different value there is unverified, never contradicted.

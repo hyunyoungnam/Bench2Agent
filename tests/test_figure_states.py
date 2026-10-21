@@ -129,6 +129,41 @@ class KoreanPairsAndDiagnostics(unittest.TestCase):
         self.assertEqual(out["4,185"], "ok")
 
 
+class PooledAndDiagnosticWords(unittest.TestCase):
+    # live browser answer (Codex, 2026-10-21, robotics on 1e1fa171722da693): right numbers marked contradicted
+    USAGE = ("benchmark_usage", {"topic": "robotics", "latest": True}, {"role": "evaluates_on", "coverage": {
+        "parsed_papers": 513, "papers_with_unattributed_benchmark_mentions": 221,
+        "editions": {"iclr-2026": {"parsed_papers": 4252, "in_scope_parsed": 183}, "icml-2026": {"parsed_papers": 4863, "in_scope_parsed": 167},
+                     "neurips-2025": {"parsed_papers": 4560, "in_scope_parsed": 163}}},
+        "results": [{"id": "libero", "name": "LIBERO", "papers": 82}]})
+
+    def verdicts(self, text):
+        lg = log(self.USAGE)
+        return dict((r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set()))
+
+    def test_a_pooled_value_over_named_editions_connects_and_a_wrong_one_is_unverified(self):
+        text = "The robotics filter yields {} parsed papers across ICLR 2026, ICML 2026 and NeurIPS 2025."
+        self.assertEqual(self.verdicts(text.format(513))["513"], "ok")
+        self.assertEqual(self.verdicts(text.format(514))["514"], "na")
+        self.assertEqual(self.verdicts("ICLR 2026 has 184 parsed papers in scope.")["184"], "no")      # one named edition: still contradicted
+
+    def test_a_row_denominator_is_the_usage_calls_pooled_one_even_when_evidence_calls_carry_their_own(self):
+        evidence = ("benchmark_evidence", {"benchmark": "libero"}, {"id": "libero", "name": "LIBERO",
+                    "coverage": {"parsed_papers": 4252, "editions": {"iclr-2026": {"parsed_papers": 4252}}}, "results": []})
+        lg = log(self.USAGE, evidence)
+        out = lambda text: dict((r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set()))
+        row = "| Benchmark | Papers evaluating on it |\n|---|---|\n| LIBERO | 82 of {} papers (16.0%) |\n"
+        self.assertEqual(out(row.format(513))["513"], "ok")
+        self.assertEqual(out(row.format(514))["514"], "no")              # only the usage call fits "evaluating": still contradicted
+        plain = "LIBERO: 82 of {} papers."                                  # no role named: both lookups fit, so not stated which
+        self.assertEqual(out(plain.format(513))["513"], "ok")
+        self.assertEqual(out(plain.format(514))["514"], "na")
+
+    def test_papers_with_unresolved_mentions_are_the_scope_diagnostic(self):
+        self.assertEqual(self.verdicts("There are also 221 papers with unresolved benchmark mentions.")["221"], "ok")
+        self.assertNotEqual(self.verdicts("LIBERO: 82 of 513 papers. There are also 222 papers with unresolved benchmark mentions.")["222"], "ok")
+
+
 class TerminalMarks(unittest.TestCase):
     def test_only_a_contradiction_reads_as_a_difference(self):
         from bench2agent.cli import render
