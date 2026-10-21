@@ -157,6 +157,14 @@ terminal and read back by the page; the wheel installed outside the checkout
 serves the page and API; screenshots at desktop width and 540 px reviewed
 (headless Edge clamps below about 500 px).
 
+Conversations can be deleted from the sidebar (the × beside each one, with a
+confirmation). A deleted conversation leaves both the browser's list and
+`bench2agent chats`; its file and tool logs move, under the same lock a save
+takes, into `data/bench2agent/chats/.deleted/<id>-<UTC time>/`, from where it
+can be restored by moving them back. Deleting is refused while a question is
+running in that conversation, and a terminal that had it open can no longer
+save to it.
+
 Not yet: Windows-native locking (the conversation lock uses fcntl; on native
 Windows only the conditional save protects), keyboard-only and contrast
 review, an empty/disconnected-CLI review with a real signed-out CLI, the old

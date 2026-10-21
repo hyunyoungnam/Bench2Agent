@@ -70,6 +70,9 @@ class TurnControl:
             return True
 
 
+DELETED = "This conversation was deleted (in the browser or another terminal). Start a new one."
+
+
 class Session:
     def __init__(self, root: Path, provider: str, model: str | None, *, cid: str | None = None, language: str = "auto",
                  connector: str = "api"):
@@ -85,19 +88,12 @@ class Session:
     def path(self) -> Path:
         return self.directory / (self.doc["id"] + ".json")
 
-    @contextlib.contextmanager
     def _locked(self):
-        """One writer at a time per conversation file (advisory lock beside it)."""
-        self.directory.mkdir(parents=True, exist_ok=True)
-        lock = self.directory / (self.doc["id"] + ".lock")
-        with lock.open("a") as fh:
-            if fcntl is not None:
-                fcntl.flock(fh, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                if fcntl is not None:
-                    fcntl.flock(fh, fcntl.LOCK_UN)
+        """One writer at a time per conversation file (advisory lock beside it; delete takes the same)."""
+        return _conversation_lock(self.directory, self.doc["id"])
+
+    def _deleted(self) -> bool:
+        return self.expected_revision is not None and not self.path.exists()
 
     def _current_revision(self):
         return self.path.stat().st_mtime_ns if self.path.exists() else None
@@ -107,6 +103,8 @@ class Session:
         this session's expected revision follows its own successful write and
         nothing else. Another terminal's newer turns are never overwritten."""
         with self._locked():
+            if self._deleted():
+                raise ValueError(DELETED)
             if self._current_revision() != self.expected_revision:
                 raise ValueError("This conversation changed in another terminal. Resume it again before continuing.")
             write_json(self.path, doc)
@@ -164,6 +162,8 @@ class Session:
             raise ValueError("The dataset changed since this conversation. Start /new, or reinstall its snapshot.")
         if store.revision and store.revision != sid:
             raise ValueError(f"Revision {store.revision} holds snapshot {sid}; its directory needs recovery.")
+        if self._deleted():
+            raise ValueError(DELETED)
         if self._current_revision() != self.expected_revision:
             raise ValueError("This conversation changed in another terminal. Resume it again before continuing.")
         language = self.doc.get("language", "auto")
@@ -212,10 +212,43 @@ class Session:
             raise providers.Cancelled(CANCELLED)
         try:
             self._save(updated)
-        except ValueError:
+        except ValueError as exc:
             self.doc.pop("provider_session", None)        # not resumed after an unsaved turn
-            raise ValueError("This conversation changed in another terminal; answer was not saved.")
+            raise ValueError(str(exc) if str(exc) == DELETED else "This conversation changed in another terminal; answer was not saved.")
         return turn
+
+
+@contextlib.contextmanager
+def _conversation_lock(directory: Path, cid: str):
+    """The same advisory lock a Session takes before it saves (one writer at a time per conversation)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / (cid + ".lock")).open("a") as fh:
+        if fcntl is not None:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def delete_conversation(root: Path, cid: str) -> Path:
+    """Take a conversation out of every list (terminal and browser): its file and its tool logs move, under the
+    save lock, into chats/.deleted/<id>-<UTC time>/, where they can be restored by moving them back. A session
+    that read it earlier can no longer save it."""
+    if not re.fullmatch(r"[0-9a-f]{12}", cid or ""):
+        raise ValueError("Invalid conversation ID.")
+    directory = root / "data/bench2agent/chats"
+    with _conversation_lock(directory, cid):
+        source = directory / (cid + ".json")
+        if not source.exists():
+            raise FileNotFoundError(cid)
+        target = directory / ".deleted" / f"{cid}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+        (target / "toollogs").mkdir(parents=True, exist_ok=False)
+        for log in sorted((directory / "toollogs").glob(cid + "-*.jsonl")):
+            os.replace(log, target / "toollogs" / log.name)
+        os.replace(source, target / source.name)                # last: until here the conversation is whole
+    return target
 
 
 def conversations(root: Path) -> list[dict]:

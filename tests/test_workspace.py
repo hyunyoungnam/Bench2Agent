@@ -142,6 +142,53 @@ class ServerTests(Base):
                 return {**v, "events": events}
         self.fail("job did not finish")
 
+    def delete(self, cid, token=True):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        headers = {"Host": f"127.0.0.1:{self.port}"}
+        if token:
+            headers["X-Workspace-Token"] = self.token
+        conn.request("DELETE", f"/api/chats/{cid}", headers=headers)
+        r = conn.getresponse()
+        body = json.loads(r.read() or b"{}")
+        conn.close()
+        return r.status, body
+
+    def test_delete_takes_a_conversation_out_of_every_list_and_keeps_its_files(self):
+        from bench2agent.session import conversations
+        cid = self.call("POST", "/api/chats", {"connector": "claude"})[1]["id"]
+        job = self.call("POST", f"/api/chats/{cid}/ask", {"question": "kept", "request_id": "req-00000010"})[1]["job"]
+        self.assertEqual(self.finish(job)["state"], "saved")
+        chats = self.root / "data/bench2agent/chats"
+        logs = sorted(p.name for p in (chats / "toollogs").glob(cid + "-*.jsonl"))
+        self.assertTrue(logs)
+        stale = Session(self.root, "anthropic", None, cid=cid)           # a terminal that read it before
+        self.assertEqual(self.delete(cid, token=False)[0], 403)
+        self.assertEqual(self.delete("0" * 12)[0], 404)
+        status, r = self.delete(cid)
+        self.assertEqual(status, 200)
+        kept = self.root / r["kept_in"]
+        self.assertTrue((kept / f"{cid}.json").exists())
+        self.assertEqual(sorted(p.name for p in (kept / "toollogs").iterdir()), logs)
+        self.assertFalse((chats / f"{cid}.json").exists())
+        self.assertNotIn(cid, [c["id"] for c in self.call("GET", "/api/chats")[1]["chats"]])
+        self.assertNotIn(cid, [c["id"] for c in conversations(self.root)])   # `bench2agent chats` no longer lists it
+        self.assertEqual(self.call("GET", f"/api/chats/{cid}")[0], 404)
+        with self.assertRaisesRegex(ValueError, "was deleted"):
+            stale.ask("after", lambda e: None)                           # never written back
+        self.assertFalse((chats / f"{cid}.json").exists())
+        self.assertEqual(self.delete(cid)[0], 404)
+
+    def test_delete_waits_for_a_running_question(self):
+        cid = self.call("POST", "/api/chats", {"connector": "claude"})[1]["id"]
+        FakeCLI.gates["slow"] = threading.Event()
+        job = self.call("POST", f"/api/chats/{cid}/ask", {"question": "slow", "request_id": "req-00000011"})[1]["job"]
+        self.assertEqual(self.delete(cid)[0], 409)
+        self.call("POST", f"/api/jobs/{job}/cancel", {})
+        self.assertEqual(self.finish(job)["state"], "cancelled")
+        status, r = self.delete(cid)                                     # never saved: nothing to keep
+        self.assertEqual((status, r["kept_in"]), (200, None))
+        self.assertNotIn(cid, [c["id"] for c in self.call("GET", "/api/chats")[1]["chats"]])
+
     def test_guards_host_origin_token_and_no_cors(self):
         self.assertEqual(self.call("GET", "/", host="evil.example:80", token=False)[0], 421)
         self.assertEqual(self.call("GET", "/api/state", token=False)[0], 403)

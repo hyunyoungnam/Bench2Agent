@@ -26,8 +26,9 @@ function initToken() {
   }
   try { S.token = fromUrl || sessionStorage.getItem("ws-token"); } catch (e) { S.token = fromUrl; }
 }
-async function api(path, body) {
+async function api(path, body, method) {
   const opts = { headers: { "X-Workspace-Token": S.token || "" } };
+  if (method) opts.method = method;
   if (body !== undefined) {
     opts.method = "POST";
     opts.headers["Content-Type"] = "application/json";
@@ -179,9 +180,8 @@ async function loadState() {
   }
   $("new-chat").disabled = !usable.length;
   if (!usable.length) $("composer-note").textContent = "No signed-in AI CLI found. Run claude auth login or codex login, then reload this page.";
-  $("data-badge").innerHTML = `Version <strong>${esc(st.app_version || "unavailable")}</strong><br>` + (st.available
-    ? plural(st.editions, "conference edition")
-    : "No research data is installed. Run bench2agent data install.");
+  $("data-badge").innerHTML = `Version <strong>${esc(st.app_version || "unavailable")}</strong>` +
+    (st.available ? "" : "<br>No research data is installed. Run bench2agent data install.");
 }
 async function loadChats() {
   const { chats } = await api("/api/chats");
@@ -189,6 +189,8 @@ async function loadChats() {
   const nav = $("chat-list");
   nav.innerHTML = "";
   for (const c of chats) {
+    const row = document.createElement("div");
+    row.className = "chat-row";
     const b = document.createElement("button");
     b.type = "button";
     b.className = "chat-item" + (c.id === S.chatId ? " active" : "");
@@ -198,8 +200,32 @@ async function loadChats() {
     b.querySelector(".m").textContent = `${CLIENTS[c.connector] || "API key"}, ${c.turns === 1 ? "1 answer" : `${c.turns || 0} answers`}, ${when(c.ts)}`;
     // the list is redrawn when a conversation opens: focus moves to its title instead of falling to the page
     b.addEventListener("click", () => openChat(c.id).then(() => { if (!S.details || $("details").hidden) $("chat-title").focus(); }));
-    nav.appendChild(b);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "chat-delete";
+    del.textContent = "×";
+    del.title = "Delete this conversation";
+    del.setAttribute("aria-label", `Delete conversation: ${c.title || "New conversation"}`);
+    del.addEventListener("click", () => deleteChat(c).catch((e) => showNotice(e.message, "bad")));
+    row.append(b, del);
+    nav.appendChild(row);
   }
+}
+/* out of the list in the browser and in `bench2agent chats`; the file is kept in chats/.deleted/ */
+async function deleteChat(c) {
+  const title = c.title || "New conversation";
+  if (!confirm(`Delete “${title}”?\n\nIt leaves this list and the terminal's list. Its file is kept in the .deleted folder of your Bench2Agent data and can be restored from there.`)) return;
+  await api(`/api/chats/${c.id}`, undefined, "DELETE");
+  if (S.chatId === c.id) {
+    closeDetails();
+    S.chatId = null; S.chat = null;
+    renderThread();
+    $("empty").hidden = false;
+    setHash({});
+  }
+  await loadChats();
+  const next = document.querySelector(".chat-item") || $("new-chat");
+  if (next && !next.disabled) next.focus();
 }
 async function openChat(id, opts = {}) {
   S.chatId = id;

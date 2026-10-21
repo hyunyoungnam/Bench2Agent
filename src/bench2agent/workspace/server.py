@@ -25,7 +25,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from bench2agent import __version__, providers
-from bench2agent.session import Session, TurnControl, conversations
+from bench2agent.session import Session, TurnControl, conversations, delete_conversation
 
 STATIC = Path(__file__).with_name("static")
 CHAT_ID = re.compile(r"[0-9a-f]{12}")
@@ -111,6 +111,20 @@ class Workspace:
         self.pending.pop(cid, None)
         doc = Session(self.root, "anthropic", None, cid=cid)        # provider and model come from the file
         return doc
+
+    def delete_chat(self, cid: str) -> dict:
+        """Out of every list; kept in chats/.deleted/ (restorable). Never while a question is running in it."""
+        if not CHAT_ID.fullmatch(cid):
+            raise ValueError("Invalid conversation id.")
+        with self.lock:
+            if any(j.chat_id == cid and j.state == "running" for j in self.jobs.values()):
+                raise Busy("This conversation is answering a question. Cancel it first, then delete it.")
+            saved = (self.root / "data/bench2agent/chats" / f"{cid}.json").exists()
+            if not saved and self.pending.pop(cid, None) is not None:
+                return {"deleted": cid, "kept_in": None}                  # never saved: nothing to keep
+            target = delete_conversation(self.root, cid)
+            self.pending.pop(cid, None)
+        return {"deleted": cid, "kept_in": str(target.relative_to(self.root))}
 
     def chat(self, cid: str) -> dict:
         s = self._session(cid)
@@ -328,6 +342,22 @@ class Handler(BaseHTTPRequestHandler):
         except Busy as exc:
             return self._send(409, {"error": str(exc)})
         except KeyError:
+            return self._send(404, {"error": "Not found."})
+        except (ValueError, OSError) as exc:
+            return self._send(400, {"error": str(exc)})
+
+    def do_DELETE(self):
+        path = urlsplit(self.path).path
+        if not self._guard(api=True):
+            return
+        try:
+            m = re.fullmatch(r"/api/chats/([0-9a-f]{12})", path)
+            if m:
+                return self._send(200, self.workspace.delete_chat(m.group(1)))
+            return self._send(404, {"error": "Not found."})
+        except Busy as exc:
+            return self._send(409, {"error": str(exc)})
+        except FileNotFoundError:
             return self._send(404, {"error": "Not found."})
         except (ValueError, OSError) as exc:
             return self._send(400, {"error": str(exc)})
