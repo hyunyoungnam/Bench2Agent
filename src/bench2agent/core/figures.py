@@ -391,11 +391,63 @@ def fold(name: str) -> str:
     return re.sub(r"[\s_-]", "", name.lower())
 
 
+def _norm_url(u) -> str:
+    u = str(u or "").strip().lower()
+    u = re.sub(r"^https?://", "", u)
+    u = re.sub(r"^www\.", "", u)
+    return re.sub(r"(?:\.git)?/*$", "", u)
+
+
+_CORRECTED_WORDS = re.compile(r"보정|고친|고쳐|corrected|repaired", re.I)
+_PRINTED_WORDS = re.compile(r"원래|인쇄|논문에\s*(?:적힌|실린|나온)|printed|original", re.I)
+
+
+def _link_cues(text: str, a: int, b: int, fs: list[dict]) -> dict:
+    """For a file count: the address (printed or corrected) and the link the claim's own line names, nearest
+    before the number first. Nothing is guessed: a cue that is not there stays out."""
+    line_start = text.rfind("\n", 0, a) + 1
+    line_end = text.find("\n", b)
+    line_end = len(text) if line_end < 0 else line_end
+    low = text[line_start:line_end].lower()
+    at = a - line_start
+    cues: dict = {}
+    words = [(m.end(), "corrected") for m in _CORRECTED_WORDS.finditer(low[:at])] + \
+            [(m.end(), "printed") for m in _PRINTED_WORDS.finditer(low[:at])]
+    if words:
+        cues["address"] = max(words)[1]
+    urls = {f["ctx"]["link_url"] for f in fs if f["metric"] == "n_files" and f["ctx"].get("link_url")}
+    seen = []
+    for u in urls:
+        for form in {u, u.split("/", 1)[1] if "/" in u else u}:
+            for m in re.finditer(re.escape(form), low):
+                seen.append((m.start(), u))
+    before = [x for x in seen if x[0] < at]
+    if before:
+        cues["link_urls"] = {max(before)[1]}
+    elif seen:
+        cues["link_urls"] = {min(seen)[1]}
+    return cues
+
+
 def facts(log: TurnLog) -> list[dict]:
     """(value, metric, context) for every number in the turn's benchmark tool results. A value inside one
     benchmark's result carries its id, except the scope-wide unresolved-observation diagnostic.
     That diagnostic also spans all roles, regardless of the query's selected role."""
     out: list[dict] = []
+
+    def link_facts(links, c):
+        """each file count belongs to ONE link and ONE address: the printed one or its repair"""
+        out.append({"value": float(len(links)), "metric": "count:paper_links", "ctx": c})
+        for link in links:
+            if not isinstance(link, dict):
+                continue
+            if isinstance(link.get("n_files"), (int, float)) and not isinstance(link["n_files"], bool):
+                out.append({"value": float(link["n_files"]), "metric": "n_files",
+                            "ctx": {**c, "link_url": _norm_url(link.get("url")), "address": "printed"}})
+            fixed = link.get("corrected") or {}
+            if isinstance(fixed.get("n_files"), (int, float)) and not isinstance(fixed["n_files"], bool):
+                out.append({"value": float(fixed["n_files"]), "metric": "n_files",
+                            "ctx": {**c, "link_url": _norm_url(fixed.get("url")), "address": "corrected"}})
 
     def walk(o, ctx, key):
         if isinstance(o, dict):
@@ -411,7 +463,10 @@ def facts(log: TurnLog) -> list[dict]:
                 out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c})
             for k, v in o.items():
                 if k == "introducing_paper" and isinstance(v, dict) and v.get("links"):
-                    walk(v["links"], dict(c), "paper_links")             # the paper's links: their file counts are facts
+                    link_facts(v["links"], dict(c))                     # the paper's links: their file counts are facts
+                    continue
+                if k == "other_paper_links" and isinstance(v, list):
+                    link_facts(v, dict(c))
                     continue
                 if k in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "snapshot_id", "generated_at", "authors", "developers",
                          "note", "url", "title", "introducing_paper", "locations"}:
@@ -621,6 +676,10 @@ def _satisfies(f: dict, c: dict) -> bool:
         return False
     if "group" in c and ctx.get("group") != c["group"]:
         return False
+    if "address" in c and ctx.get("address") != c["address"]:
+        return False                                   # the printed address's count is never confirmed by its repair's
+    if "link_urls" in c and ctx.get("link_url") not in c["link_urls"]:
+        return False
     return True
 
 
@@ -641,6 +700,11 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
         scoped = {k: x for k, x in c.items() if k != "benchmark_ids"}
         cand = [f for f in fs if f["ctx"].get("benchmark_id") is None and (f["ctx"].get("tool"), f["ctx"].get("args")) in calls
                 and _satisfies(f, scoped)]
+    if cand and c.get("metric") == {"n_files"}:
+        if len({(f["ctx"].get("link_url"), f["ctx"].get("address")) for f in cand}) > 1:
+            return "na", "which link or address the file count is for is not stated"
+        if "address" not in c and any(f["ctx"].get("address") == "corrected" for f in cand):
+            return "na", "the printed or the corrected address is not stated"
     fams = {family(f["metric"]) for f in cand}
     if {"usage", "adoption"} <= fams and "metric" in c and c["metric"] >= _COUNTS:
         return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
@@ -661,26 +725,7 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     return "na", "no tool result has this context"
 
 
-def verbatim_strings(log: TurnLog) -> set[str]:
-    """Tool-returned sentences with digits, long enough to recognise when an answer copies them word for word
-    (a paper link's observation, a note): the numbers inside such a copy are the tool's text, not new figures."""
-    out: set[str] = set()
-
-    def walk(o):
-        if isinstance(o, dict):
-            for v in o.values():
-                walk(v)
-        elif isinstance(o, list):
-            for v in o:
-                walk(v)
-        elif isinstance(o, str) and len(o) >= 30 and re.search(r"\d", o):
-            out.add(" ".join(o.split()))
-    for e in log.entries:
-        walk(e.get("result"))
-    return out
-
-
-def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set, verbatim: set[str] = frozenset()) -> list[tuple]:
+def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set) -> list[tuple]:
     """(start, end, raw, verdict, why): 'ok' connected, 'no' contradicted
     (facts with these cues hold another value), 'na' not connected, 'date-ok' /
     'date-no' for a date found / not found verbatim in this turn's results.
@@ -695,19 +740,23 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set,
         taken.append((m.start(), m.end()))
     month_days = {d[5:10] for d in date_strings}
     for m in re.finditer(r"(?<![\d.,:/-])(\d{1,2})-(\d{1,2})(?![\d])", text):
-        if f"{int(m.group(1)):02d}-{int(m.group(2)):02d}" in month_days and not any(a <= m.start() < b for a, b in taken):
-            out.append((m.start(), m.end(), m.group(0), "date-ok", "date"))    # "10-21": a returned date, shortened
+        if f"{int(m.group(1)):02d}-{int(m.group(2)):02d}" not in month_days or any(a <= m.start() < b for a, b in taken):
+            continue
+        pre, post = text[max(0, m.start() - 16):m.start()], text[m.end():m.end() + 12]
+        if re.match(r"\s*(?:papers?|편|개|건|회|명|uses?|files?|%)", post, re.I):
+            continue                                            # "10-21 papers": a range of counts, never a date
+        if re.search(r"(?:시각|날짜|일자|확인일|checked(?:\s+on)?|dated?|as\s+of)\s*[(:]?\s*$", pre, re.I) or re.match(r"\)?\s*(?:UTC|기준)", post):
+            out.append((m.start(), m.end(), m.group(0), "date-ok", "date"))    # "확인 시각(10-21)": a returned date, shortened
             taken.append((m.start(), m.end()))
-    for q in verbatim:
-        i = text.find(q)
-        while i >= 0:
-            taken.append((i, i + len(q)))                       # a tool sentence copied word for word
-            i = text.find(q, i + 1)
     for m in _NUM.finditer(text):
         if any(a <= m.start() < b for a, b in taken) or _identifier_number(text, m):
             continue
         if re.search(r"HTTP\s*$", text[max(0, m.start() - 6):m.start()]):
             continue                                            # an HTTP status code, not a figure
+        if re.search(r"(?:more|fewer|less)\s+than\s*$|at\s+(?:least|most)\s*$", text[max(0, m.start() - 14):m.start()], re.I) \
+                or re.match(r"\s*(?:편|개|건)?\s*(?:이상|이하|초과|미만)", text[m.end():m.end() + 8]):
+            out.append((m.start(), m.end(), m.group(0), "na", "a comparison, not a stated value"))
+            continue                                            # "more than 4": not judged as "exactly 4"
         raw, v = m.group(0), _val(m.group(0))
         line_start = text.rfind("\n", 0, m.start()) + 1
         if re.fullmatch(r"\s*(?:#{1,6}\s*|[-*]\s*)?", text[line_start:m.start()]) and re.match(r"[.)]\s", text[m.end():m.end() + 2]):
@@ -774,6 +823,8 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set,
             if ids is not None:
                 c["benchmark_ids"] = ids
                 c["ambiguous_name"] = len(ids) > 1
+        if c.get("metric") == {"n_files"}:
+            c.update(_link_cues(text, m.start(), m.end(), fs))   # which link, which address: from the claim's own line
         verdict, why = _judge(raw, v, c, fs)
         out.append((m.start(), m.end(), raw, verdict, why))
     return sorted(out)

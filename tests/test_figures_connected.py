@@ -23,8 +23,7 @@ TREND = ("benchmark_trend", {"benchmark": "toybench"}, {"id": "toybench", "name"
 
 
 def verdicts(text, lg):
-    return [(raw, v) for _a, _b, raw, v, _w in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set(),
-                                                                      figures.verbatim_strings(lg))]
+    return [(raw, v) for _a, _b, raw, v, _w in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
 
 
 class ConnectedFigureTests(unittest.TestCase):
@@ -91,13 +90,60 @@ class ConnectedFigureTests(unittest.TestCase):
                 "paper_id": "2503.07019", "url": "https://github.com/hxwork/HybridReg˙PyTorch",
                 "observed": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)", "checked_at": "2026-10-21T00:00:43Z",
                 "corrected": {"url": "https://github.com/hxwork/HybridReg_PyTorch", "observed": seen, "n_files": 96}}]}}))
-        self.assertEqual(verdicts(f'HybridMatch: 보정한 주소의 관측 "{seen}"', lg), [("2026-10-21", "date-ok")])
+        # a copied observation is checked like any other text (no copy exemption): its date and its file count
+        self.assertEqual(verdicts(f'HybridMatch: 보정한 주소의 관측 "{seen}"', lg), [("2026-10-21", "date-ok"), ("96", "ok")])
         self.assertEqual(verdicts("HybridMatch의 인쇄된 주소는 HTTP 404였습니다", lg), [])
         self.assertEqual(verdicts("HybridMatch: 확인 시각(10-21)", lg), [("10-21", "date-ok")])
         self.assertEqual(verdicts("HybridMatch: 보정한 주소에서 파일 96개를 읽었습니다", lg), [("96", "ok")])
         self.assertEqual(verdicts("HybridMatch: the corrected address lists 96 files", lg), [("96", "ok")])
         self.assertEqual(verdicts("HybridMatch: the corrected address lists 95 files", lg), [("95", "no")])
         self.assertEqual(verdicts("HybridMatch: 확인 시각(11-30)", lg), [("11", "na"), ("-30", "na")])   # not a returned date
+
+    def test_a_file_count_belongs_to_one_link_and_one_address(self):
+        # Codex, 2026-10-21: the printed address (1 file) was confirmed with its repair's 96
+        def adoption(*links):
+            return log(("benchmark_adoption", {"benchmark": "toybench"}, {"id": "toybench", "name": "ToyBench",
+                                                                          "introducing_paper": {"paper_id": "1", "links": list(links)}}))
+        lg = adoption({"paper_id": "1", "url": "https://github.com/x/printed", "n_files": 1,
+                       "corrected": {"url": "https://github.com/x/fixed", "n_files": 96}})
+        self.assertEqual(verdicts("ToyBench: 원래 주소에는 파일 96개", lg), [("96", "no")])
+        self.assertEqual(verdicts("ToyBench: the printed address lists 96 files", lg), [("96", "no")])
+        self.assertEqual(verdicts("ToyBench: 원래 주소에는 파일 1개", lg), [("1", "ok")])
+        self.assertEqual(verdicts("ToyBench: 보정 주소에는 파일 96개", lg), [("96", "ok")])
+        self.assertEqual(verdicts("ToyBench: 파일 96개", lg), [("96", "na")])                     # which address: not stated
+        # the printed address has no file count: its repair's never stands in
+        lg = adoption({"paper_id": "1", "url": "https://github.com/x/printed",
+                       "corrected": {"url": "https://github.com/x/fixed", "n_files": 96}})
+        self.assertEqual(verdicts("ToyBench: 원래 주소에는 파일 96개", lg), [("96", "na")])
+        self.assertEqual(verdicts("ToyBench: 파일 96개", lg), [("96", "na")])
+        self.assertEqual(verdicts("ToyBench: 보정 주소 github.com/x/fixed 에는 파일 96개", lg), [("96", "ok")])
+        # two printed links: the one the line names, or none
+        lg = adoption({"paper_id": "1", "url": "https://github.com/a/one", "n_files": 3}, {"paper_id": "1", "url": "https://github.com/a/two", "n_files": 5})
+        self.assertEqual(verdicts("ToyBench: github.com/a/one 저장소는 파일 3개", lg), [("3", "ok")])
+        self.assertEqual(verdicts("ToyBench: a/two has 3 files", lg), [("3", "no")])
+        self.assertEqual(verdicts("ToyBench: 파일 3개", lg), [("3", "na")])
+
+    def test_a_copied_tool_sentence_is_checked_where_it_is_placed(self):
+        # Codex, 2026-10-21: OtherBench's observation pasted under ToyBench skipped the check entirely
+        seen = "repository reached on 2026-10-21 UTC; file list of branch main read: 96 files; README read"
+        lg = log(("new_benchmarks", {}, {"results": [
+            {"id": "toybench", "name": "ToyBench", "introducing_paper": {"paper_id": "1", "links": [
+                {"paper_id": "1", "url": "u1", "n_files": 3, "observed": seen.replace("96 files", "3 files")}]}},
+            {"id": "otherbench", "name": "OtherBench", "introducing_paper": {"paper_id": "2", "links": [
+                {"paper_id": "2", "url": "u2", "n_files": 96, "observed": seen}]}}]}))
+        self.assertEqual(verdicts(f"### ToyBench\nRecorded: {seen}", lg), [("2026-10-21", "date-ok"), ("96", "no")])
+        self.assertEqual(verdicts(f"### OtherBench\nRecorded: {seen}", lg), [("2026-10-21", "date-ok"), ("96", "ok")])
+
+    def test_a_range_of_counts_is_not_a_shortened_date_and_a_comparison_is_not_a_value(self):
+        lg = log(NEW, ("benchmark_adoption", {"benchmark": "toybench"}, {"id": "toybench", "name": "ToyBench", "checked_at": "2026-10-21T00:00:00Z"}))
+        for text in ("ToyBench: other authors 10-21 papers", "ToyBench: 타저자 10-21편", "ToyBench: seen on 10-21 papers"):
+            self.assertNotIn("date-ok", [v for _r, v in verdicts(text, lg)], text)
+        self.assertEqual(verdicts("ToyBench: checked on 10-21", lg), [("10-21", "date-ok")])
+        self.assertEqual(verdicts("ToyBench: 확인 시각(10-21)", lg), [("10-21", "date-ok")])
+        self.assertEqual(verdicts("ToyBench: 10-21 UTC 기준", lg), [("10-21", "date-ok")])
+        # "more than 4" is not "exactly 4": unverified, never contradicted or confirmed as 4
+        self.assertEqual(verdicts("No benchmark after ToyBench appears in more than 4 papers.", self.lg), [("4", "na")])
+        self.assertEqual(verdicts("ToyBench는 타저자 4편 이상", self.lg), [("4", "na")])
 
     def test_an_edition_table_whose_figure_header_mentions_the_benchmark_is_read_by_edition(self):
         # Reproduced on a live Codex answer (2026-10-21): "Papers evaluating on the benchmark" was taken for the
