@@ -108,6 +108,12 @@ FIGURES["8503cf1b1f7bee99"] = {
     'libero_adoption': {'others': 195, 'self': 3, 'undetermined': 0, 'before_claim': 0},
     'relbench_2_adoption': {'others': 3, 'self': 1, 'undetermined': 0, 'unattributed': 8},
 }
+# 2026-10-21, release candidate for 0.6.0: 8503cf1b1f7bee99 + reviewed front-matter locations, five Hub
+# datasets and paper links; observations, uses, adoption and claims verified unchanged (verify_candidate_v4-v6),
+# so the counts are 8503cf1b1f7bee99's. The shares are the confirmed percentages of those same counts.
+FIGURES["1e1fa171722da693"] = {**FIGURES["8503cf1b1f7bee99"],
+                               "robotics_percent": {"LIBERO": 16.0},
+                               "iclr_cifar10_percent": {"iclr-2024": 9.5, "iclr-2025": 6.4, "iclr-2026": 4.0}}
 FIGURES["ddae8df2d9caf403"] = {**FIGURES["a4a18c3dbaf3ca0b"],
                                "robotics_latest": {"parsed": 513, "LIBERO": 82, "SIMPLER": 41, "Meta-World": 29},
                                "latest_all": {"parsed": 27459, "GSM8K": 1121, "CIFAR-10": 843, "MMLU": 800},
@@ -169,6 +175,16 @@ def main() -> int:
         ok = got_tr == want["iclr_cifar10"]
         bad += not ok
         print(f"  ICLR CIFAR-10 {got_tr} {'ok' if ok else 'EXPECTED ' + str(want['iclr_cifar10'])}")
+        if "robotics_percent" in want:
+            got = {r["name"]: r.get("share_percent") for r in u["results"] if r["name"] in want["robotics_percent"]}
+            ok = got == want["robotics_percent"]
+            bad += not ok
+            print(f"  robotics/latest share % {got} {'ok' if ok else 'EXPECTED ' + str(want['robotics_percent'])}")
+        if "iclr_cifar10_percent" in want:
+            got = {r["edition"]: r.get("share_percent") for r in tr["results"] if r["edition"] in want["iclr_cifar10_percent"]}
+            ok = got == want["iclr_cifar10_percent"]
+            bad += not ok
+            print(f"  ICLR CIFAR-10 share % {got} {'ok' if ok else 'EXPECTED ' + str(want['iclr_cifar10_percent'])}")
         if "latest_all" in want:
             u = store.usage({})
             got = {"parsed": u["coverage"]["parsed_papers"], **{r["name"]: r["papers"] for r in u["results"][:3]}}
