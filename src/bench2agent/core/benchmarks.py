@@ -633,7 +633,7 @@ class BenchmarkStore:
                         "the authors chose on the submission form), venue_track_mapped (the topic an AAAI track name states; "
                         "the raw track is kept as venue_track), derived_topic (from the abstract pass, fixed vocabulary). "
                         "Proceedings volume ids (venue_volume) are not fields. Coverage is incomplete and differs by "
-                        "edition; a field filter excludes unlabelled papers. Usage needs an installed data revision; "
+                        "edition; a field filter excludes unlabeled papers. Usage needs an installed data revision; "
                         "missing data is not zero usage."}
 
     def _select(self, data: dict, a: dict, *, latest: bool = False, authors: bool = False) -> tuple[list, dict]:
@@ -652,7 +652,7 @@ class BenchmarkStore:
                 newest[v] = max(newest.get(v, ed), ed)
             eds = list(newest.values())
         if data["available"] and not eds:
-            raise ValueError("No analysed editions match the requested scope")
+            raise ValueError("No analyzed editions match the requested scope")
         topic = a.get("topic")
         if topic and topic.casefold() not in self.repo().field_labels():
             raise ValueError("Unknown field label; call benchmark_scope(query=...) or supply paper_ids")
@@ -667,7 +667,7 @@ class BenchmarkStore:
                         "unattributed_papers": with_unattributed,  # compatibility alias, not a disjoint group
                         "note": "Denominators include every successfully parsed paper in this scope, "
                                 "including those with no stated benchmark. Latest editions differ by venue. "
-                                "Pooled counts are paper-edition observations. Field filters cover labelled papers only; "
+                                "Pooled counts are paper-edition observations. Field filters cover labeled papers only; "
                                 "zero in-scope papers is not proof a venue has no papers in that field. "
                                 + COVERAGE_UNATTRIBUTED_NOTE}
 

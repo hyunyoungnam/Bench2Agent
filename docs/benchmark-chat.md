@@ -9,7 +9,7 @@ quality measure.
 
 ## Build and serve
 
-After the full-text mention run and reviewed identity catalogue are stable:
+After the full-text mention run and reviewed identity catalog are stable:
 
 ```bash
 PYTHONPATH=src python3 -m bench2agent benchmarks
@@ -17,7 +17,7 @@ PYTHONPATH=src python3 -m bench2agent serve --no-meili
 ```
 
 The builder joins `mentions_<edition>.jsonl`, normalized paper metadata,
-arXiv mappings, available topic labels and the reviewed catalogue, and writes
+arXiv mappings, available topic labels and the reviewed catalog, and writes
 the research tables straight into `data/processed/benchmark_snapshot.sqlite`
 (built beside the target and swapped in once checked); it rejects source
 changes during the build. The revision id is a hash of that content.
@@ -30,13 +30,13 @@ names remain unresolved observations rather than ranked entities. Same-name
 claims from the same introducing paper are deduplicated in the snapshot with
 all evidence and former IDs retained; unrelated introducing papers remain
 distinct. Ambiguous use requires a local citation to exactly one introducing
-paper. This adapter does not edit the source catalogue or extraction outputs.
+paper. This adapter does not edit the source catalog or extraction outputs.
 
 ## Question routing
 
 | Question | Tools | Checks |
 |---|---|---|
-| What do researchers test on now in a field? | `benchmark_scope`, `benchmark_usage` | Exact field label; latest analysed edition per venue; evaluation role; denominator and verbatim evidence |
+| What do researchers test on now in a field? | `benchmark_scope`, `benchmark_usage` | Exact field label; latest analyzed edition per venue; evaluation role; denominator and verbatim evidence |
 | Is a benchmark becoming more or less common? | `benchmark_trend` | Per-1,000 parsed-paper rates; comparisons within a venue; observed zeros separated from missing scope |
 | Which benchmarks are new? | `new_benchmarks` | Reviewed claims, including body-only names and entries without subsequent uptake; evaluation benchmarks separate from training resources |
 | Are other researchers adopting one? | `benchmark_adoption` | Other/self/undetermined author names; evaluation/training separate; introducing papers excluded; unresolved homonyms reported |
@@ -60,7 +60,7 @@ editions). Proceedings volume ids (`venue_volume`, the ACL Anthology) are
 kept as labels but are not fields. Venue tracks are the venue's
 classification, not an author declaration. Some venues carry no field
 labels at all; zero matches there do not establish absence of that field.
-The scope response gives accepted, arXiv-matched, parsed and field-labelled
+The scope response gives accepted, arXiv-matched, parsed and field-labeled
 totals, the papers per label origin, and each field's origins.
 
 In a query's `coverage`, `papers_with_unattributed_benchmark_mentions`

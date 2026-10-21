@@ -37,7 +37,7 @@ implementation; keep web dependencies optional for terminal-only installs.
 ## Design and interaction
 
 Conversation is the starting point. Do not replace it with a dashboard of
-charts, a benchmark ranking, a paper catalogue or a large configuration form.
+charts, a benchmark ranking, a paper catalog or a large configuration form.
 Offer a clear question box and a few representative example questions. On a
 wide screen, use a compact history sidebar, a readable conversation column
 and an on-demand result/evidence panel. On narrower screens, collapse the
@@ -46,7 +46,7 @@ columns are not required.
 
 | User action | Browser response |
 |---|---|
-| Ask what benchmarks a field uses | A concise answer with compact benchmark cards: name, evaluation/training role, count and analysed denominator, plus the relevant scope |
+| Ask what benchmarks a field uses | A concise answer with compact benchmark cards: name, evaluation/training role, count and analyzed denominator, plus the relevant scope |
 | Open a benchmark | A detail panel with available repository/dataset and introducing-paper links, then source sentences and paper attribution |
 | Compare benchmarks or editions | A table using existing tool results, with each edition's denominator and explicit role; a chart is optional when it answers the question |
 | Ask about new benchmarks | Reviewed introductions and external/self/unknown adoption, including zero adoption and the corpus-first-claim caveat |

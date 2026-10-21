@@ -21,7 +21,7 @@ API keys are an explicit alternative. See [the terminal guide](terminal.md).
 
 Data revision `8503cf1b1f7bee99` has 61 editions of 11 conferences,
 116,988 listed paper-edition observations, 88,873 matched to arXiv, 88,172
-parsed and 38,672 with field labels, and 9,334 catalogue entries: 8,770 with
+parsed and 38,672 with field labels, and 9,334 catalog entries: 8,770 with
 reviewed introduction claims and 89 with an individually reviewed code or
 data location. The release's `coverage.csv` reports the listed, arXiv-matched,
 parsed and labeled counts per edition. These are observations, not

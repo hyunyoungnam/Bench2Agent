@@ -102,7 +102,7 @@ repositories and the Sine papers different project pages.
 When a paper's arXiv text changes and a reviewed introduction sentence is
 no longer extracted, `icml.update` keeps the last sentence on the review
 entry (`retained_evidence`) and queues the claim as `vanished`. The
-benchmark stays in the catalogue with that claim marked
+benchmark stays in the catalog with that claim marked
 `vanished_in_latest_version` — a benchmark that was introduced does not
 stop having existed because a later version words it differently — and
 its other claims are untouched. A reviewer compares the old sentence with
@@ -123,7 +123,7 @@ or the rules changed) or `paper_unmatched` (the paper left the edition's
 matched set — a match or identity change — so no sentence of it is read
 at all; the decision then also says whether the paper belongs to the
 edition). The two claims that vanished before this record existed were
-seeded from the git history of the catalogue and the archived HTML:
+seeded from the git history of the catalog and the archived HTML:
 `2410.02942#noisymnist` (confirmed T, `paper_unmatched`: ICLR 2025 event
 31893 "SymmetricDiffusers … Models over Finite Symmetric Groups" no longer
 matches arXiv title "… on Finite Symmetric Groups", token overlap 0.70 <

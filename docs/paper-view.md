@@ -369,7 +369,7 @@ against.
   question without scite's verdicts: an unfolded card shows what later corpus
   papers say AT the citation — the citing paper's own sentence, located by
   the reference head's natbib tag (icml.cite_contexts), never paraphrased,
-  never labelled supporting/disputing. They ride the spans parts as slot 8
+  never labeled supporting/disputing. They ride the spans parts as slot 8
   (one sentence per citer on the page; the two-sentence record stays in
   cite_contexts.json and surfaces in get_citations as "context"). Trap: the
   body searched must be the SAME fulltext file the references came from —

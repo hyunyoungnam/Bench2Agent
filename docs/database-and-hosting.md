@@ -55,7 +55,7 @@ share one implementation, checked against fixture expectations and pinned
 figures of published revisions (`scripts/regression_check.py`).
 
 Answers from both interfaces carry the dataset revision, complete tool
-arguments, analysed editions, denominators and evidence IDs. Every tool call
+arguments, analyzed editions, denominators and evidence IDs. Every tool call
 in a conversation uses its pinned revision, including follow-up questions and
 answer verification. A new revision becomes available to new conversations;
 existing conversations continue on their original revision.
@@ -405,7 +405,7 @@ reference-result tests per adapter. See the
    database of per-edition stage versions, per-paper stage status with
    retryable failures, a claim review queue and every run; `run` re-does
    only what changed (new papers, transient parse failures, a parser or
-   rules change) down to the regenerated catalogue, queues new and changed
+   rules change) down to the regenerated catalog, queues new and changed
    claims for review (a reviewed claim whose sentence changed is stale and
    counts nowhere), builds and optionally publishes a revision, holds one
    lock, and `--if-due N` lets an OS timer call it daily with a missed week

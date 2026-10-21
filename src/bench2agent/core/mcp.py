@@ -480,7 +480,7 @@ def t_topic_papers(a: dict) -> dict:
             per[key] = len(eids)
             hits += [S.gid_by[(key, e)] for e in eids if (key, e) in S.gid_by]
     if not hits:
-        return {"error": f"no topic labelled '{a['topic']}' — see list_topics",
+        return {"error": f"no topic labeled '{a['topic']}' — see list_topics",
                 "hint": "topics are a fixed shared vocabulary; free-text goes "
                         "to search_papers instead"}
     return {"topic": want, "total": len(hits), "by_corpus": per,
@@ -569,7 +569,7 @@ def t_field_trend(a: dict) -> dict:
                              "corpus_size": size,
                              "per_1k": round(n / size * 1000, 1)})
     if not rows:
-        return {"error": f"no topic labelled '{a['topic']}' — see list_topics"}
+        return {"error": f"no topic labeled '{a['topic']}' — see list_topics"}
     rows.sort(key=lambda r: (r["venue"], r["year"]))
     changes = []
     for i in range(1, len(rows)):
@@ -650,7 +650,7 @@ def t_gap_scan(a: dict) -> dict:
                 eids = list(t0.get("explicit", ())) + list(t0.get("via_child", ()))
                 gids += [S.gid_by[(key, e)] for e in eids if (key, e) in S.gid_by]
     if not gids:
-        return {"error": f"no topic labelled '{a['topic']}' — see list_topics"}
+        return {"error": f"no topic labeled '{a['topic']}' — see list_topics"}
     label_words = set(_TOK.findall(a["topic"].lower()))
     # gather each member's L text, K text, names, edition
     rows = []
@@ -994,7 +994,7 @@ def _benchmark_tools():
     S = store()
     specs = [
         ("benchmark_scope", S.scope, "Discover installed full-text editions, coverage and exact field labels. Call before benchmark questions; missing snapshots are NOT zero usage.", {"query": {"type": "string"}}, []),
-        ("benchmark_usage", S.usage, "Rank explicitly stated evaluation use (or training separately). Latest analysed edition per venue by default. Counts, per-1000 parsed-paper rates, coverage and verbatim evidence; not quality. Each row carries locations (our checked mapping: Hub/GitHub/homepage) and introducing_paper (arXiv), separately.", {**_SCOPE, "role": _ROLE, "latest": {"type": "boolean", "default": True}, "limit": {"type": "integer"}}, []),
+        ("benchmark_usage", S.usage, "Rank explicitly stated evaluation use (or training separately). Latest analyzed edition per venue by default. Counts, per-1000 parsed-paper rates, coverage and verbatim evidence; not quality. Each row carries locations (our checked mapping: Hub/GitHub/homepage) and introducing_paper (arXiv), separately.", {**_SCOPE, "role": _ROLE, "latest": {"type": "boolean", "default": True}, "limit": {"type": "integer"}}, []),
         ("benchmark_trend", S.trend, "Full-text benchmark use over editions, including zeros with observed denominators; within-venue change tests. Pass an unambiguous benchmark ID.", {**_SCOPE, "role": _ROLE, "benchmark": {"type": "string"}}, ["benchmark"]),
         ("new_benchmarks", S.new, "Reviewed introductions, including zero-adoption entries. First claim inside this corpus, not first public release. Rows carry introducing_paper and locations. Separate benchmark/training-data introductions. sort=adoption ranks external evaluation use (training for datasets), across ALL installed using papers; filters select introductions only.", {**_SCOPE, "kind": {"type": "string", "enum": ["benchmark", "dataset"], "default": "benchmark"}, "sort": {"type": "string", "enum": ["introduced", "adoption"]}, "include_adoption": {"type": "boolean"}, "adoption_role": {"type": "string", "enum": ["evaluates_on", "trains_on"]}, "limit": {"type": "integer"}, "offset": {"type": "integer"}}, []),
         ("benchmark_adoption", S.adoption, "Unique using papers for a reviewed introduction: evaluation/training and other/self/unknown authors separately. Introducing papers excluded; homonyms need local citation attribution.", {**_SCOPE, "benchmark": {"type": "string"}}, ["benchmark"]),
