@@ -80,13 +80,34 @@ function setHash(p) {
 function scopeText(a) {
   if (!a) return "";
   const bits = [];
-  if (a.topic) bits.push(`field “${a.topic}”`);
+  if (a.topic) bits.push(`subject “${a.topic}”`);
   if (a.venue) bits.push(esc(venueName(a.venue)));
   if (a.edition) bits.push(edition(a.edition));
   if (a.years) bits.push([].concat(a.years).join(", "));
-  if (a.latest) bits.push("latest edition per venue");
-  return bits.length ? bits.join(", ") : "all analysed editions";
+  if (a.latest) bits.push("latest edition per conference");
+  return bits.length ? bits.join(", ") : "all analyzed editions";
 }
+/* a lookup named by what it asked: "Robotics · Evaluation use · Latest edition per conference" */
+function describeQuery(a, role) {
+  a = a || {};
+  const cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+  const bits = [a.topic ? cap(a.topic) : "All subjects"];
+  if (role === "evaluates_on") bits.push("Evaluation use");
+  else if (role === "trains_on") bits.push("Training use");
+  if (a.venue) bits.push(venueName(a.venue));
+  if (a.edition) bits.push(edition(a.edition));
+  if (a.years) bits.push([].concat(a.years).join(", "));
+  else if (a.latest) bits.push("Latest edition per conference");
+  else if (!a.edition) bits.push("All editions");
+  return bits.join(" · ");
+}
+/* a share of the papers analyzed, as a percentage of the same count and denominator */
+function pct(papers, denom) {
+  if (!denom || papers == null) return "–";
+  const v = (100 * papers) / denom;
+  return v > 0 && v < 0.1 ? "<0.1%" : `${v.toFixed(1)}%`;
+}
+const TREND = { rising: "Rising", falling: "Falling", appearing: "Newly observed", no_detected_change: "No clear change", insufficient_scope: "Not enough data" };
 
 /* ---------- answer rendering (safe markdown subset) ---------- */
 function inline(s) {
@@ -272,7 +293,7 @@ function turnNode(t) {
     html += `<span class="item${v.passed === v.checked ? " all" : ""}"><b>${fmt(v.passed)} of ${fmt(v.checked)}</b> quotes found in the papers</span>`;
   }
   if (!t.unverifiable && v.fchecked) {
-    html += `<span class="item${v.fpassed === v.fchecked ? " all" : ""}"><b>${fmt(v.fpassed)} of ${fmt(v.fchecked)}</b> figures matched to tool results</span>`;
+    html += `<span class="item${v.fpassed === v.fchecked ? " all" : ""}"><b>${fmt(v.fpassed)} of ${fmt(v.fchecked)}</b> numbers matched to the evidence</span>`;
   }
   check.innerHTML = html;
   if (t.has_tools) {
@@ -285,13 +306,13 @@ function turnNode(t) {
     check.appendChild(b);
   }
   if (!t.unverifiable && v.fpassed !== v.fchecked) {
-    check.insertAdjacentHTML("beforeend", `<span class="legend"><span class="pencil-sample">Pencilled</span> figures could not be matched to this answer's tool results. That does not make them wrong; check them in the evidence.</span>`);
+    check.insertAdjacentHTML("beforeend", `<span class="legend"><span class="pencil-sample">Dotted underline</span>: numbers not matched to the evidence. That does not make them wrong; check them in the evidence.</span>`);
   }
   if (check.childNodes.length) a.appendChild(check);
   return el;
 }
 
-/* ---------- asking, following, cancelling ---------- */
+/* ---------- asking, following, canceling ---------- */
 function newRequestId() {
   const a = new Uint8Array(12);
   crypto.getRandomValues(a);
@@ -395,7 +416,7 @@ async function follow(jobId, question) {
     } catch (e) { /* a new conversation that saved nothing has no file yet */ }
   }
   if (missing) showNotice("The workspace was restarted while this question ran. Its answer was not saved; ask again.", "warn");
-  else if (view && view.state === "cancelled") showNotice(`Cancelled, nothing saved: “${String(view.question || "").replace(/[.?!]+$/, "")}”. The next question sees only the saved answers.`, "warn");
+  else if (view && view.state === "cancelled") showNotice(`Canceled, nothing saved: “${String(view.question || "").replace(/[.?!]+$/, "")}”. The next question sees only the saved answers.`, "warn");
   else if (view && view.state === "failed") {
     const err = view.error || "The question failed.";
     showNotice(/not logged in|\/login|log in|sign in/i.test(err) ? `${err} ${signInHint(S.chat && S.chat.connector)}` : err, "bad");
@@ -408,7 +429,7 @@ async function cancel(jobId) {
   try {
     const r = await api(`/api/jobs/${jobId}/cancel`, {});
     if (r.result === "too_late") $("live-status").textContent = "Too late to cancel: the answer is being saved";
-    else if (r.result === "cancelled") $("live-status").textContent = "Cancelling; nothing will be saved";
+    else if (r.result === "cancelled") $("live-status").textContent = "Canceling; nothing will be saved";
   } catch (e) { showNotice(e.message, "bad"); }
 }
 function showNotice(msg, kind) {
@@ -500,7 +521,7 @@ function locationLabel(l) {
   return "Homepage";
 }
 function locationsHtml(c) {
-  if (!c.locations || !c.locations.length) return `<span class="muted">No confirmed location</span>`;
+  if (!c.locations || !c.locations.length) return `<span class="muted">No verified resource link</span>`;
   return c.locations.map((l) => {
     const how = l.check === "api" ? `API check ${esc(l.checked_at || "")}`.trim()
       : l.check === "reviewed" ? `reviewed ${esc(l.checked_at || "")}`.trim()
@@ -514,20 +535,20 @@ function introducingHtml(c) {
   if (p === undefined) return `<span class="muted">Not looked up in this answer</span>`;
   if (!p) return `<span class="muted">None reviewed in this corpus</span>`;
   return `${link(p.url, "arXiv " + p.paper_id)}${p.edition ? ` <span class="muted">${edition(p.edition)}</span>` : ""}${p.title ? `<div class="paper-title">${esc(p.title)}</div>` : ""}` +
-    paperLinksHtml(p.links, "Links this paper prints") + paperLinksHtml(c.otherLinks, "Links another introducing paper prints");
+    paperLinksHtml(p.links, "Links from the paper") + paperLinksHtml(c.otherLinks, "Links from another introducing paper");
 }
 /* the paper's own links that were not confirmed as this benchmark's location: what was seen there, dated */
 function paperLinksHtml(links, title) {
   if (!Array.isArray(links) || !links.length) return "";
-  return `<div class="paper-links"><div class="paper-links-title">${esc(title)}, not a confirmed location</div>` + links.map((l) => {
+  return `<div class="paper-links"><div class="paper-links-title">${esc(title)} — benchmark connection unconfirmed</div>` + links.map((l) => {
     const cap = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
     const fixed = l.corrected ? `<span class="status-note">Corrected address (${esc(l.corrected.rule || "repaired")}): ${link(l.corrected.url, l.corrected.url.replace(/^https?:\/\//, ""))}</span>` +
       `<span class="status-note">Seen there: ${esc(l.corrected.observed || "not checked")}</span>` +
       (l.corrected.note ? `<span class="status-note">${esc(cap(l.corrected.note))}</span>` : "") : "";
     const paper = l.paper_id && title.startsWith("Links another") ? ` <span class="muted">arXiv ${esc(l.paper_id)}</span>` : "";
     return `<div class="paper-link"><span class="muted">${esc(l.label || "Link")}</span> ${link(l.url, l.url.replace(/^https?:\/\//, ""))}${paper}` +
-      `<span class="status-note">Seen: ${esc(l.observed || "not checked")}</span>` +
-      (l.not_confirmed_because ? `<span class="status-note">Not a location: ${esc(l.not_confirmed_because)}</span>` : "") +
+      `<span class="status-note">Checked: ${esc(l.observed || "not checked")}</span>` +
+      (l.not_confirmed_because ? `<span class="status-note">Why unconfirmed: ${esc(l.not_confirmed_because)}</span>` : "") +
       (Array.isArray(l.paths_containing_the_name) && l.paths_containing_the_name.length
         ? `<span class="status-note">Paths with the name in the file list: ${esc(l.paths_containing_the_name.join(", "))} (not reviewed as its location)</span>` : "") +
       fixed + `</div>`;
@@ -540,55 +561,55 @@ function roleLabel(role) {
 }
 function measureHtml(x, showScope) {
   const share = x.denom ? Math.max(0, Math.min(100, (x.papers / x.denom) * 100)) : 0;
-  return `<div class="measure"><div class="measure-line"><span class="measure-num"><b>${fmt(x.papers)}</b> of ${fmt(x.denom)} parsed papers</span>` +
-    `<span class="share" title="${x.per_1000 != null ? fmt(x.per_1000) + " per 1,000 papers" : ""}"><span data-w="${share.toFixed(2)}"></span></span></div>` +
+  return `<div class="measure"><div class="measure-line"><span class="measure-num"><b>${fmt(x.papers)}</b> of ${fmt(x.denom)} papers analyzed · <b>${pct(x.papers, x.denom)}</b></span>` +
+    `<span class="share"><span data-w="${share.toFixed(2)}"></span></span></div>` +
     (showScope ? `<div class="measure-scope">${esc(scopeText(x.scope))}</div>` : "") + `</div>`;
 }
 function groupsHtml(g) {
   if (!g) return "";
-  return `<div class="groups"><span>Other authors <b>${fmt(g.others)}</b></span><span>Self <b>${fmt(g.self)}</b></span><span>Undetermined <b>${fmt(g.undetermined)}</b></span></div>`;
+  return `<div class="groups"><span>By other authors <b>${fmt(g.others)}</b></span><span>Introducing authors involved <b>${fmt(g.self)}</b></span><span>Author relationship unknown <b>${fmt(g.undetermined)}</b></span></div>`;
 }
 function benchmarksTab(m) {
-  if (!m.cards.size) return `<p class="note">This answer returned no benchmark rows${m.scope ? ". The Scope tab shows the coverage it checked" : ""}.</p>`;
+  if (!m.cards.size) return `<p class="note">This answer returned no benchmark rows${m.scope ? ". The Data coverage tab shows what it checked" : ""}.</p>`;
   let html = "";
   for (const c of m.cards.values()) {
     const us = c.usages || [];
     const role = (us[0] && us[0].role) || (c.trend && c.trend.role) || (c.adoption ? "evaluates_on" : null);
     const ev = m.evidence.get(c.id);
-    const kind = [c.kind, c.isNew && c.first_claim ? `first claimed at ${edition(c.first_claim)}` : null].filter(Boolean).join(", ");
+    const kind = [c.kind, c.isNew && c.first_claim ? `first introduced in this data at ${edition(c.first_claim)}` : null].filter(Boolean).join(", ");
     html += `<section class="entry"><div class="entry-head"><span class="entry-name">${esc(c.name || c.id)}</span>${roleLabel(role)}</div>` +
       (kind ? `<div class="entry-kind">${kind}</div>` : "") +
       us.map((x) => measureHtml(x, true)).join("") +
       (c.trend && c.trend.rows.length ? `<div class="measure-scope">Trend over ${plural(c.trend.rows.length, "edition")} in Compare</div>` : "") +
-      (c.adoption ? `<div class="measure-scope gap">Unique papers using it for evaluation</div>${groupsHtml(c.adoption.evaluates_on)}` +
-        (c.adoption.unattributed ? `<div class="measure-scope">${plural(c.adoption.unattributed, "use")} of the same name not attributed to it</div>` : "") : "") +
-      `<dl class="facts"><dt>Location</dt><dd>${locationsHtml(c)}</dd><dt>Introduced in</dt><dd>${introducingHtml(c)}</dd>` +
-      (ev ? `<dt>Sentences</dt><dd><button class="link-btn" type="button" data-evidence="${esc(c.id)}">${plural(ev.length, "paper")} with quoted sentences</button></dd>` : "") +
+      (c.adoption ? `<div class="measure-scope gap">Papers using it for evaluation, each counted once</div>${groupsHtml(c.adoption.evaluates_on)}` +
+        (c.adoption.unattributed ? `<div class="measure-scope">${plural(c.adoption.unattributed, "use")} under the same name not assigned to it</div>` : "") : "") +
+      `<dl class="facts"><dt>Resource links</dt><dd>${locationsHtml(c)}</dd><dt>Introduced in</dt><dd>${introducingHtml(c)}</dd>` +
+      (ev ? `<dt>Evidence</dt><dd><button class="link-btn" type="button" data-evidence="${esc(c.id)}">${plural(ev.length, "paper")} with quoted sentences</button></dd>` : "") +
       `</dl></section>`;
   }
-  return html + `<p class="note">Counts measure stated use, not benchmark quality. A location is our mapping and not proof that the data can be downloaded.</p>`;
+  return html + `<p class="note">Counts measure stated use, not benchmark quality. A resource link is our mapping and not proof that the data can be downloaded.</p>`;
 }
 function compareTab(m) {
   let html = "";
   for (const u of m.usage) {
     const max = Math.max(1, ...u.rows.map((r) => r.papers || 0));
-    html += `<h3 class="section">Usage, ${esc(scopeText(u.args))}</h3><div class="section-sub">${u.role === "trains_on" ? "Training use" : "Evaluation use"} out of ${fmt(u.denom)} parsed papers</div>` +
-      `<table class="data-table"><thead><tr><th>Benchmark</th><th class="n">Papers</th><th class="n">Per 1,000</th><th class="barcell"></th></tr></thead><tbody>` +
-      u.rows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${fmt(r.papers)}</td><td class="n">${fmt(r.per_1000)}</td><td class="barcell"><span class="share"><span data-w="${(100 * (r.papers || 0) / max).toFixed(1)}"></span></span></td></tr>`).join("") +
+    html += `<h3 class="section">${esc(describeQuery(u.args, u.role || "evaluates_on"))}</h3><div class="section-sub">Out of ${fmt(u.denom)} papers analyzed (full text processed by our pipeline)</div>` +
+      `<table class="data-table"><thead><tr><th>Benchmark</th><th class="n">Papers using it</th><th class="n">Share of analyzed papers</th><th class="barcell"></th></tr></thead><tbody>` +
+      u.rows.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${fmt(r.papers)}</td><td class="n">${pct(r.papers, u.denom)}</td><td class="barcell"><span class="share"><span data-w="${(100 * (r.papers || 0) / max).toFixed(1)}"></span></span></td></tr>`).join("") +
       `</tbody></table>` + (u.truncated ? `<p class="note">Showing ${fmt(u.rows.length)} of ${fmt(u.total)} benchmarks.</p>` : "");
   }
   for (const t of m.trends) {
     const cmp = new Map((t.comparisons || []).map((c) => [c.to, c]));
-    html += `<h3 class="section">${esc(t.name)} across editions</h3><div class="section-sub">${t.role === "trains_on" ? "Training use" : "Evaluation use"}, ${esc(scopeText(t.args))}</div>` +
-      `<table class="data-table"><thead><tr><th>Edition</th><th class="n">Papers</th><th class="n">Parsed</th><th class="n">Per 1,000</th><th>Change</th></tr></thead><tbody>` +
-      t.rows.map((r) => { const c = cmp.get(r.edition); return `<tr><td>${edition(r.edition)}</td><td class="n">${fmt(r.papers)}</td><td class="n">${fmt(r.parsed_papers)}</td><td class="n">${fmt(r.per_1000)}</td><td>${c ? `<span class="state-${esc(c.state)}">${esc(String(c.state).replace(/_/g, " "))}</span> <span class="muted">z ${fmt(c.z)}</span>` : ""}</td></tr>`; }).join("") +
-      `</tbody></table>` + (t.rule ? `<p class="note">${esc(t.rule)}</p>` : "");
+    html += `<h3 class="section">${esc(t.name)} across editions</h3><div class="section-sub">${esc(describeQuery(t.args, t.role || "evaluates_on"))}</div>` +
+      `<table class="data-table"><thead><tr><th>Edition</th><th class="n">Papers using it</th><th class="n">Papers analyzed</th><th class="n">Share of analyzed papers</th><th>Trend</th></tr></thead><tbody>` +
+      t.rows.map((r) => { const c = cmp.get(r.edition); return `<tr><td>${edition(r.edition)}</td><td class="n">${fmt(r.papers)}</td><td class="n">${fmt(r.parsed_papers)}</td><td class="n">${pct(r.papers, r.parsed_papers)}</td><td>${c ? `<span class="state-${esc(c.state)}">${esc(TREND[c.state] || String(c.state).replace(/_/g, " "))}</span>` : `<span class="muted">—</span>`}</td></tr>`; }).join("") +
+      `</tbody></table><p class="note">Trend compares each edition with the previous one of the same conference: Rising or Falling when the share changed clearly, Newly observed when no analyzed paper used it before and 8 or more do now.</p>`;
   }
   for (const a of m.adoption) {
-    html += `<h3 class="section">Who uses ${esc(a.name)}</h3><div class="section-sub">Unique papers; the introducing papers are excluded</div>` +
-      `<table class="data-table"><thead><tr><th>Use</th><th class="n">Other authors</th><th class="n">Self</th><th class="n">Undetermined</th></tr></thead><tbody>` +
+    html += `<h3 class="section">Who uses ${esc(a.name)}</h3><div class="section-sub">Each paper counted once; the papers that introduced it are excluded</div>` +
+      `<table class="data-table"><thead><tr><th>Use</th><th class="n">By other authors</th><th class="n">Introducing authors involved</th><th class="n">Author relationship unknown</th></tr></thead><tbody>` +
       [["Evaluation", a.evaluates_on], ["Training", a.trains_on]].filter(([, g]) => g).map(([k, g]) => `<tr><td>${k}</td><td class="n">${fmt(g.others)}</td><td class="n">${fmt(g.self)}</td><td class="n">${fmt(g.undetermined)}</td></tr>`).join("") +
-      `</tbody></table><p class="note">${plural(a.unattributed || 0, "same-name use")} not attributed; ${plural(a.before_claim || 0, "use")} before its first claim.</p>`;
+      `</tbody></table><p class="note">${plural(a.unattributed || 0, "use")} under the same name not assigned to it; ${plural(a.before_claim || 0, "use")} observed before its first introduction in this data.</p>`;
   }
   return html || `<p class="note">This answer did not ask for figures that compare side by side.</p>`;
 }
@@ -618,23 +639,24 @@ function editionsTable(eds, withScope) {
   const rows = Object.entries(eds || {}).sort(([a], [b]) => a.localeCompare(b));
   const inScope = rows.filter(([, e]) => e.in_scope_parsed === undefined || e.in_scope_parsed > 0);
   if (!inScope.length) return "";
-  return `<table class="data-table"><thead><tr><th>Edition</th><th class="n">Listed</th><th class="n">On arXiv</th><th class="n">Parsed</th>${withScope ? `<th class="n">In scope</th>` : ""}<th class="n">Labelled</th></tr></thead><tbody>` +
+  return `<table class="data-table"><thead><tr><th>Edition</th><th class="n">Listed by the conference</th><th class="n">Matched on arXiv</th><th class="n">Papers analyzed</th>${withScope ? `<th class="n">Matching your filters</th>` : ""}<th class="n">With subject labels</th></tr></thead><tbody>` +
     inScope.map(([k, e]) => `<tr><td>${edition(k)}</td><td class="n">${fmt(e.total_papers)}</td><td class="n">${fmt(e.arxiv_matched)}</td><td class="n">${fmt(e.parsed_papers)}</td>${withScope ? `<td class="n">${fmt(e.in_scope_parsed)}</td>` : ""}<td class="n">${fmt(e.field_labelled_papers)}</td></tr>`).join("") +
-    `</tbody></table>` + (rows.length !== inScope.length ? `<p class="note">${plural(rows.length - inScope.length, "other edition")} have no papers in this scope. For a field filter that means no paper carries the label, not that none exist.</p>` : "");
+    `</tbody></table>` + (rows.length !== inScope.length ? `<p class="note">${plural(rows.length - inScope.length, "other edition")} have no papers matching these filters. For a subject filter that means no paper carries the label, not that none exist.</p>` : "") +
+    `<p class="note">Papers analyzed: full text processed by our pipeline, not read by people.</p>`;
 }
 function scopeTab(m) {
   let html = `<h3 class="section">What this answer looked up</h3><ol class="calls">` +
     m.calls.map((c) => `<li><b>${esc(LABELS[c.name] || c.name)}</b><br>${esc(c.name)}(${esc(argText(c.args))})</li>`).join("") + `</ol>`;
-  html += `<dl class="facts"><dt>Dataset ID</dt><dd>${esc(m.meta.revision || "–")}<br><span class="muted">Identifies the data used for this answer, separate from the app version.</span></dd><dt>Built</dt><dd>${esc(String(m.meta.generated_at || "–").slice(0, 10))}</dd><dt>Source</dt><dd>${m.meta.source === "arxiv_html_stated_roles" ? "Roles stated in the papers' arXiv full text" : esc(m.meta.source || "–")}</dd>` +
-    (m.scope ? `<dt>Catalogue</dt><dd>${plural(m.scope.catalogue_entries, "benchmark and dataset entry", "benchmark and dataset entries")}</dd>` : "") + `</dl>`;
+  html += `<dl class="facts"><dt>Dataset ID</dt><dd>${esc(m.meta.revision || "–")}<br><span class="muted">Identifies the data used for this answer, separate from the app version.</span></dd><dt>Data built on</dt><dd>${esc(String(m.meta.generated_at || "–").slice(0, 10))}</dd><dt>Source</dt><dd>${m.meta.source === "arxiv_html_stated_roles" ? "Roles stated in the papers' arXiv full text" : esc(m.meta.source || "–")}</dd>` +
+    (m.scope ? `<dt>Catalog</dt><dd>${plural(m.scope.catalogue_entries, "benchmark and dataset entry", "benchmark and dataset entries")}</dd>` : "") + `</dl>`;
   for (const cov of m.coverages) {
     const eds = Object.values(cov.editions || {}).filter((e) => e.in_scope_parsed === undefined || e.in_scope_parsed > 0).length;
-    html += `<h3 class="section">Lookup ${cov.call}: ${esc(scopeText(cov.args))}</h3>` +
-      `<dl class="facts"><dt>Field filter</dt><dd>${esc(cov.topic || "none")}</dd><dt>Use</dt><dd>${cov.role === "trains_on" ? "training" : cov.role ? "evaluation" : "–"}</dd>` +
-      `<dt>Denominator</dt><dd>${fmt(cov.parsed_papers)} parsed papers in ${plural(eds, "edition")}</dd>` +
-      `<dt>Unresolved names</dt><dd>${plural(cov.papers_with_unattributed_benchmark_mentions ?? cov.unattributed_papers ?? 0, "paper")} with at least one benchmark name not attributed to a benchmark; not a count of papers that use none</dd></dl>` + editionsTable(cov.editions, true);
+    html += `<h3 class="section">${esc(describeQuery(cov.args, cov.role))}</h3>` +
+      `<dl class="facts"><dt>Subject filter</dt><dd>${esc(cov.topic || "None (all subjects)")}</dd><dt>Use counted</dt><dd>${cov.role === "trains_on" ? "Training" : cov.role ? "Evaluation" : "–"}</dd>` +
+      `<dt>Papers analyzed</dt><dd>${fmt(cov.parsed_papers)} in ${plural(eds, "conference edition")}</dd>` +
+      `<dt>Uncertain benchmark matches</dt><dd>${plural(cov.papers_with_unattributed_benchmark_mentions ?? cov.unattributed_papers ?? 0, "paper")} with at least one benchmark name not matched with certainty; they can also have confirmed uses</dd></dl>` + editionsTable(cov.editions, true);
   }
-  if (!m.coverages.length && m.scope) html += `<h3 class="section">Installed editions</h3>` + editionsTable(m.scope.editions, false);
+  if (!m.coverages.length && m.scope) html += `<h3 class="section">Conference editions in the data</h3>` + editionsTable(m.scope.editions, false);
   for (const n of m.notes) html += `<p class="note">${esc(n)}</p>`;
   return html;
 }

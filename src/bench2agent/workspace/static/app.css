@@ -209,7 +209,9 @@ button, select, textarea { font: inherit; color: inherit; }
 .data-table th { font-size: 12.5px; color: var(--ink-3); font-weight: 600; border-bottom-color: var(--rule); }
 .data-table td:first-child { white-space: nowrap; }
 .data-table .n { text-align: right; white-space: nowrap; }
-.data-table .barcell { width: 90px; }
+.data-table th, .data-table th.n { white-space: normal; line-height: 1.25; vertical-align: bottom; }   /* long plain-English headers wrap; figures do not */
+.data-table .barcell { width: 64px; }
+.data-table .barcell .share { display: block; }   /* a span: without this its height never applies and the bar is invisible */
 .state-falling { color: var(--bad); font-weight: 700; }
 .state-rising, .state-appearing { color: var(--pen); font-weight: 700; }
 .note { color: var(--ink-3); font-size: 12.5px; line-height: 1.5; margin: 10px 0; }
