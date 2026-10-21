@@ -366,18 +366,21 @@ _UNIT_AFTER = [(r"\s*(?:개\s*)?(?:(?:회차|에디션)(?!\s*별)|editions?(?![A
                (r"\s*(?:편\s*(?:이|가|이\s*)?\s*파싱|parsed\s+papers?(?![A-Za-z])|papers?\s+(?:were\s+)?parsed)", {"parsed_papers", "in_scope_parsed"}),   # "4,252편 파싱되었습니다"
                (r"\s*(?:편|papers?(?![A-Za-z])|논문)", _COUNTS),
                (r"\s*(?:‰|/\s*1,?000(?!\d)|per\s*1,?000(?!\d)|(?:편|개)?\s*당\s*1,?000(?!\d)|/\s*천)", RATE), (r"\s*%", {"percent"}),
+               (r"\s*(?:개\s*)?files?(?![A-Za-z])", {"n_files"}),          # a paper link's file list: "96 files"
                (r"\s*(?:건|개|items?(?![A-Za-z]))", _ANY)]
 # words BEFORE the number: a specific word beats a generic one; among specific ones the nearest wins
 _SPECIFIC_WORDS = [
     (r"(?<!논문-)(?<!paper-)(?:회차|에디션|editions?)", EDITIONS), (r"논문-에디션(?:\s*관측)?|paper-edition(?:\s*observations?)?", {"parsed_papers", "in_scope_parsed"}),
-    (r"‰|per\s*1,?000(?:\s+(?:parsed\s+)?papers?)?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed papers" is one rate phrase (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
+    (r"‰|per\s*1,?000(?:\s+(?:parsed(?:\s+papers?)?|papers?))?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed (papers)" is one rate phrase
+    (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|parsed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
     (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS),
     (r"papers_with_unattributed_benchmark_mentions|unattributed_papers", UNATTRIBUTED_OBSERVATIONS),
     (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
-    (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"})]
+    (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"}),
+    (r"파일|(?<![A-Za-z])files?(?![A-Za-z])", {"n_files"})]
 _GENERIC_WORDS = [(r"사용|(?<![A-Za-z])uses?(?![A-Za-z])|usage|관측|observations?", USAGE)]
 _CONTEXT_WORDS = [(r"타\s*저자|다른\s*저자|(?<![A-Za-z])others?(?![A-Za-z])", "group", "others"), (r"자기|자체\s*저자|(?<![A-Za-z])self(?![A-Za-z])", "group", "self"),
                   (r"미확정|(?<![A-Za-z])undetermined(?![A-Za-z])", "group", "undetermined"), (r"평가|evaluat", "role", "evaluates_on"), (r"학습|훈련|train", "role", "trains_on")]
@@ -407,6 +410,9 @@ def facts(log: TurnLog) -> list[dict]:
             if key in {"editions", "by_edition", "by_year"} or (o and all(_EDITION.fullmatch(str(k)) for k in o)):
                 out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c})
             for k, v in o.items():
+                if k == "introducing_paper" and isinstance(v, dict) and v.get("links"):
+                    walk(v["links"], dict(c), "paper_links")             # the paper's links: their file counts are facts
+                    continue
                 if k in {"evidence", "claims", "surfaces", "paper_id", "paper_ids", "snapshot_id", "generated_at", "authors", "developers",
                          "note", "url", "title", "introducing_paper", "locations"}:
                     continue
@@ -537,6 +543,8 @@ def _metric_cues(before: str, after: str) -> set | None:
         return word
     if word is None:
         return unit
+    if word == {"n_files"}:
+        return word                                             # "파일 96개": the word says what the count is
     if word & UNATTRIBUTED_OBSERVATIONS and unit in (_COUNTS, _ANY):
         return word                                             # paper-edition diagnostic, not adoption by the "papers" unit
     narrowed = {x for x in word if x in unit or ("count:*" in unit and x.startswith("count:"))}
@@ -576,7 +584,9 @@ def _tables(text: str) -> list[dict]:
     while i < len(lines) - 1:
         if lines[i].strip().startswith("|") and re.fullmatch(r"\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*", lines[i + 1]):
             header = [h.strip() for h in lines[i].strip().strip("|").split("|")]
-            ident = next((j for j, h in enumerate(header) if re.search(r"benchmark|벤치마크|dataset|데이터셋|(?<![A-Za-z])name(?![A-Za-z])|이름", h, re.I)), None)
+            # an identity column names the thing; "Papers evaluating on the benchmark" is a figure column
+            ident = next((j for j, h in enumerate(header) if re.search(r"benchmark|벤치마크|dataset|데이터셋|(?<![A-Za-z])name(?![A-Za-z])|이름", h, re.I)
+                          and not re.search(r"papers?(?![A-Za-z])|편|논문\s*수|(?<![A-Za-z])count|share|rate|per\s*1,?000|‰|%|(?<![A-Za-z])uses?(?![A-Za-z])|사용", h, re.I)), None)
             ed_col = next((j for j, h in enumerate(header) if re.search(r"edition|회차|에디션|venue|학회", h, re.I)), None)
             k = i + 2
             while k < len(lines) and lines[k].strip().startswith("|"):
@@ -640,7 +650,26 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     return "na", "no tool result has this context"
 
 
-def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set) -> list[tuple]:
+def verbatim_strings(log: TurnLog) -> set[str]:
+    """Tool-returned sentences with digits, long enough to recognise when an answer copies them word for word
+    (a paper link's observation, a note): the numbers inside such a copy are the tool's text, not new figures."""
+    out: set[str] = set()
+
+    def walk(o):
+        if isinstance(o, dict):
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+        elif isinstance(o, str) and len(o) >= 30 and re.search(r"\d", o):
+            out.add(" ".join(o.split()))
+    for e in log.entries:
+        walk(e.get("result"))
+    return out
+
+
+def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set, verbatim: set[str] = frozenset()) -> list[tuple]:
     """(start, end, raw, verdict, why): 'ok' connected, 'no' contradicted
     (facts with these cues hold another value), 'na' not connected, 'date-ok' /
     'date-no' for a date found / not found verbatim in this turn's results.
@@ -653,9 +682,21 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
         raw = m.group(0)
         out.append((m.start(), m.end(), raw, "date-ok" if raw[:10] in date_strings else "date-no", "date"))
         taken.append((m.start(), m.end()))
+    month_days = {d[5:10] for d in date_strings}
+    for m in re.finditer(r"(?<![\d.,:/-])(\d{1,2})-(\d{1,2})(?![\d])", text):
+        if f"{int(m.group(1)):02d}-{int(m.group(2)):02d}" in month_days and not any(a <= m.start() < b for a, b in taken):
+            out.append((m.start(), m.end(), m.group(0), "date-ok", "date"))    # "10-21": a returned date, shortened
+            taken.append((m.start(), m.end()))
+    for q in verbatim:
+        i = text.find(q)
+        while i >= 0:
+            taken.append((i, i + len(q)))                       # a tool sentence copied word for word
+            i = text.find(q, i + 1)
     for m in _NUM.finditer(text):
         if any(a <= m.start() < b for a, b in taken) or _identifier_number(text, m):
             continue
+        if re.search(r"HTTP\s*$", text[max(0, m.start() - 6):m.start()]):
+            continue                                            # an HTTP status code, not a figure
         raw, v = m.group(0), _val(m.group(0))
         line_start = text.rfind("\n", 0, m.start()) + 1
         if re.fullmatch(r"\s*(?:#{1,6}\s*|[-*]\s*)?", text[line_start:m.start()]) and re.match(r"[.)]\s", text[m.end():m.end() + 2]):

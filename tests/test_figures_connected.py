@@ -23,7 +23,8 @@ TREND = ("benchmark_trend", {"benchmark": "toybench"}, {"id": "toybench", "name"
 
 
 def verdicts(text, lg):
-    return [(raw, v) for _a, _b, raw, v, _w in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
+    return [(raw, v) for _a, _b, raw, v, _w in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set(),
+                                                                      figures.verbatim_strings(lg))]
 
 
 class ConnectedFigureTests(unittest.TestCase):
@@ -79,6 +80,39 @@ class ConnectedFigureTests(unittest.TestCase):
         self.assertEqual(verdicts("ToyBench: 미귀속 18편", lg), [("18", "ok")])
         self.assertEqual(verdicts("ToyBench: 미귀속 221편", lg), [("221", "no")])
         self.assertEqual(verdicts("미귀속 논문 221편", lg), [("221", "na")])  # unit is ambiguous
+
+    def test_a_paper_links_observation_is_its_text_its_status_code_and_dates_are_not_figures(self):
+        # Reproduced on the live answers of 2026-10-21 (ToxiAlert-Bench, D-GARA-152, HybridMatch): the
+        # observation copied word for word, "HTTP 404" and "10-21" were marked as unverified figures.
+        seen = "repository reached on 2026-10-21 UTC; file list of branch main read: 96 files; README read"
+        lg = log(("benchmark_adoption", {"benchmark": "hybridmatch"}, {
+            "id": "hybridmatch", "name": "HybridMatch", "locations": [],
+            "introducing_paper": {"paper_id": "2503.07019", "links": [{
+                "paper_id": "2503.07019", "url": "https://github.com/hxwork/HybridReg˙PyTorch",
+                "observed": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)", "checked_at": "2026-10-21T00:00:43Z",
+                "corrected": {"url": "https://github.com/hxwork/HybridReg_PyTorch", "observed": seen, "n_files": 96}}]}}))
+        self.assertEqual(verdicts(f'HybridMatch: 보정한 주소의 관측 "{seen}"', lg), [("2026-10-21", "date-ok")])
+        self.assertEqual(verdicts("HybridMatch의 인쇄된 주소는 HTTP 404였습니다", lg), [])
+        self.assertEqual(verdicts("HybridMatch: 확인 시각(10-21)", lg), [("10-21", "date-ok")])
+        self.assertEqual(verdicts("HybridMatch: 보정한 주소에서 파일 96개를 읽었습니다", lg), [("96", "ok")])
+        self.assertEqual(verdicts("HybridMatch: the corrected address lists 96 files", lg), [("96", "ok")])
+        self.assertEqual(verdicts("HybridMatch: the corrected address lists 95 files", lg), [("95", "no")])
+        self.assertEqual(verdicts("HybridMatch: 확인 시각(11-30)", lg), [("11", "na"), ("-30", "na")])   # not a returned date
+
+    def test_an_edition_table_whose_figure_header_mentions_the_benchmark_is_read_by_edition(self):
+        # Reproduced on a live Codex answer (2026-10-21): "Papers evaluating on the benchmark" was taken for the
+        # identity column, so every figure in the ICLR CIFAR-10 table was left unverified.
+        self.lg = log(SCOPE, NEW, ("benchmark_trend", {"benchmark": "toybench"}, {**TREND[2], "role": "evaluates_on"}))   # the tool states the role
+        text = ("ToyBench at ICLR:\n\n| Analysed edition | Papers evaluating on the benchmark | Parsed papers |\n|---|---:|---:|\n"
+                "| ICLR 2025 | 10 | 3,059 |\n| ICLR 2026 | 12 | 4,252 |\n")
+        self.assertEqual(verdicts(text, self.lg), [("10", "ok"), ("3,059", "ok"), ("12", "ok"), ("4,252", "ok")])
+        wrong = text.replace("| ICLR 2026 | 12 |", "| ICLR 2026 | 10 |")
+        self.assertIn(("10", "no"), verdicts(wrong, self.lg))
+        # the same answer's rate column: "per 1,000 parsed" is one rate phrase, not the denominator
+        lg = log(("benchmark_trend", {"benchmark": "toybench"}, {"id": "toybench", "name": "ToyBench", "role": "evaluates_on", "results": [
+            {"edition": "iclr-2026", "papers": 12, "parsed_papers": 4252, "per_1000": 2.822}]}))
+        rate = "ToyBench:\n\n| Analysed edition | Papers evaluating on the benchmark | Evaluation papers per 1,000 parsed |\n|---|---:|---:|\n| ICLR 2026 | 12 | 2.822 |\n"
+        self.assertEqual(verdicts(rate, lg), [("12", "ok"), ("2.822", "ok")])
 
     def test_a_section_heading_names_the_benchmark(self):
         text = "### OtherBench\n- 타저자 3편, 자기 2편\n### ToyBench\n- 타저자 3편"

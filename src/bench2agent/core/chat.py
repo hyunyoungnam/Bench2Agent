@@ -227,9 +227,9 @@ def _anchored_connected(tool: str, arg: str, claim: str, log, context=None) -> d
                 "why": "this turn did not call the tool with these arguments"}
     if context and context[1]:
         whole, (a0, b0) = context
-        found = [x for x in figures.scan_connected(whole, fs, figures.date_strings(log), set()) if a0 <= x[0] < b0 and not x[3].startswith("date")]
+        found = [x for x in figures.scan_connected(whole, fs, figures.date_strings(log), set(), figures.verbatim_strings(log)) if a0 <= x[0] < b0 and not x[3].startswith("date")]
     else:
-        found = [x for x in figures.scan_connected(claim, fs, figures.date_strings(log), set()) if not x[3].startswith("date")]
+        found = [x for x in figures.scan_connected(claim, fs, figures.date_strings(log), set(), figures.verbatim_strings(log)) if not x[3].startswith("date")]
     if not found:
         return {"state": "na", "tool": tool, "arg": arg, "n": 0, "why": "no figure in the claim"}
     bad = [x for x in found if x[3] != "ok"]
@@ -277,9 +277,9 @@ def _auto_connected(segs: list, v: dict, log, inline_text: str | None = None) ->
     connects to a fact of this turn's tool log (figures.scan_connected). The
     whole answer is read once, anchors inlined, so a number keeps its table
     row and column, clause and section across an anchor next to it."""
-    fs, dates = figures.facts(log), figures.date_strings(log)
+    fs, dates, verbatim = figures.facts(log), figures.date_strings(log), figures.verbatim_strings(log)
     skip = {float(s["gid"]) for s in segs if s.get("t") == "c" and s.get("gid")}
-    whole = figures.scan_connected(inline_text, fs, dates, skip) if inline_text else None
+    whole = figures.scan_connected(inline_text, fs, dates, skip, verbatim) if inline_text else None
     out: list = []
     for seg in segs:
         if seg.get("t") != "p":
@@ -290,7 +290,7 @@ def _auto_connected(segs: list, v: dict, log, inline_text: str | None = None) ->
         if whole is not None and at is not None:
             found = [(a - at, b - at, raw, verdict, why) for a, b, raw, verdict, why in whole if at <= a and b <= at + len(text)]
         else:
-            found = figures.scan_connected(text, fs, dates, skip)
+            found = figures.scan_connected(text, fs, dates, skip, verbatim)
         for a, b, raw, verdict, why in found:
             if verdict == "date-ok":
                 continue                                  # a date the tools returned verbatim: not a figure, not counted
