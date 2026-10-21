@@ -392,6 +392,27 @@ This prints a configuration using an absolute Python executable and data
 directory. The MCP host starts `bench2agent mcp` automatically as a local stdio
 process. Running it manually waits for JSON-RPC requests; it is not a chat prompt.
 
+### Which server a client runs
+
+The code and the data a Bench2Agent MCP server uses are decided by its
+command, environment and `--home`, not by the name of the registration:
+
+| Started by | Code | Data |
+|---|---|---|
+| `bench2agent` terminal or `bench2agent --web` | the running installation | the home given by `--home`, `BENCH2AGENT_HOME`, else `~/.bench2agent` |
+| `bench2agent claude` / `bench2agent codex` | the installation that launched it | the same home, passed to the session |
+| A registration made by `bench2agent mcp --connect` | the installation's Python | the home written into the registration (`--home`) |
+| A project file in a source checkout (for example a `.mcp.json` running `python3 -m bench2agent mcp` with `PYTHONPATH=src`) | the checkout | the checkout's own data when no home is set |
+
+The terminal and the browser start their AI CLI with their own MCP
+configuration (Claude Code with `--strict-mcp-config`; Codex with the
+`bench2agent` entry overridden for that session), so registrations made for
+opening the client directly never change which data an answer reads. When
+the same name is registered in more than one scope, the client chooses one;
+`claude mcp get bench2agent` or `codex mcp get bench2agent` shows the command
+and home in use, and a project file's server is used only after the client
+approves it. Restart a client after upgrading the installation it runs.
+
 ### Streamable HTTP
 
 With the server extra (`pip install 'bench2agent[server]'`, the official MCP
@@ -424,7 +445,7 @@ Local data stays on your machine. Questions and returned tool evidence are sent
 to your chosen model provider during inference. API authentication for the
 independent terminal is separate from ChatGPT/Claude subscription login.
 
-## Browser interface direction (planned)
+## Browser workspace
 
 The two tracks are terminal and browser interfaces over one local application,
 with terminal implementation first. The browser workspace runs on your PC,
