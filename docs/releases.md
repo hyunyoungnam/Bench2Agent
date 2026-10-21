@@ -93,7 +93,8 @@ data-20261013.
 
 The terminal, browser workspace and MCP are checked outside the checkout on
 Linux/WSL; macOS uses the same POSIX implementation. Native Windows has not
-been validated (cancellation, and the conversation lock, which uses fcntl).
+been validated (cancellation, and the conversation lock, which uses fcntl). The device
+checklist is in [platform-checks.md](platform-checks.md).
 The browser workspace was checked with keyboard use and at desktop and narrow
 widths. HTTP MCP and the earlier web host are optional development
 prototypes; hosted sign-in, visitor isolation and public operation are not
