@@ -102,6 +102,12 @@ button, select, textarea { font: inherit; color: inherit; }
 .quote.unfound { background: none; box-shadow: none; text-decoration: underline dotted var(--pencil); text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .cite { font: 600 11px/1 var(--sans); vertical-align: super; margin-left: 2px; text-decoration: none; }
 .fig.unv { text-decoration: underline dotted var(--pencil); text-decoration-thickness: 2px; text-underline-offset: 4px; cursor: help; }
+/* the reason, for the mouse and for keyboard focus alike */
+.fig.unv { position: relative; }
+.fig.unv:hover::after, .fig.unv:focus-visible::after { content: attr(data-why); position: absolute; left: 0; top: calc(100% + 6px); z-index: 5;
+  width: max-content; max-width: 280px; padding: 6px 8px; border-radius: 6px; background: var(--ink); color: var(--paper);
+  font: 12.5px/1.4 var(--sans); white-space: normal; text-decoration: none; }
+.fig.unv.differs { text-decoration-color: var(--bad); }
 .pencil-sample { text-decoration: underline dotted var(--pencil); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 
 .sources { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--rule-2); font: 13px/1.45 var(--sans); color: var(--ink-2); }

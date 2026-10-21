@@ -154,6 +154,17 @@ function markdown(src) {
   flushPara(); flushList();
   return out.join("");
 }
+/* why a number is marked, in words a reader can use: contradicted (the same context says otherwise) vs unverified */
+const WHY = {
+  "no cue says what it counts": "the sentence does not say what it counts",
+  "no tool result has this context": "no lookup returned a value for this context",
+  "connected": "",
+};
+function figNote(s) {
+  const why = s.why ? (WHY[s.why] ?? s.why) : "";
+  if (s.v === "no" && s.kind !== "date") return `Differs from this answer's tool results${why ? `: ${why}` : ""}`;   // a date never contradicts
+  return `${s.kind === "date" ? "Date" : "Number"} not verified${why ? `: ${why}` : ""}`;
+}
 function sourceUrl(s) { return safeUrl(s.url) || (s.paper_id ? `https://arxiv.org/abs/${encodeURIComponent(s.paper_id)}` : null); }
 function renderAnswer(turn) {
   const tokens = [], cites = [];
@@ -166,7 +177,7 @@ function renderAnswer(turn) {
     const s = tokens[+k];
     if (s.t === "n") {
       return UNVERIFIED.has(s.v)
-        ? `<span class="fig unv" tabindex="0" title="${s.kind === "date" ? "This date" : "This figure"} could not be matched to this answer's tool results" aria-label="${esc(s.s)}, ${s.kind === "date" ? "a date" : "a figure"} not matched to this answer's tool results">${esc(s.s)}</span>`
+        ? `<span class="fig unv${s.v === "no" && s.kind !== "date" ? " differs" : ""}" tabindex="0" data-why="${esc(figNote(s))}" aria-label="${esc(s.s)}. ${esc(figNote(s))}">${esc(s.s)}</span>`
         : `<span class="fig">${esc(s.s)}</span>`;
     }
     cites.push(s);
@@ -294,6 +305,8 @@ function turnNode(t) {
   }
   if (!t.unverifiable && v.fchecked) {
     html += `<span class="item${v.fpassed === v.fchecked ? " all" : ""}"><b>${fmt(v.fpassed)} of ${fmt(v.fchecked)}</b> numbers matched to the evidence</span>`;
+    const differs = (t.segs || []).filter((s) => s.t === "n" && s.v === "no" && s.kind !== "date").length;
+    if (differs) html += `<span class="item"><b>${fmt(differs)}</b> ${differs === 1 ? "differs" : "differ"} from the evidence</span>`;
   }
   check.innerHTML = html;
   if (t.has_tools) {
@@ -306,7 +319,7 @@ function turnNode(t) {
     check.appendChild(b);
   }
   if (!t.unverifiable && v.fpassed !== v.fchecked) {
-    check.insertAdjacentHTML("beforeend", `<span class="legend"><span class="pencil-sample">Dotted underline</span>: numbers not matched to the evidence. That does not make them wrong; check them in the evidence.</span>`);
+    check.insertAdjacentHTML("beforeend", `<span class="legend"><span class="pencil-sample">Dotted underline</span>: a number not matched to the evidence, or one that differs from it. Hover or focus it to see which and why; an unverified number is not necessarily wrong.</span>`);
   }
   if (check.childNodes.length) a.appendChild(check);
   return el;

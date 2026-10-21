@@ -70,5 +70,16 @@ class FigureStates(unittest.TestCase):
         self.assertNotIn("no", [s for _, s in states])
 
 
+
+
+class TerminalMarks(unittest.TestCase):
+    def test_only_a_contradiction_reads_as_a_difference(self):
+        from bench2agent.cli import render
+        turn = {"segs": [{"t": "n", "s": "14", "v": "no"}, {"t": "p", "s": " "}, {"t": "n", "s": "13", "v": "na"},
+                         {"t": "p", "s": " "}, {"t": "n", "s": "2026-10-21", "v": "na", "kind": "date"}, {"t": "p", "s": " "},
+                         {"t": "n", "s": "5", "v": "ok"}]}
+        self.assertEqual(render(turn), "14 [differs from tool result] 13 [unverified figure] 2026-10-21 [unverified date] 5")
+
+
 if __name__ == "__main__":
     unittest.main()
