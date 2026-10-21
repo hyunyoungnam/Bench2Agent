@@ -2,7 +2,7 @@
 
 [![Code release](https://img.shields.io/github/v/release/hyunyoungnam/Bench2Agent?filter=v*&label=release)](https://github.com/hyunyoungnam/Bench2Agent/releases)
 [![PyPI](https://img.shields.io/pypi/v/bench2agent)](https://pypi.org/project/bench2agent/)
-[![Data release](https://img.shields.io/badge/data-2026--10--19-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261019)
+[![Data release](https://img.shields.io/badge/data-2026--10--21-blue)](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261021)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/hyunyoungnam/Bench2Agent/blob/main/LICENSE)
 
 Ask which benchmarks researchers evaluate on, how usage changes across years,
@@ -42,15 +42,11 @@ Choose **one** installation method, then choose an interface:
 | Interface | Start | Use it for |
 |---|---|---|
 | Terminal | `bench2agent` | Ask questions and follow-ups, resume conversations, inspect sources with `/sources` |
-| Local browser (0.6.0) | `bench2agent --web` | Read answers beside benchmark cards, comparison tables, original evidence and data coverage |
+| Local browser | `bench2agent --web` | Read answers beside benchmark cards, comparison tables, original evidence and data coverage |
 
-The browser launcher is part of **0.6.0, currently being prepared for release**.
-The published 0.5.0 package supports the terminal and MCP routes. From a
-development checkout with research data installed, try the browser with:
-
-```bash
-PYTHONPATH=src python3 -m bench2agent --web
-```
+`bench2agent --web` opens the workspace in your browser; `--no-open` prints its
+address instead and `--port N` chooses a port. Keep that terminal open while
+you use it; Ctrl+C stops the workspace.
 
 On the first interactive launch,
 Bench2Agent automatically downloads the research-data bundle (about 45 MB),
@@ -182,17 +178,15 @@ interface. [MCP setup and scripted queries](https://github.com/hyunyoungnam/Benc
 
 ## Data coverage
 
-The published **2026-10-19 data release** contains **61 editions of 11 conferences**,
-**88,172 parsed paper-edition observations** and **9,334 benchmark/dataset
-entries**, including 8,770 entries with reviewed introduction claims and 89
-with an individually reviewed code or data location (an AI review against the
-introducing paper's own release sentence). Revision: `8503cf1b1f7bee99`.
-
-The prepared **0.6.0 data**, revision `1e1fa171722da693` used in the screenshot,
-has the same paper and benchmark coverage. It expands individually reviewed
-resource locations to **315 benchmarks (336 links)** and adds **70 unique links
-printed in 65 papers**, attached to 74 benchmark entries. These paper links
-remain separate from verified resource locations.
+The **2026-10-21 data release** (revision `1e1fa171722da693`, used in the
+screenshot) contains **61 editions of 11 conferences**, **88,172 analyzed
+paper-edition observations** and **9,334 benchmark/dataset entries**, including
+8,770 entries with reviewed introduction claims and **315 benchmarks with
+individually reviewed resource links (336 links)**: an AI review against the
+introducing paper's own release line and the text at the link. It also adds
+**70 unique links printed in 65 papers**, attached to 74 benchmark entries;
+these paper links remain separate from verified resource links. Paper and
+benchmark coverage is the same as in the 2026-10-19 release.
 
 | Venue | Included editions |
 |---|---|
@@ -219,15 +213,15 @@ introduction claims in the expanded editions are not yet reviewed, so
 introduction discovery is less complete than usage coverage. “New” means a
 reviewed claim in this corpus, not the first public release worldwide.
 
-The 2026-10-19 bundle (data format v2) needs Bench2Agent
-0.5.0 or later; the 2026-10-13 bundle (format v1) still installs from its
-explicit URL through a one-time conversion.
+The 2026-10-21 bundle (data format v2) installs with Bench2Agent 0.5.0 or later
+(0.5.0 serves it without the paper links or percentages); the 2026-10-13 bundle
+(format v1) still installs from its explicit URL through a one-time conversion.
 [Data rules](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/benchmark-chat.md) · [Database design](https://github.com/hyunyoungnam/Bench2Agent/blob/main/docs/database-and-hosting.md)
 
-## Updates and web development
+## Updates
 
-Version **0.5.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.5.0/)
-and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.5.0).
+Version **0.6.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.6.0/)
+and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.0).
 Code and research data update separately:
 
 1. Update the code with your installation method (rerun its install command).
