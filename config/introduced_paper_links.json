@@ -755,7 +755,9 @@
     "observed": {
      "checked_at": "2026-10-21T00:00:44Z",
      "reached": true,
-     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 96 files; README read"
+     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 96 files; README read",
+     "n_files": 96,
+     "listing_truncated": false
     },
     "note": "the corrected address exists; that does not establish it is the printed link's intended target"
    }
@@ -1666,7 +1668,9 @@
     "observed": {
      "checked_at": "2026-10-21T00:03:16Z",
      "reached": true,
-     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 15 files; README read"
+     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 15 files; README read",
+     "n_files": 15,
+     "listing_truncated": false
     },
     "note": "the corrected address exists; that does not establish it is the printed link's intended target"
    }
@@ -1740,7 +1744,9 @@
     "observed": {
      "checked_at": "2026-10-21T00:03:21Z",
      "reached": true,
-     "summary": "Hub dataset reached on 2026-10-21 UTC; file list read: 12,417 files"
+     "summary": "Hub dataset reached on 2026-10-21 UTC; file list read: 12,417 files",
+     "n_files": 12417,
+     "listing_truncated": false
     },
     "note": "the corrected address exists; that does not establish it is the printed link's intended target"
    }

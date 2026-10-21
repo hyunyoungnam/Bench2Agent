@@ -101,10 +101,13 @@ def paper_link(x: dict) -> dict:
     o = x.get("observed") or {}
     return {"paper_id": x["paper_id"], "label": x.get("label"), "line": x.get("line"), "url": x["url"], "host": x.get("host"),
             "observed": o.get("summary"), "checked_at": o.get("checked_at"),
+            **({"n_files": o["n_files"], "listing_truncated": bool(o.get("listing_truncated"))} if o.get("n_files") is not None else {}),
             "not_confirmed_because": x.get("not_confirmed_because") or "not reviewed as this benchmark's location",
             **({"paths_containing_the_name": x["paths_containing_the_name"]} if x.get("paths_containing_the_name") else {}),
             **({"corrected": {**{k: x["corrected"].get(k) for k in ("url", "rule", "note")},
-                              "observed": (x["corrected"].get("observed") or {}).get("summary")}} if x.get("corrected") else {}),
+                              "observed": (x["corrected"].get("observed") or {}).get("summary"),
+                              **({"n_files": x["corrected"]["observed"]["n_files"]} if (x["corrected"].get("observed") or {}).get("n_files") is not None else {})}}
+               if x.get("corrected") else {}),
             "source": {k: (x.get("source") or {}).get(k) for k in ("arxiv_version", "element_id")}}
 
 
