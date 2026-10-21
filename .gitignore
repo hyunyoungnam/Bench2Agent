@@ -40,10 +40,8 @@ data/interim/html/
 # data/interim/html in ~45 min, no model involved.
 data/interim/mentions/
 
-# Maintainers' working notes, agent instructions and internal evaluations —
-# kept locally, never published (removed from the repository 2026-10-07).
-/CLAUDE.md
-/AGENTS.md
+# Shared agent instructions (CLAUDE.md and AGENTS.md) are tracked.
+# Local configuration and internal evaluations remain private.
 /.claude/
 /docs/platform-survey-*.md
 /docs/similar-projects-survey.md
