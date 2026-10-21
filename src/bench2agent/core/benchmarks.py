@@ -98,6 +98,20 @@ def other_paper_links(entry: dict) -> list[dict]:
     return [paper_link(x) for x in entry.get("paper_links") or [] if x["paper_id"] != shown]
 
 
+def edition_totals(editions: dict) -> dict:
+    """Sums over exactly the editions a response lists, per measure; a measure missing in any edition has no total
+    (never a zero). Paper-edition observations, not unique papers."""
+    def total(key):
+        vals = [e.get(key) for e in editions.values()]
+        return sum(vals) if vals and all(isinstance(v, int) and not isinstance(v, bool) for v in vals) else None
+    return {"editions": len(editions), "total_papers": total("total_papers"), "arxiv_matched": total("arxiv_matched"),
+            "parsed_papers": total("parsed_papers"), "field_labelled_papers": total("field_labelled_papers"),
+            "note": "Sums over every edition listed in this response (benchmark_scope lists all installed editions; its "
+                    "query only searches field names). total_papers = listed by the conferences, arxiv_matched = matched "
+                    "to arXiv, parsed_papers = analyzed. Paper-edition observations, not unique papers; a total is null "
+                    "when an edition lacks the value."}
+
+
 def paper_link(x: dict) -> dict:
     o = x.get("observed") or {}
     return {"paper_id": x["paper_id"], "label": x.get("label"), "line": x.get("line"), "url": x["url"], "host": x.get("host"),
@@ -629,6 +643,7 @@ class BenchmarkStore:
                 "fields": [{"name": f, "parsed_papers": n, **({"origins": origins["by_field"][f]} if f in origins["by_field"] else {})}
                            for f, n in sorted(fields.items(), key=lambda x: (-x[1], x[0])) if query in f.casefold()][:100],
                 "label_origins": origins["origins"],
+                "edition_totals": edition_totals(data["editions"]),
                 "catalogue_entries": len(data["benchmarks"]),
                 "note": "Fields are exact labels with a recorded origin: declared_area/declared_subarea (the primary area "
                         "the authors chose on the submission form), venue_track_mapped (the topic an AAAI track name states; "

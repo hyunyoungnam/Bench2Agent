@@ -93,6 +93,17 @@ class ParenthesesAndTotals(unittest.TestCase):
         self.assertEqual(self.verdicts("LIBERO: 82 of 350 analyzed papers", self.USAGE), [("82", "ok"), ("350", "ok")])
         self.assertEqual(self.verdicts("LIBERO: 81 of 350 analyzed papers", self.USAGE)[0], ("81", "no"))   # still a contradiction
 
+    def test_a_sum_over_editions_connects_only_to_an_explicit_total(self):
+        from bench2agent.core.benchmarks import edition_totals
+        tot = edition_totals(self.SCOPE[2]["editions"])
+        self.assertEqual((tot["total_papers"], tot["arxiv_matched"], tot["parsed_papers"], tot["field_labelled_papers"]),
+                         (12097, 9183, 9115, None))                    # a measure missing in an edition has no total
+        scope = (self.SCOPE[0], self.SCOPE[1], {**self.SCOPE[2], "edition_totals": tot})
+        self.assertEqual(self.verdicts("12,097 listed papers", scope), [("12,097", "ok")])
+        self.assertEqual(self.verdicts("9,115 analyzed papers", scope), [("9,115", "ok")])
+        self.assertNotIn(("12,098", "ok"), self.verdicts("12,098 listed papers", scope))
+        self.assertNotIn(("12,097", "ok"), self.verdicts("12,097 listed papers", self.SCOPE))   # no explicit total: never summed here
+
 
 class TerminalMarks(unittest.TestCase):
     def test_only_a_contradiction_reads_as_a_difference(self):
