@@ -388,6 +388,7 @@ function model(tools) {
     if (r.kind) c.kind = r.kind;
     if (Array.isArray(r.locations) && r.locations.length) c.locations = r.locations;
     if (r.introducing_paper !== undefined) c.introducing = r.introducing_paper;
+    if (Array.isArray(r.other_paper_links) && r.other_paper_links.length) c.otherLinks = r.other_paper_links;
     if (r.first_claim) c.first_claim = r.first_claim;
   };
   const addEvidence = (id, papers) => {
@@ -465,7 +466,19 @@ function introducingHtml(c) {
   const p = c.introducing;
   if (p === undefined) return `<span class="muted">Not looked up in this answer</span>`;
   if (!p) return `<span class="muted">None reviewed in this corpus</span>`;
-  return `${link(p.url, "arXiv " + p.paper_id)}${p.edition ? ` <span class="muted">${edition(p.edition)}</span>` : ""}${p.title ? `<div class="paper-title">${esc(p.title)}</div>` : ""}`;
+  return `${link(p.url, "arXiv " + p.paper_id)}${p.edition ? ` <span class="muted">${edition(p.edition)}</span>` : ""}${p.title ? `<div class="paper-title">${esc(p.title)}</div>` : ""}` +
+    paperLinksHtml(p.links, "Links this paper prints") + paperLinksHtml(c.otherLinks, "Links another introducing paper prints");
+}
+/* the paper's own links that were not confirmed as this benchmark's location: what was seen there, dated */
+function paperLinksHtml(links, title) {
+  if (!Array.isArray(links) || !links.length) return "";
+  return `<div class="paper-links"><div class="paper-links-title">${esc(title)}, not a confirmed location</div>` + links.map((l) => {
+    const fixed = l.corrected ? `<span class="status-note">Printed address could not be opened; ${link(l.corrected.url, "a corrected address")} exists: ${esc(l.corrected.observed || "")}. ${esc(l.corrected.note || "")}</span>` : "";
+    const paper = l.paper_id && title.startsWith("Links another") ? ` <span class="muted">arXiv ${esc(l.paper_id)}</span>` : "";
+    return `<div class="paper-link"><span class="muted">${esc(l.label || "Link")}</span> ${link(l.url, l.url.replace(/^https?:\/\//, ""))}${paper}` +
+      `<span class="status-note">Seen: ${esc(l.observed || "not checked")}</span>` +
+      (l.not_confirmed_because ? `<span class="status-note">Not a location: ${esc(l.not_confirmed_because)}</span>` : "") + fixed + `</div>`;
+  }).join("") + `</div>`;
 }
 function roleLabel(role) {
   if (role === "trains_on") return `<span class="role train">training use</span>`;

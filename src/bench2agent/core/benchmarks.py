@@ -13,6 +13,7 @@ import collections
 import contextlib
 import datetime as dt
 import functools
+import hashlib
 import json
 import math
 import re
@@ -51,7 +52,14 @@ LINK_NOTE = ("locations: our mapping from this benchmark id to where the artifac
              "at the location itself, not the paper, and is never quoted as the paper. An empty list is no "
              "confirmed location, not none. "
              "introducing_paper: the reviewed introducing paper in this corpus, null when there is "
-             "none; it is a paper, not a download location. Neither ranks or filters anything.")
+             "none; it is a paper, not a download location. introducing_paper.links: links that paper itself prints "
+             "in its front matter that were NOT confirmed as this benchmark's location; each names the paper_id that "
+             "printed it (other_paper_links: links printed by another introducing paper of the same entry). line is "
+             "that paper's verbatim text (quotable with its paper_id); observed is what was seen at the URL on that "
+             "date (UTC) and nothing more: an address that could not be reached is not a finding that it was deleted "
+             "or is private, and a short file list is not a finding that no data exists; not_confirmed_because says "
+             "why it is not a location; corrected is a repaired address that exists, not proof it is the intended "
+             "target. Neither ranks or filters anything.")
 
 
 def locations(entry: dict, checked_at: str | None = None) -> list[dict]:
@@ -77,8 +85,27 @@ def introducing_paper(entry: dict) -> dict | None:
     if not claims:
         return None
     c = next((c for c in claims if c["edition"] == entry.get("first_claim")), claims[0])
-    return {"paper_id": c["arxiv_base"], "url": "https://arxiv.org/abs/" + c["arxiv_base"],
-            "edition": c["edition"], "title": c["title"]}
+    out = {"paper_id": c["arxiv_base"], "url": "https://arxiv.org/abs/" + c["arxiv_base"],
+           "edition": c["edition"], "title": c["title"]}
+    links = [paper_link(x) for x in entry.get("paper_links") or [] if x["paper_id"] == c["arxiv_base"]]
+    return {**out, "links": links} if links else out      # only that paper's own links sit under it
+
+
+def other_paper_links(entry: dict) -> list[dict]:
+    """Links printed by an introducing paper other than the one introducing_paper() returns, each with its paper."""
+    shown = (introducing_paper(entry) or {}).get("paper_id")
+    return [paper_link(x) for x in entry.get("paper_links") or [] if x["paper_id"] != shown]
+
+
+def paper_link(x: dict) -> dict:
+    o = x.get("observed") or {}
+    return {"paper_id": x["paper_id"], "label": x.get("label"), "line": x.get("line"), "url": x["url"], "host": x.get("host"),
+            "observed": o.get("summary"), "checked_at": o.get("checked_at"),
+            "not_confirmed_because": x.get("not_confirmed_because") or "not reviewed as this benchmark's location",
+            **({"paths_containing_the_name": x["paths_containing_the_name"]} if x.get("paths_containing_the_name") else {}),
+            **({"corrected": {**{k: x["corrected"].get(k) for k in ("url", "rule", "note")},
+                              "observed": (x["corrected"].get("observed") or {}).get("summary")}} if x.get("corrected") else {}),
+            "source": {k: (x.get("source") or {}).get(k) for k in ("arxiv_version", "element_id")}}
 
 
 def fold(s: str) -> str:
@@ -104,7 +131,7 @@ def rows(path: Path):
                 yield json.loads(line)
 
 
-def catalogue(root: Path) -> list[dict]:
+def catalogue(root: Path, stale: list | None = None) -> list[dict]:
     reg = read_json(root / "config/benchmarks.json", {"benchmarks": []})
     out = {e["id"]: dict(e) for e in reg["benchmarks"]}
     intro = read_json(root / "config/benchmarks_introduced.json", {})
@@ -163,7 +190,55 @@ def catalogue(root: Path) -> list[dict]:
             e.setdefault("reviewed_locations", []).append({k: loc.get(k) for k in ("url", "host", "artifact", "verification", "data_status", "basis", "checked_at",
                                                                                     "reviewed_by", "paper_id", "release_sentence", "evidence_at_url", "judgment")
                                                            if loc.get(k) is not None})
+    attach_paper_links(root, out, stale)
     return list(out.values())
+
+
+def _archive_sha256(root: Path, paper_id: str) -> str | None:
+    import gzip
+    path = root / "data/raw/html" / f"{paper_id}.html.gz"
+    if not path.exists():
+        return None
+    try:
+        return hashlib.sha256(gzip.decompress(path.read_bytes())).hexdigest()
+    except OSError:
+        return None
+
+
+def paper_links_left_out(root: Path) -> list[dict]:
+    """The paper links the build leaves out because their archived HTML changed (reported, then reviewed again)."""
+    stale: list = []
+    attach_paper_links(root, {}, stale)
+    return stale
+
+
+def attach_paper_links(root: Path, out: dict, stale: list | None = None) -> None:
+    """config/introduced_paper_links.json: links an introducing paper prints that were not confirmed as a
+    location. Each belongs to the paper that printed it and reaches every entry that paper introduces, except
+    an entry that already has the same URL as a reviewed location (never promoted, never duplicated). A link
+    whose archived HTML is present and no longer the page it was read from is left out until reviewed again."""
+    by_paper = collections.defaultdict(dict)
+    for e in out.values():
+        for c in e.get("claims") or []:
+            by_paper[c["arxiv_base"]][e["id"]] = e
+    hashes = {}
+    for x in read_json(root / "config/introduced_paper_links.json", {}).get("links", []):
+        pid = x["paper_id"]
+        if pid not in hashes:
+            hashes[pid] = _archive_sha256(root, pid)
+        recorded = (x.get("source") or {}).get("archive_sha256")
+        if hashes[pid] is not None and recorded and hashes[pid] != recorded:
+            if stale is not None:
+                stale.append({"paper_id": pid, "url": x["url"]})
+            continue
+        reviews = {r["benchmark_id"]: r for r in x.get("reviews") or []}
+        for e in by_paper.get(pid, {}).values():
+            if x["url"].lower().rstrip("/") in {loc["url"].lower().rstrip("/") for loc in e.get("reviewed_locations") or []}:
+                continue
+            r = reviews.get(e["id"]) or next((reviews[b] for b in e.get("merged_ids") or [] if b in reviews), {})
+            e.setdefault("paper_links", []).append({
+                **{k: x[k] for k in ("paper_id", "label", "line", "url", "host", "source", "observed", "corrected") if x.get(k) is not None},
+                **{k: r[k] for k in ("not_confirmed_because", "paths_containing_the_name", "review_ref") if r.get(k)}})
 
 
 _AAAI_TRACK = re.compile(r"^(?:AAAI|IAAI|EAAI)\s+(?:Technical|Special)\s+Track(?:\s+Focus\s+Area)?(?:\s+on|:)\s*(.+?)(?:\s+[IVX]+)?$")
@@ -252,7 +327,8 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
     files = sorted((root / "data/interim/mentions").glob("mentions_*.jsonl"))
     if not files:
         raise FileNotFoundError("No full-text mention outputs. Finish icml.bench_mentions --all first.")
-    dependencies = files + [root / "config/benchmarks.json", root / "config/benchmarks_introduced.json", root / "config/introduced_locations.json"]
+    dependencies = files + [root / "config/benchmarks.json", root / "config/benchmarks_introduced.json", root / "config/introduced_locations.json",
+                           root / "config/introduced_paper_links.json"]
     stamps = {}
 
     def remember(paths):
@@ -401,7 +477,8 @@ def build_revision(root: Path = ROOT, out: Path | None = None) -> dict:
                                            "sqlite_library": sqlite3.sqlite_version})
     return {"path": str(target), "revision_id": rid, "snapshot_id": rid, "content_sha256": content,
             "sha256": report["sha256"], "editions": len(editions), "parsed_papers": len(result),
-            "benchmarks": len(entries)}
+            "benchmarks": len(entries), "paper_links": sum(len(e.get("paper_links") or []) for e in entries),
+            "paper_links_left_out_changed_archive": paper_links_left_out(root)}
 
 
 def _pinned(method):
@@ -524,8 +601,9 @@ class BenchmarkStore:
 
     def _links(self, data: dict, entry: dict) -> dict:
         """Keyed by the entry (benchmark id), never by name: a homonym gets its own."""
+        others = other_paper_links(entry)
         return {"locations": locations(entry, data.get("registry_checked")),
-                "introducing_paper": introducing_paper(entry)}
+                "introducing_paper": introducing_paper(entry), **({"other_paper_links": others} if others else {})}
 
     def _entry(self, data: dict, name: str) -> dict:
         exact = [e for e in data["benchmarks"] if e["id"] == name or name in e.get("merged_ids", [])]

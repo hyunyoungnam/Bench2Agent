@@ -1,0 +1,2463 @@
+{
+ "about": "Links the introducing paper itself prints in its front matter (\"Code — URL\", \"Datasets — URL\") that were NOT confirmed as a benchmark's location in the individual review (2026-10-20/21). Each link belongs to the paper that printed it (paper_id); `line` is that paper's verbatim text; `observed` is what was seen at the URL on that date, nothing more; `reviews` says per benchmark why it is not a confirmed location. Never promoted to config/introduced_locations.json without a new review. `source.archive_sha256` is the decompressed archived HTML the line was read from: the build drops a link whose archive has changed until it is reviewed again.",
+ "links": [
+  {
+   "paper_id": "2511.09127",
+   "label": "Code",
+   "line": "Code — https://github.com/BigTaige/HAR-GUI",
+   "url": "https://github.com/BigTaige/HAR-GUI",
+   "host": "github",
+   "source": {
+    "archive_sha256": "ff3f23f41e76475cef5b4f0845db62ddc00171a6c3268b31b0aef596d0799dea",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-12",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-20T23:59:26Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-20 UTC; file list of branch main read: 71 files; README read",
+    "http_status": 200,
+    "n_files": 71,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "act2sum",
+     "not_confirmed_because": "the README names it only as a prompt variable (ACT2SUM_INSTRUCTION), not as a dataset",
+     "paths_containing_the_name": [
+      "Prompts/Act2Sum.py"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#3"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.11244",
+   "label": "Code",
+   "line": "Code — https://github.com/ShijianDeng/AGT",
+   "url": "https://github.com/ShijianDeng/AGT",
+   "host": "github",
+   "source": {
+    "archive_sha256": "1e9a289ee7bb6a7284e0662bcff49acfa47f55fea48bc8cbe995da8312fe352a",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-14",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-20T23:59:29Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-20 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "agt",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#6"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.12785",
+   "label": "Code",
+   "line": "Code — https://github.com/maria-larchenko/mkl-harmonizer",
+   "url": "https://github.com/maria-larchenko/mkl-harmonizer",
+   "host": "github",
+   "source": {
+    "archive_sha256": "43c338b49b35b5b42da87bfbf249a3f5161b28acb8a45b6e0c44ed1baca2ed4e",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-16",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-20T23:59:30Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-20 UTC; file list of branch main read: 40 files; README read",
+    "http_status": 200,
+    "n_files": 40,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "arcore",
+     "not_confirmed_because": "ARCore appears only in a link to an Android SDK app, not as the paper's data",
+     "paths_containing_the_name": [
+      "assets/arcore_ikea.gif",
+      "assets/arcore_pawn.gif",
+      "assets/arcore_pawn.mp4",
+      "… 3 more"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#18"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2503.19498",
+   "label": "Code",
+   "line": "Code — https://github.com/LingZhong01/DomainCQA",
+   "url": "https://github.com/LingZhong01/DomainCQA",
+   "host": "github",
+   "source": {
+    "archive_sha256": "cf9d463641291d85f33c5ef415290a485a11dddd3a823114fd9225af2d1b7e3a",
+    "arxiv_version": "v6",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-03-25",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-20T23:59:33Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-20 UTC; file list of branch main read: 40 files; README read",
+    "http_status": 200,
+    "n_files": 40,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "astrochart",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#19"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2510.10921",
+   "label": "Homepage",
+   "line": "Homepage: https://360cvgroup.github.io/FG-CLIP",
+   "url": "https://360cvgroup.github.io/FG-CLIP",
+   "host": "web",
+   "source": {
+    "archive_sha256": "8d3134e4345a7b365d98f683bc51ea98aaf42276603e99d264f370802256815a",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-10-13",
+    "element_id": "p1.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-20T23:59:36Z",
+    "method": "http get",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-20 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "boxclass-cn",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#26"
+    },
+    {
+     "benchmark_id": "dci-cn",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#59"
+    },
+    {
+     "benchmark_id": "fineregion-cn",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#88"
+    },
+    {
+     "benchmark_id": "lit-cn",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#141"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.11158",
+   "label": "Code",
+   "line": "Code — https://github.com/RocStone/PUDD",
+   "url": "https://github.com/RocStone/PUDD",
+   "host": "github",
+   "source": {
+    "archive_sha256": "b16fb30ae29d15e58b443d86643167cb0e40142f3147a9f108b46a25d21db438",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-15",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:07Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch master read: 12 files; README read",
+    "http_status": 200,
+    "n_files": 12,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "cifar-10-cd",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#39"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.15588",
+   "label": "Code",
+   "line": "Code — https://github.com/HLR/NeSyCoCo",
+   "url": "https://github.com/HLR/NeSyCoCo",
+   "host": "github",
+   "source": {
+    "archive_sha256": "fac5cd68159c63d4e79f8f634e86096f72ee7b95c5822a8ffb8f23825203559f",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-20",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:10Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 89 files; README read",
+    "http_status": 200,
+    "n_files": 89,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "clevr-syn",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "analysis_clevr_syn.ipynb",
+      "scripts/generate_clevr_syn.py"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#40"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2512.13731",
+   "label": "Code",
+   "line": "Code — https://github.com/Baitlo/CMER",
+   "url": "https://github.com/Baitlo/CMER",
+   "host": "github",
+   "source": {
+    "archive_sha256": "2dcec249c4e067aae145dd8090837e2fac24c4b56f5029893250cc047309ff93",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-12-14",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:13Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 2 files; files: LICENSE, README.md; README read",
+    "http_status": 200,
+    "n_files": 2,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "cmer-3m",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#41"
+    },
+    {
+     "benchmark_id": "cmer-bench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#42"
+    },
+    {
+     "benchmark_id": "mer-17m",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#178"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.10488",
+   "label": "Project",
+   "line": "Project — https://svgbuilder.github.io",
+   "url": "https://svgbuilder.github.io",
+   "host": "web",
+   "source": {
+    "archive_sha256": "0fa13975688f937abbd903b55a944b137a4bf467f55ff2ec2fe8491dd3ca9ec6",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-13",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:16Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 10 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "colorsvg-100k",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#43"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.12004",
+   "label": "Code and Datasets",
+   "line": "Code and Datasets — https://github.com/xgl-git/ComLQR-main",
+   "url": "https://github.com/xgl-git/ComLQR-main",
+   "host": "github",
+   "source": {
+    "archive_sha256": "79ef0be03004707aa5d2132bbc11b12685b43a93a0c13e8e56c13d79f7c37e19",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-15",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:17Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 5 files; README read",
+    "http_status": 200,
+    "n_files": 5,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "comlq",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#45"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.13626",
+   "label": "Project Page",
+   "line": "Project Page — https://kaixuewen.github.io/Crebench",
+   "url": "https://kaixuewen.github.io/Crebench",
+   "host": "web",
+   "source": {
+    "archive_sha256": "56ae90929ed5ca2b1f2baef2135e05e913bc6fa5aa82b194eea99206cce9de3b",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-17",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:20Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 3,628 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "cremit",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#51"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.16590",
+   "label": "Code",
+   "line": "Code — https://github.com/sen0609/D-GARA",
+   "url": "https://github.com/sen0609/D-GARA",
+   "host": "github",
+   "source": {
+    "archive_sha256": "5ffe16ab26e256eff53405f216feed1d18a05122bec17177c39887f2a8387b0d",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-20",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:21Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 94 files; README read",
+    "http_status": 200,
+    "n_files": 94,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "d-gara-152",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "D-GARA-152.json"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#57"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2410.04759",
+   "label": "Code",
+   "line": "Code — https://github.com/Vickycth/driving-with-regulation",
+   "url": "https://github.com/Vickycth/driving-with-regulation",
+   "host": "github",
+   "source": {
+    "archive_sha256": "554060e32926c632d2d4cff97216305337751f45a35d37eb2767f79e42f6605b",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-10-07",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:24Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 1 file; files: README.md; README read",
+    "http_status": 200,
+    "n_files": 1,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "drivereg-scenarios",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#65"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.12832",
+   "label": "Code",
+   "line": "Code — https://github.com/jxtse/GEC-Metrics-DSGram",
+   "url": "https://github.com/jxtse/GEC-Metrics-DSGram",
+   "host": "github",
+   "source": {
+    "archive_sha256": "c5e70f83858d5b8560400f714c2184dba3be2805ca771b2a65c05d1d188adb5c",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-17",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:28Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 31 files; README read",
+    "http_status": 200,
+    "n_files": 31,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "dsgram-eval",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "Dataset/DSGram-Eval/gec_human_eval_test_1.json",
+      "Dataset/DSGram-Eval/gec_human_eval_test_2.json",
+      "Dataset/DSGram-Eval/gec_human_eval_test_3.json"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#67"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2407.20224",
+   "label": "Project website",
+   "line": "Project website — https://llm-editing.github.io",
+   "url": "https://llm-editing.github.io",
+   "host": "web",
+   "source": {
+    "archive_sha256": "480e14a0eeb045685ab052a3a3b4703195f0887535d703a39f7885b90dc31b98",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-07-29",
+    "element_id": "p1.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:31Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 34,783 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "editattack",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#71"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2510.10921",
+   "label": "Code",
+   "line": "Code: https://github.com/360CVGroup/FG-CLIP",
+   "url": "https://github.com/360CVGroup/FG-CLIP",
+   "host": "github",
+   "source": {
+    "archive_sha256": "8d3134e4345a7b365d98f683bc51ea98aaf42276603e99d264f370802256815a",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-10-13",
+    "element_id": "p1.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:32Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 131 files; README read",
+    "http_status": 200,
+    "n_files": 131,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "fineregion-cn",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#89"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2504.12679",
+   "label": "Project",
+   "line": "Project — https://computer-use-agents.github.io/tongui/",
+   "url": "https://computer-use-agents.github.io/tongui/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "047d00a723ff9c52d14182a8f7eb588e4442b13f493a7f8bbe521fb206820c15",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-04-17",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:35Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 92 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "gui-net-1m",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#109"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2503.02547",
+   "label": "Code",
+   "line": "Code — https://github.com/Sunniva-Shang/PVTree-palm-vein-generation",
+   "url": "https://github.com/Sunniva-Shang/PVTree-palm-vein-generation",
+   "host": "github",
+   "source": {
+    "archive_sha256": "aeb824c0df3626024b590addccc007e38a10fe7284cf4900a6460c05cd98e156",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-03-04",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:36Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 147 files; README read",
+    "http_status": 200,
+    "n_files": 147,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "hfut",
+     "not_confirmed_because": "HFUT appears only in an e-mail domain",
+     "review_ref": "data/work/links/front_packets.json#114"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2503.02547",
+   "label": "Dataset",
+   "line": "Dataset — https://github.com/Sunniva-Shang/Palm-Vein-Dataset-HFUT",
+   "url": "https://github.com/Sunniva-Shang/Palm-Vein-Dataset-HFUT",
+   "host": "github",
+   "source": {
+    "archive_sha256": "aeb824c0df3626024b590addccc007e38a10fe7284cf4900a6460c05cd98e156",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-03-04",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:40Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "hfut",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#115"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2403.20213",
+   "label": "Code & Data",
+   "line": "Code & Data — https://github.com/opendatalab/VHM",
+   "url": "https://github.com/opendatalab/VHM",
+   "host": "github",
+   "source": {
+    "archive_sha256": "43fd044cc0a7fde0cdefdbde3bdb70b25e91e1ae320301ff212cdd15da356330",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-03-29",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:40Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 36 files; README read",
+    "http_status": 200,
+    "n_files": 36,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "hnstd",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#116"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2503.07019",
+   "label": "Code",
+   "line": "Code — https://github.com/hxwork/HybridReg˙PyTorch",
+   "url": "https://github.com/hxwork/HybridReg˙PyTorch",
+   "host": "github",
+   "source": {
+    "archive_sha256": "25b627c2c339d41a798222d608c5aeba3c8189d15d7eed924a7814c93eaa0081",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-03-10",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:43Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "hybridmatch",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#120"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review",
+   "corrected": {
+    "url": "https://github.com/hxwork/HybridReg_PyTorch",
+    "rule": "U+02D9 (˙) in the printed address read as an underscore",
+    "observed": {
+     "checked_at": "2026-10-21T00:00:44Z",
+     "reached": true,
+     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 96 files; README read"
+    },
+    "note": "the corrected address exists; that does not establish it is the printed link's intended target"
+   }
+  },
+  {
+   "paper_id": "2412.08038",
+   "label": "Code, Datasets and Appendix",
+   "line": "Code, Datasets and Appendix — https://github.com/zch65458525/GHGRL/tree/main",
+   "url": "https://github.com/zch65458525/GHGRL/tree/main",
+   "host": "github",
+   "source": {
+    "archive_sha256": "52171ab53178e4e26aa456165d881467e39e1e9f327e4dad42d4eb26b751d9c9",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-11",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:48Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 35 files; README read",
+    "http_status": 200,
+    "n_files": 35,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "imdb-rir",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#123"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2504.08202",
+   "label": "Code",
+   "line": "Code — https://github.com/FYYFU/Hybrid-NIAH",
+   "url": "https://github.com/FYYFU/Hybrid-NIAH",
+   "host": "github",
+   "source": {
+    "archive_sha256": "642907dd4931d703261893ad22f9430fc682ebc44ef38c3aa88eb46c995ad8e5",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-04-11",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:51Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 147 files; README read",
+    "http_status": 200,
+    "n_files": 147,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "iwhoqa",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#128"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.07934",
+   "label": "Code",
+   "line": "Code — https://github.com/HHHHStar/Laytrol",
+   "url": "https://github.com/HHHHStar/Laytrol",
+   "host": "github",
+   "source": {
+    "archive_sha256": "6751b659c05106ad746d39925e650cf0509e63cf624f3e315a361f5f243f532f",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-11",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:54Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 24 files; README read",
+    "http_status": 200,
+    "n_files": 24,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "laysyn",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#134"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2510.17602",
+   "label": "Data and code",
+   "line": "Data and code — https://github.com/thunlp/LexChain",
+   "url": "https://github.com/thunlp/LexChain",
+   "host": "github",
+   "source": {
+    "archive_sha256": "74ab45faf8b2071964ae2248cd9fea14ddcd5186cf8ff7d5be6618550ffcf008",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-10-20",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:00:57Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 17 files; README read",
+    "http_status": 200,
+    "n_files": 17,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "lexchaineval",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#137"
+    },
+    {
+     "benchmark_id": "lexchaintrain",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#138"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2309.13788",
+   "label": "Project website",
+   "line": "Project website: https://llm-misinformation.github.io/",
+   "url": "https://llm-misinformation.github.io/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "6ed853afc7937607e4aeff68e3907885532f2eabbd680b720489fc72f50467d6",
+    "arxiv_version": "v5",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2023-09-25",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:00Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 65,400 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "llmfake",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#146"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.12713",
+   "label": "Code",
+   "line": "Code — https://github.com/pedroilidio/oxytrees2025",
+   "url": "https://github.com/pedroilidio/oxytrees2025",
+   "host": "github",
+   "source": {
+    "archive_sha256": "e09324e55ef5f3a1957044edec3a31e0b206b2d3eaa9aa3b4fa9836ac079d1cd",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-16",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:31Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 275 files; README read",
+    "http_status": 200,
+    "n_files": 275,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "lncrna-mirna",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "experiments/datasets/lncrna_mirna/X1.npy",
+      "experiments/datasets/lncrna_mirna/X2.npy",
+      "experiments/datasets/lncrna_mirna/y.npy"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#147"
+    },
+    {
+     "benchmark_id": "te-pirna",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "experiments/datasets/te_pirna/X1.npy",
+      "experiments/datasets/te_pirna/X2.npy",
+      "experiments/datasets/te_pirna/y.npy"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#295"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2604.11792",
+   "label": "Project Page",
+   "line": "Project Page: https://lottiegpt.github.io/",
+   "url": "https://lottiegpt.github.io/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "09f6805174f36c3eb2f2e54709585860a718dac0494451577ed8dd62495d1c99",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-04-13",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:34Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 1,670 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "lottie-660k",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#152"
+    },
+    {
+     "benchmark_id": "lottieanimation-660k",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#153"
+    },
+    {
+     "benchmark_id": "lottiebench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#154"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2601.08545",
+   "label": "Code",
+   "line": "Code — https://github.com/PandaAB/LSGen",
+   "url": "https://github.com/PandaAB/LSGen",
+   "host": "github",
+   "source": {
+    "archive_sha256": "d2932551a129ad1d308dd07c14e34456206ece5aeabd693678ff909bce91e2e8",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-13",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:35Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 60,180 files (the API truncated the listing; more files exist); README read",
+    "http_status": 200,
+    "n_files": 60180,
+    "listing_truncated": true
+   },
+   "reviews": [
+    {
+     "benchmark_id": "lpr-bench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#156"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2407.12317",
+   "label": "Code",
+   "line": "Code — https://github.com/Topdu/OpenOCR",
+   "url": "https://github.com/Topdu/OpenOCR",
+   "host": "github",
+   "source": {
+    "archive_sha256": "7fcd7871f646ddafd90132769bc1145a447dbedab7e4a63764adf85ab1473dea",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-07-17",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:39Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 418 files; README read",
+    "http_status": 200,
+    "n_files": 418,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "ltb",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#158"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2603.19993",
+   "label": "Project Page",
+   "line": "Project Page: https://rozainmalik.github.io/MedSPOT_web/",
+   "url": "https://rozainmalik.github.io/MedSPOT_web/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "52682af97c0ebf66a1b9757acad9f34ebbdbf994dba235cfa5a4f89d45126b95",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-03-20",
+    "element_id": "p1.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:42Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 27 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "medspot",
+     "not_confirmed_because": "nothing readable at the page beyond an HTML comment",
+     "review_ref": "data/work/links/front_packets.json#173"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.12113",
+   "label": "Code",
+   "line": "Code — https://github.com/Qlanxue/MetaGDPO",
+   "url": "https://github.com/Qlanxue/MetaGDPO",
+   "host": "github",
+   "source": {
+    "archive_sha256": "4982ed82ee5f323efc5e1fd5bd52845cb815c736e127e3cfd012cb21b0af2288",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-15",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:44Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 4 files; files: .DS_Store, LICENSE, appendix/.DS_Store, appendix/Appendix_GDPO.pdf; README not present",
+    "http_status": 200,
+    "n_files": 4,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "metakl",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#179"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2602.00583",
+   "label": "Code",
+   "line": "Code — https://github.com/XDLI13/MAUGen/tree/main",
+   "url": "https://github.com/XDLI13/MAUGen/tree/main",
+   "host": "github",
+   "source": {
+    "archive_sha256": "285f08ee132f0089265e09413ef7d14c6071f2b39a2f25c96222d0ccbddc0b48",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-31",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:47Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 19 files; README read",
+    "http_status": 200,
+    "n_files": 19,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mifa",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#183"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.20378",
+   "label": "Project website",
+   "line": "Project website — https://tri-ergon.github.io/Tri-Ergon/",
+   "url": "https://tri-ergon.github.io/Tri-Ergon/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "708fc48e569f2cf5c18583865886692fa0d1f5a409822503316cd3e6acd3ccd8",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-29",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:50Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 2,376 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mm-v2a",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#186"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.12254",
+   "label": "Code&Supp.",
+   "line": "Code&Supp. — https://github.com/george13zyx/MAR",
+   "url": "https://github.com/george13zyx/MAR",
+   "host": "github",
+   "source": {
+    "archive_sha256": "082320d0bf07a9463d23d24ed878028f259310639c3239dd392f8ce87ce6028a",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-15",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:51Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 43 files; README read",
+    "http_status": 200,
+    "n_files": 43,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mobile-eval-rag",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "Mobile-Agent-RAG/Mobile_Eval_RAG/1_Information Searching.jsonl",
+      "Mobile-Agent-RAG/Mobile_Eval_RAG/2_What's Trending.jsonl",
+      "Mobile-Agent-RAG/Mobile_Eval_RAG/3_Restaurant Recommendation.jsonl",
+      "… 5 more"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#194"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2410.17520",
+   "label": "Code",
+   "line": "Code — https://mobilesafetybench.github.io/code",
+   "url": "https://mobilesafetybench.github.io/code",
+   "host": "web",
+   "source": {
+    "archive_sha256": "81da17eb5dc6e71e98c4fb03bc25acdfd0fd67ee3c26e8cbe4d5119653eca344",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-10-23",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:54Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 114 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mobilesafetybench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#195"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2410.17520",
+   "label": "Datasets",
+   "line": "Datasets — https://mobilesafetybench.github.io/datasets",
+   "url": "https://mobilesafetybench.github.io/datasets",
+   "host": "web",
+   "source": {
+    "archive_sha256": "81da17eb5dc6e71e98c4fb03bc25acdfd0fd67ee3c26e8cbe4d5119653eca344",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-10-23",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:55Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 107 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mobilesafetybench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#196"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.13689",
+   "label": "Code",
+   "line": "Code — https://github.com/SofeeyaJ/Crossing-Borders—AAAI26",
+   "url": "https://github.com/SofeeyaJ/Crossing-Borders—AAAI26",
+   "host": "github",
+   "source": {
+    "archive_sha256": "90045bff1c4a879f8efdf2ec7812cbea640ea40f2212d17fd7756f840658b7e9",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-17",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:56Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "morphoverse",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#200"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2408.12910",
+   "label": "Code & Datasets",
+   "line": "Code & Datasets — https://github.com/superboom/DialPrompt",
+   "url": "https://github.com/superboom/DialPrompt",
+   "host": "github",
+   "source": {
+    "archive_sha256": "4e8f77f771f264a068222d477847a4c13d8701501c686b837bd8dc3cfb6f6010",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-08-23",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:01:57Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 9 files; README read",
+    "http_status": 200,
+    "n_files": 9,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "mtgpd",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#205"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.06452",
+   "label": "Project Page",
+   "line": "Project Page — https://ravexly.github.io/MultiBenchplus",
+   "url": "https://ravexly.github.io/MultiBenchplus",
+   "host": "web",
+   "source": {
+    "archive_sha256": "bec9632baa75d3f725dd06a0b7e7fc5ce12aeefe03278f3ad4daac905728d207",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-09",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:02:01Z",
+    "method": "http get",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "multibench-plus-plus",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#207"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.09970",
+   "label": "Code",
+   "line": "Code — https://github.com/Armanfard-Lab/MultiTab",
+   "url": "https://github.com/Armanfard-Lab/MultiTab",
+   "host": "github",
+   "source": {
+    "archive_sha256": "7fd03613e6af32218c04196ef590a317b707dcebe5b7af1fa47b84e1ef44476f",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-13",
+    "element_id": "p3.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:02:01Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch master read: 70 files; README read",
+    "http_status": 200,
+    "n_files": 70,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "multitab-bench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#208"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2506.07611",
+   "label": "Code",
+   "line": "Code — https://github.com/zhouyuan888888/DragNeXt",
+   "url": "https://github.com/zhouyuan888888/DragNeXt",
+   "host": "github",
+   "source": {
+    "archive_sha256": "35e17eb305f48ed48fba24924c73aa9e3f8e846a33ff06c72c007da2714b6f9d",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-06-09",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:02:05Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 22 files; README read",
+    "http_status": 200,
+    "n_files": 22,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "nextbench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#215"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2508.07981",
+   "label": "Code",
+   "line": "Code — https://amap-ml.github.io/Omni-Effects.github.io",
+   "url": "https://amap-ml.github.io/Omni-Effects.github.io",
+   "host": "web",
+   "source": {
+    "archive_sha256": "a1d35e0886feb9bb482cf405283742b78d4fd71a18c3f901af04531232140ecb",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-08-11",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:02:08Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 4,843 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "omni-vfx",
+     "not_confirmed_because": "Omni-VFX appears only in a commented-out link on the page",
+     "review_ref": "data/work/links/front_packets.json#220"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2602.24071",
+   "label": "Project",
+   "line": "Project — https://zcli-charlie.github.io/songsong/",
+   "url": "https://zcli-charlie.github.io/songsong/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "865bb980f3c4bebb07954f8104dc6f23ddc90a7d70a10a52b30ec15392530f35",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-02-27",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:02:39Z",
+    "method": "http get",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "opensongsong",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#223"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.19500",
+   "label": "Datasets",
+   "line": "Datasets — https://github.com/sunyrain/OPV2D",
+   "url": "https://github.com/sunyrain/OPV2D",
+   "host": "github",
+   "source": {
+    "archive_sha256": "f6a3efb809688412d6c1801dbf8efcca76f6053bde2ec5305d40a0172ae31bfe",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-23",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:09Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 8 files; README read",
+    "http_status": 200,
+    "n_files": 8,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "opv2d",
+     "not_confirmed_because": "the repository now presents OPV-DB, a literature-mined device database; it does not name OPV2D",
+     "review_ref": "data/work/links/front_packets.json#225"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2408.12928",
+   "label": "Code and models",
+   "line": "Code and models — https://github.com/bytedance/ParGo",
+   "url": "https://github.com/bytedance/ParGo",
+   "host": "github",
+   "source": {
+    "archive_sha256": "69ab52a78632efb210c573f1c3b12006d6631768b0d83ea0d22c5d286d072fe3",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-08-23",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:12Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 30 files; README read",
+    "http_status": 200,
+    "n_files": 30,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pargocap-1m-pt",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#230"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2601.06234",
+   "label": "Code",
+   "line": "Code — https://github.com/silverbeats/pcs˙v2",
+   "url": "https://github.com/silverbeats/pcs˙v2",
+   "host": "github",
+   "source": {
+    "archive_sha256": "400de64bb656b4dbe9a0e279e6e8e34e6ffe6a261708f478198d43ea001db85b",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-09",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:15Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pcokg",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#232"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review",
+   "corrected": {
+    "url": "https://github.com/silverbeats/pcs_v2",
+    "rule": "U+02D9 (˙) in the printed address read as an underscore",
+    "observed": {
+     "checked_at": "2026-10-21T00:03:16Z",
+     "reached": true,
+     "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 15 files; README read"
+    },
+    "note": "the corrected address exists; that does not establish it is the printed link's intended target"
+   }
+  },
+  {
+   "paper_id": "2511.06764",
+   "label": "Code",
+   "line": "Code — https://github.com/Pu-Wang-alt/Reduce-Purple-Flare/",
+   "url": "https://github.com/Pu-Wang-alt/Reduce-Purple-Flare/",
+   "host": "github",
+   "source": {
+    "archive_sha256": "19b40e1b3b9b93350f5d9f4fd524c641466d3966164e4782f114cbe8c6bebeb3",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-10",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:19Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pfsd",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#235"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.06764",
+   "label": "Datasets",
+   "line": "Datasets — https://huggingface.co/datasets/PuWang0/purple˙flare",
+   "url": "https://huggingface.co/datasets/PuWang0/purple˙flare",
+   "host": "huggingface",
+   "source": {
+    "archive_sha256": "19b40e1b3b9b93350f5d9f4fd524c641466d3966164e4782f114cbe8c6bebeb3",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-10",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:20Z",
+    "method": "hugging face api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 401)",
+    "http_status": 401
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pfsd",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#236"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review",
+   "corrected": {
+    "url": "https://huggingface.co/datasets/PuWang0/purple_flare",
+    "rule": "U+02D9 (˙) in the printed address read as an underscore",
+    "observed": {
+     "checked_at": "2026-10-21T00:03:21Z",
+     "reached": true,
+     "summary": "Hub dataset reached on 2026-10-21 UTC; file list read: 12,417 files"
+    },
+    "note": "the corrected address exists; that does not establish it is the printed link's intended target"
+   }
+  },
+  {
+   "paper_id": "2406.06424",
+   "label": "Code",
+   "line": "Code — https://github.com/mapo-t2i/mapo",
+   "url": "https://github.com/mapo-t2i/mapo",
+   "host": "github",
+   "source": {
+    "archive_sha256": "a99bcbcaab55312882940bc8a856f4ef06c0af5e56171395c662773cbd49912b",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-06-10",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:23Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 9 files; README read",
+    "http_status": 200,
+    "n_files": 9,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pick-safety",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#238"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2601.15547",
+   "label": "Code",
+   "line": "Code — https://github.com/Kingyum-Hou/LANO",
+   "url": "https://github.com/Kingyum-Hou/LANO",
+   "host": "github",
+   "source": {
+    "archive_sha256": "362cbbb1a678595a45438b17a8f7e030c24e36b8a21b2490d30694deac315ac4",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-22",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:26Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch master read: 88 files; README read",
+    "http_status": 200,
+    "n_files": 88,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pobench-pde",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#244"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2507.22533",
+   "label": "Code",
+   "line": "Code — https://github.com/sakurakawa1/CliCARE",
+   "url": "https://github.com/sakurakawa1/CliCARE",
+   "host": "github",
+   "source": {
+    "archive_sha256": "e355b7a17cf83a2723d93ee5a6dd0ec40db7d15c950d5181818af8f855793afe",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-07-30",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:29Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 86 files; README read",
+    "http_status": 200,
+    "n_files": 86,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "processed-mimic-cancer",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#248"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2505.23229",
+   "label": "Code",
+   "line": "Code — https://github.com/JianChengXingYun/Mctsr-Zero",
+   "url": "https://github.com/JianChengXingYun/Mctsr-Zero",
+   "host": "github",
+   "source": {
+    "archive_sha256": "33011bc018b48a86a60b495c7d3b61d1e3dee30c5672a75a547a8eeb642e8f7f",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-05-29",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:32Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 39 files; README read",
+    "http_status": 200,
+    "n_files": 39,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "psyeval",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "paths_containing_the_name": [
+      "Swimming_Pool_Async_project/build/lib/Swimming_Pool_Async/PsyEval_Prompter.py",
+      "Swimming_Pool_Async_project/build/lib/Swimming_Pool_Async/PsyEval_PrompterV2.py",
+      "Swimming_Pool_Async_project/build/lib/Swimming_Pool_Async/PsyEval_Prompter_E.py",
+      "… 3 more"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#250"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2601.07344",
+   "label": "Code",
+   "line": "Code — https://github.com/AQ-MedAI/PulseMind",
+   "url": "https://github.com/AQ-MedAI/PulseMind",
+   "host": "github",
+   "source": {
+    "archive_sha256": "09266affb4cdac74c6b25a596c3147805817d5ac96fd8e2ff39829306920d98b",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-12",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:35Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 9 files; README read",
+    "http_status": 200,
+    "n_files": 9,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "pulsemind",
+     "not_confirmed_because": "the README presents the PulseMind model and other benchmarks (MedDiagnose, CMtMedQA-test); it does not name the PulseMind Benchmark",
+     "review_ref": "data/work/links/front_packets.json#251"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2602.02393",
+   "label": "Project Page",
+   "line": "Project Page: https://RQ-Wu.github.io/projects/infinite-world.html",
+   "url": "https://RQ-Wu.github.io/projects/infinite-world.html",
+   "host": "web",
+   "source": {
+    "archive_sha256": "178f083859e2905289f90744e5d8fd335e8ac56662d10f3f743df251aab0204f",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-02-02",
+    "element_id": "p1.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:38Z",
+    "method": "http get",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "rdd",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#252"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2601.08040",
+   "label": "Code",
+   "line": "Code — https://github.com/SoumyaroopNandi/Rescind",
+   "url": "https://github.com/SoumyaroopNandi/Rescind",
+   "host": "github",
+   "source": {
+    "archive_sha256": "916bfd5a5b61630ac5e71d010ac4ad7bbc613803df0cbd3a147cc897db4d233f",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-01-12",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:39Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "rescind",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#254"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2407.02906",
+   "label": "Datasets",
+   "line": "Datasets — https://huggingface.co/Lhaippp/RS-Diffusion",
+   "url": "https://huggingface.co/Lhaippp/RS-Diffusion",
+   "host": "huggingface",
+   "source": {
+    "archive_sha256": "2cdcea96edb9a2fc8c1c13558eccca46c162ae396066b0862ff611df49b445b2",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-07-03",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:40Z",
+    "method": "hugging face api",
+    "reached": true,
+    "summary": "Hub model page reached on 2026-10-21 UTC; file list read: 2 files; files: .gitattributes, README.md",
+    "http_status": 200,
+    "n_files": 2,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "rs-real",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#263"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2606.29473",
+   "label": "Project page",
+   "line": "Project page: https://liukqchoco.github.io/MAVIN/",
+   "url": "https://liukqchoco.github.io/MAVIN/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "dc0e379313b89d31276a7c2566adf7cef01cf9058ef9704eeee9c5bbb205653f",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-06-28",
+    "element_id": "p1.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:41Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 12,928 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "rwbench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#266"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2412.10078",
+   "label": "Code",
+   "line": "Code — https://drliuqi.github.io/",
+   "url": "https://drliuqi.github.io/",
+   "host": "web",
+   "source": {
+    "archive_sha256": "4ce7c3ef969133532fd1d36f88eb10681db75276be5c29631712e0b6c2a6a11c",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-12-13",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:03:42Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 3,374 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "scutic",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#273"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2508.20097",
+   "label": "Code & Data",
+   "line": "Code & Data — https://github.com/BlairStanek/LLM-Tax-Abuse/",
+   "url": "https://github.com/BlairStanek/LLM-Tax-Abuse/",
+   "host": "github",
+   "source": {
+    "archive_sha256": "10b70622e924aedb1040963b7b47a9a49f47652b72006550fa235bf882a0f06c",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-08-10",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:13Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 30 files; README read",
+    "http_status": 200,
+    "n_files": 30,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "shelter-check",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#275"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.07267",
+   "label": "Code",
+   "line": "Code — https://github.com/hanshenmesen/Debate-to-Detect",
+   "url": "https://github.com/hanshenmesen/Debate-to-Detect",
+   "host": "github",
+   "source": {
+    "archive_sha256": "8bd6416fb75503a5ce3568bb24eb9501a194ee1b8b4931d46669f8ecdf856cbd",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-10",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:16Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 8 files; README read",
+    "http_status": 200,
+    "n_files": 8,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "snopes25",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#279"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2604.22759",
+   "label": "Code",
+   "line": "Code — https://github.com/AIT55/TeCQR",
+   "url": "https://github.com/AIT55/TeCQR",
+   "host": "github",
+   "source": {
+    "archive_sha256": "91a11fb2596439d13bd4ad7ee1e58e6cbbbfc87970335bfe54b57913a610d917",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-03-09",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:19Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 9 files; README read",
+    "http_status": 200,
+    "n_files": 9,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "stackoverflow-tag",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#281"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.17300",
+   "label": "Code",
+   "line": "Code — https://github.com/hustvl/MolSight",
+   "url": "https://github.com/hustvl/MolSight",
+   "host": "github",
+   "source": {
+    "archive_sha256": "8b001731b5ef6c611cf308758c09c66e28df3057042243e1cdaaa058dd4f7115",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-21",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:22Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 47 files; README read",
+    "http_status": 200,
+    "n_files": 47,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "stereo",
+     "not_confirmed_because": "a coincidental match on 'stereoisomers'; the paper's dataset is Stereo-200k",
+     "review_ref": "data/work/links/front_packets.json#282"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2408.10605",
+   "label": "Dataset",
+   "line": "Dataset — https://huggingface.co/yanboding/MUSES",
+   "url": "https://huggingface.co/yanboding/MUSES",
+   "host": "huggingface",
+   "source": {
+    "archive_sha256": "515105e773d8a6566124a864aa7b3306874a39c567e9689bb587e687a4bf4720",
+    "arxiv_version": "v5",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-08-20",
+    "element_id": "p3.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:25Z",
+    "method": "hugging face api",
+    "reached": true,
+    "summary": "Hub model page reached on 2026-10-21 UTC; file list read: 1,211 files",
+    "http_status": 200,
+    "n_files": 1211,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "t2i-3disbench",
+     "not_confirmed_because": "a Hugging Face model page (related artifact under rule v3)",
+     "review_ref": "data/work/links/front_packets.json#291"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2605.15984",
+   "label": "Code",
+   "line": "Code — https://github.com/yiliang-la/ToxiAlert",
+   "url": "https://github.com/yiliang-la/ToxiAlert",
+   "host": "github",
+   "source": {
+    "archive_sha256": "f74a5922bb9bbf101c30a401064aa66515b57e5cc2092250a40a8735f05bfb52",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2026-05-15",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:26Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 1 file; files: README.md; README read",
+    "http_status": 200,
+    "n_files": 1,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "toxialert-bench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#300"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2407.09893",
+   "label": "Code",
+   "line": "Code — https://github.com/yueshengbin/SMART",
+   "url": "https://github.com/yueshengbin/SMART",
+   "host": "github",
+   "source": {
+    "archive_sha256": "cab0ec4bb98af64bc701ce5b7a0b2f35066d63c28adb4176bb1128332b0f9169",
+    "arxiv_version": "v3",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-07-13",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:30Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 42 files; README read",
+    "http_status": 200,
+    "n_files": 42,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "trajectory",
+     "not_confirmed_because": "'Trajectory' is a word in the method's title, not a dataset name",
+     "paths_containing_the_name": [
+      "data_creation/example/long_trajectory.json",
+      "data_creation/example/short_trajectory.json"
+     ],
+     "paths_note": "file paths seen in the listing, not reviewed as this benchmark's location",
+     "review_ref": "data/work/links/front_packets.json#302"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2410.05295",
+   "label": "Project page",
+   "line": "Project page: https://autodans.github.io/AutoDAN-Turbo",
+   "url": "https://autodans.github.io/AutoDAN-Turbo",
+   "host": "web",
+   "source": {
+    "archive_sha256": "2819b1b28fa5fd2e0132c3478e4253a11a361898a71d3b166cdcfa04d3066f73",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-10-03",
+    "element_id": "p2.2",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:33Z",
+    "method": "http get",
+    "reached": true,
+    "summary": "page reached on 2026-10-21 UTC (HTTP 200); 10,565 characters of page text read; no file list",
+    "http_status": 200
+   },
+   "reviews": [
+    {
+     "benchmark_id": "unseen-malicious-requests",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#305"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2410.05295",
+   "label": "Code",
+   "line": "Code: https://github.com/SaFoLab-WISC/AutoDAN-Turbo",
+   "url": "https://github.com/SaFoLab-WISC/AutoDAN-Turbo",
+   "host": "github",
+   "source": {
+    "archive_sha256": "2819b1b28fa5fd2e0132c3478e4253a11a361898a71d3b166cdcfa04d3066f73",
+    "arxiv_version": "v4",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2024-10-03",
+    "element_id": "p2.4",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:34Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 36 files; README read",
+    "http_status": 200,
+    "n_files": 36,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "unseen-malicious-requests",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#306"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.14247",
+   "label": "Code",
+   "line": "Code — https://github.com/wklin214-glitch/V2VLoc",
+   "url": "https://github.com/wklin214-glitch/V2VLoc",
+   "host": "github",
+   "source": {
+    "archive_sha256": "88fca8ad12afa6d393e4731e26b8e9649ad9f01561e51e033f0fec1bdbf7f096",
+    "arxiv_version": "v1",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-18",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:37Z",
+    "method": "github api",
+    "reached": false,
+    "summary": "could not be reached or confirmed on 2026-10-21 UTC (HTTP 404)",
+    "http_status": 404
+   },
+   "reviews": [
+    {
+     "benchmark_id": "v2vloc",
+     "not_confirmed_because": "the address could not be reached or confirmed when reviewed on 2026-10-20",
+     "review_ref": "data/work/links/front_packets.json#308"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  },
+  {
+   "paper_id": "2511.06283",
+   "label": "Code",
+   "line": "Code — https://github.com/xxlllz/TinyChemVL",
+   "url": "https://github.com/xxlllz/TinyChemVL",
+   "host": "github",
+   "source": {
+    "archive_sha256": "c08c700f7200679f51b2f73b40bb46cb69cddee4a947379841280de370af5e6e",
+    "arxiv_version": "v2",
+    "arxiv_version_basis": "version strings in the archived page",
+    "oai_source_version": null,
+    "oai_baseline_datestamp": "2025-11-09",
+    "element_id": "p2.1",
+    "region": "front matter (after the abstract, before the first section)"
+   },
+   "observed": {
+    "checked_at": "2026-10-21T00:04:38Z",
+    "method": "github api",
+    "reached": true,
+    "summary": "repository reached on 2026-10-21 UTC; file list of branch main read: 4 files; files: README.md, fig/main.png, modeling_intern_vit.py, modeling_internvl_chat.py; README read",
+    "http_status": 200,
+    "n_files": 4,
+    "listing_truncated": false
+   },
+   "reviews": [
+    {
+     "benchmark_id": "visrxnbench",
+     "not_confirmed_because": "the benchmark's name was not found in the text read there on 2026-10-20 (README, card or page text)",
+     "review_ref": "data/work/links/front_packets.json#317"
+    }
+   ],
+   "reviewed_by": "Claude Code (AI review), not human review",
+   "review_method": "front-matter line read verbatim from the archived arXiv HTML; the URL re-checked by API or HTTP GET; the relation to each benchmark taken from the individual front-matter review"
+  }
+ ]
+}

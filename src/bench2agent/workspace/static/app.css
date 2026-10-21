@@ -188,6 +188,9 @@ button, select, textarea { font: inherit; color: inherit; }
 .facts .paper-title { font-family: var(--serif); color: var(--ink-2); }
 .facts .muted { color: var(--ink-3); }
 .status-note { display: block; font-size: 12.5px; color: var(--ink-3); }
+.paper-links { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--rule); }
+.paper-links-title { font-size: 12.5px; color: var(--ink-2); }
+.paper-link { margin-top: 4px; overflow-wrap: anywhere; }
 .link-btn { border: 0; background: none; padding: 0; color: var(--pen); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
 
 .section { font: 600 15px/1.3 var(--serif); margin: 20px 0 4px; }

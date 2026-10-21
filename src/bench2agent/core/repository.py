@@ -733,12 +733,15 @@ class SqliteRepository:
             for r in claim_rows:
                 if q in " ".join((r[2] or "").split()):
                     return {"title": r[0], "edition": r[1]}
-            # a reviewed location's release sentence: the introducing paper's own verbatim text
+            # a reviewed location's release sentence, or the line of a link the paper prints (paper_links):
+            # the introducing paper's own verbatim text. Only the line is checked here; what the link holds is not.
             for r in claim_rows:
                 for (extra,) in con.execute("SELECT extra FROM benchmarks WHERE id = ?", (r[3],)):
-                    for loc in (json.loads(extra) if extra else {}).get("reviewed_locations") or []:
-                        if loc.get("paper_id") == paper_id and q in " ".join((loc.get("release_sentence") or "").split()):
-                            return {"title": r[0], "edition": r[1]}
+                    e = json.loads(extra) if extra else {}
+                    texts = [loc.get("release_sentence") for loc in e.get("reviewed_locations") or [] if loc.get("paper_id") == paper_id]
+                    texts += [x.get("line") for x in e.get("paper_links") or [] if x.get("paper_id") == paper_id]
+                    if any(q in " ".join((t or "").split()) for t in texts):
+                        return {"title": r[0], "edition": r[1]}
         finally:
             self._done(con)
         return None
