@@ -76,6 +76,18 @@ class ConnectedFigureTests(unittest.TestCase):
         segs, _ = chat.segment(text, None, Verifier.__new__(Verifier), [], lg)
         self.assertEqual([s["v"] for s in segs if s["t"] == "n"], ["no"])
 
+    def test_an_anchor_inside_a_table_cell_escapes_its_separator(self):
+        # live answer of 2026-10-21: "| LIBERO | ⟦benchmark_usage:{...}\\|LIBERO 82 of 513 parsed papers⟧ |" -- the
+        # backslash markdown needs before "|" in a table cell was read into the arguments, so 14 right figures read ✗
+        from bench2agent.core import chat
+        from bench2agent.core.verify import Verifier
+        lg = log(("benchmark_usage", {"topic": "robotics", "latest": True}, {
+            "role": "evaluates_on", "coverage": {"parsed_papers": 513}, "results": [{"id": "libero", "name": "LIBERO", "papers": 82}]}))
+        for text, state in (('| LIBERO | ⟦benchmark_usage:{"topic":"robotics","latest":true}\\|LIBERO 82 of 513 parsed papers⟧ |', "ok"),
+                            ('| LIBERO | ⟦benchmark_usage:{"topic":"robotics","latest":true}\\|LIBERO 83 of 513 parsed papers⟧ |', "no")):
+            segs, _ = chat.segment(text, None, Verifier.__new__(Verifier), [], lg)
+            self.assertEqual([s["v"] for s in segs if s["t"] == "n"], [state], text)
+
     def test_percentage_rounding_and_anchors_use_the_turns_own_counts(self):
         from bench2agent.core import chat
         from bench2agent.core.metrics import percentage

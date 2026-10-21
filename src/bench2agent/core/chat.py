@@ -104,7 +104,7 @@ def system_for(lang: str | None) -> str:
 #   ⟦gid|quote⟧              a sentence, matched against that paper
 #   ⟦tool:arg|figures⟧       a number, recomputed by running the tool again
 _ANCHOR = re.compile(
-    r"⟦\s*(?:(\d+)\s*\|([^⟧]+)|([a-z_]{3,20})\s*:\s*([^|⟧]{1,2000})\|([^⟧]{1,2000}))⟧")
+    r"⟦\s*(?:(\d+)\s*\\?\|([^⟧]+)|([a-z_]{3,20})\s*:\s*([^|⟧]{1,2000}?)\s*\\?\|([^⟧]{1,2000}))⟧")   # "\|": an anchor written inside a markdown table cell
 
 
 def _mcp_config() -> str:
