@@ -196,7 +196,8 @@ async function loadChats() {
     b.innerHTML = `<span class="t"></span><span class="m"></span>`;
     b.querySelector(".t").textContent = c.title || "New conversation";
     b.querySelector(".m").textContent = `${CLIENTS[c.connector] || "API key"}, ${c.turns === 1 ? "1 answer" : `${c.turns || 0} answers`}, ${when(c.ts)}`;
-    b.addEventListener("click", () => openChat(c.id));
+    // the list is redrawn when a conversation opens: focus moves to its title instead of falling to the page
+    b.addEventListener("click", () => openChat(c.id).then(() => { if (!S.details || $("details").hidden) $("chat-title").focus(); }));
     nav.appendChild(b);
   }
 }
@@ -376,6 +377,7 @@ async function follow(jobId, question) {
 }
 async function cancel(jobId) {
   const btn = $("cancel");
+  if (btn && document.activeElement === btn) $("question").focus();   // the button goes away: keep the keyboard in the composer
   if (btn) btn.disabled = true;
   try {
     const r = await api(`/api/jobs/${jobId}/cancel`, {});
