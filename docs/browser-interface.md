@@ -82,7 +82,9 @@ additional dependencies.
   not a benchmark-quality rating or a guarantee that every semantic binding
   is correct. Keep the source, edition, role and denominator inspectable.
 - Show each answer's scope clearly. Keep the pinned revision and full trail
-  in data details and exports. Updates affect new conversations; an existing
+  in data details and exports. The sidebar shows the running application
+  version; the dataset ID is explained in Scope, not used as the product version.
+  Updates affect new conversations; an existing
   conversation never silently switches revision. Cross-revision differences
   must not be presented as year-to-year usage trends.
 - Source sentences remain verbatim and tied to the paper/version; assembled

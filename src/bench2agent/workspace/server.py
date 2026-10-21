@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from bench2agent import providers
+from bench2agent import __version__, providers
 from bench2agent.session import Session, TurnControl, conversations
 
 STATIC = Path(__file__).with_name("static")
@@ -93,7 +93,7 @@ class Workspace:
         data = BenchmarkStore(self.root, revision=revision).data() if revision else {"available": False}
         connectors = [{"name": c["name"], "label": c.get("label"), "connected": bool(c.get("connected"))}
                       for c in available_connectors() if c["name"] in ("claude", "codex")]
-        return {"revision": revision, "available": bool(data.get("available")), "generated_at": data.get("generated_at"),
+        return {"app_version": __version__, "revision": revision, "available": bool(data.get("available")), "generated_at": data.get("generated_at"),
                 "editions": len(data.get("editions") or {}), "connectors": connectors}
 
     def chats(self) -> list[dict]:

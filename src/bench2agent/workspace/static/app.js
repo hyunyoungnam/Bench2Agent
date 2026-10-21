@@ -179,9 +179,9 @@ async function loadState() {
   }
   $("new-chat").disabled = !usable.length;
   if (!usable.length) $("composer-note").textContent = "No signed-in AI CLI found. Run claude auth login or codex login, then reload this page.";
-  $("data-badge").innerHTML = st.available
-    ? `Data revision <strong>${esc(st.revision)}</strong><br>${plural(st.editions, "conference edition")}`
-    : "No data revision is installed. Run bench2agent data install.";
+  $("data-badge").innerHTML = `Version <strong>${esc(st.app_version || "unavailable")}</strong><br>` + (st.available
+    ? plural(st.editions, "conference edition")
+    : "No research data is installed. Run bench2agent data install.");
 }
 async function loadChats() {
   const { chats } = await api("/api/chats");
@@ -599,7 +599,7 @@ function editionsTable(eds, withScope) {
 function scopeTab(m) {
   let html = `<h3 class="section">What this answer looked up</h3><ol class="calls">` +
     m.calls.map((c) => `<li><b>${esc(LABELS[c.name] || c.name)}</b><br>${esc(c.name)}(${esc(argText(c.args))})</li>`).join("") + `</ol>`;
-  html += `<dl class="facts"><dt>Data revision</dt><dd>${esc(m.meta.revision || "–")}</dd><dt>Built</dt><dd>${esc(String(m.meta.generated_at || "–").slice(0, 10))}</dd><dt>Source</dt><dd>${m.meta.source === "arxiv_html_stated_roles" ? "Roles stated in the papers' arXiv full text" : esc(m.meta.source || "–")}</dd>` +
+  html += `<dl class="facts"><dt>Dataset ID</dt><dd>${esc(m.meta.revision || "–")}<br><span class="muted">Identifies the data used for this answer, separate from the app version.</span></dd><dt>Built</dt><dd>${esc(String(m.meta.generated_at || "–").slice(0, 10))}</dd><dt>Source</dt><dd>${m.meta.source === "arxiv_html_stated_roles" ? "Roles stated in the papers' arXiv full text" : esc(m.meta.source || "–")}</dd>` +
     (m.scope ? `<dt>Catalogue</dt><dd>${plural(m.scope.catalogue_entries, "benchmark and dataset entry", "benchmark and dataset entries")}</dd>` : "") + `</dl>`;
   for (const cov of m.coverages) {
     const eds = Object.values(cov.editions || {}).filter((e) => e.in_scope_parsed === undefined || e.in_scope_parsed > 0).length;
@@ -624,8 +624,7 @@ async function openDetails(index, tab) {
   $("details").hidden = false;
   $("app").classList.add("with-details");
   $("details-title").textContent = turn.q || "Evidence";
-  const rev = turn.on && turn.on.benchmarks && turn.on.benchmarks.revision;
-  $("details-sub").textContent = `${plural(S.details.model.calls.length, "lookup")} on data revision ${rev || "unknown"}`;
+  $("details-sub").textContent = plural(S.details.model.calls.length, "lookup");
   renderDetails();
   setHash({ chat: S.chat.id, turn: index, tab });
   const from = document.activeElement;
