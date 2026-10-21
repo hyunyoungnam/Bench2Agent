@@ -427,16 +427,18 @@ independent terminal is separate from ChatGPT/Claude subscription login.
 ## Browser interface direction (planned)
 
 The two tracks are terminal and browser interfaces over one local application,
-with terminal implementation first. The planned browser runs on your PC,
+with terminal implementation first. The browser workspace runs on your PC,
 uses the same installed Claude Code or Codex login, and presents benchmark
 cards, comparisons and source evidence alongside the conversation. It needs
 no dedicated paid backend or Bench2Agent account, but does require local
 installation and a running process. See [browser-interface.md](browser-interface.md).
 
-A first `bench2agent --web` slice exists in the development checkout, not in
-0.5.0 ([current state](browser-interface.md#current-state-development-checkout-2026-10-20)).
-The commands in the following section start the earlier hosted visitor
-prototype, not this local workspace. Public multi-user hosting is deferred.
+Since 0.6.0, `bench2agent --web [--port N] [--no-open]` starts it
+([current state](browser-interface.md#current-state-version-060-2026-10-21)).
+Conversations are shared: `/resume ID` continues one started in the browser,
+and the browser shows conversations started here. The commands in the
+following section start the earlier hosted visitor prototype, not this local
+workspace. Public multi-user hosting is deferred.
 
 ## Earlier hosted conversation prototype (deferred)
 

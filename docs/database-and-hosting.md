@@ -9,8 +9,8 @@ AI CLI run on the user's PC. The browser's interaction and delivery plan is
 in [browser-interface.md](browser-interface.md). It is a target, not a newly
 shipped feature; the existing hosted visitor prototype remains separate.
 
-This is the implementation design, kept current. State as of 2026-10-13
-(Bench2Agent 0.4.0 released; the checkout at 0.5.0.dev0): the application
+This is the implementation design, kept current. State as of 2026-10-21
+(Bench2Agent 0.6.0): the application
 reads an installed, immutable data revision, which is one SQLite database
 identified by a hash of its research content (revisions installed by 0.4.0
 from the JSON + SQLite bundle keep serving); the terminal, the stdio MCP
@@ -19,9 +19,8 @@ conversation. The working database that will hold processing state is kept
 apart from the published export (see *Next steps*).
 `bench2agent serve` starts the earlier paper-evidence browser, and
 `bench2agent web serve` starts the earlier hosted visitor prototype. Neither
-is the planned local conversation workspace; its first slice,
-`bench2agent --web`, exists in the development checkout only
-([browser-interface.md](browser-interface.md)). A Mac or Linux server is an
+is the local conversation workspace, which `bench2agent --web` starts since
+0.6.0 ([browser-interface.md](browser-interface.md)). A Mac or Linux server is an
 optional later deployment, not a dependency of either local interface.
 
 ## Shared tools and separate interfaces

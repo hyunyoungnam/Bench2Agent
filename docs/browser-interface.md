@@ -1,8 +1,8 @@
 # Terminal and browser interfaces
 
-Direction agreed with the owner on 2026-10-15. **This is a target design; a
-first working slice exists in the development checkout (0.6.0.dev0) and is not
-part of any release.** See *Current state* below for what is built and checked.
+Direction agreed with the owner on 2026-10-15. **The browser workspace ships
+with version 0.6.0** (`bench2agent --web`). See *Current state* below for what
+is built and checked; the rest of this document remains the design target.
 The terminal implementation comes first; both interfaces belong to one local
 application. The browser can offer a more polished visual experience while
 using the same data and answer rules. Public hosting is a separate decision.
@@ -27,8 +27,8 @@ can show instructions or a labeled demo, but cannot by itself execute the
 user's installed CLI.
 
 The browser launcher should open the page automatically and handle startup,
-an occupied port and shutdown clearly. `bench2agent --web` starts it in the
-development checkout (not in 0.5.0). The existing `bench2agent web serve`
+an occupied port and shutdown clearly. `bench2agent --web` starts it
+(since 0.6.0). The existing `bench2agent web serve`
 starts the earlier hosted visitor prototype; `bench2agent serve` starts the
 paper-evidence browser. Neither command is already the target product merely
 because it opens a browser. Existing `server` extras can be reused for an
@@ -123,7 +123,7 @@ Keep ingestion and publication jobs apart from conversation requests. The UI
 may install a verified published data bundle through the common data manager;
 it does not scrape conferences or rebuild the corpus inside an HTTP request.
 
-## Current state (development checkout, 2026-10-20)
+## Current state (version 0.6.0, 2026-10-21)
 
 Built (`src/bench2agent/workspace/`, standard library only): `bench2agent --web
 [--port N] [--no-open]` starts a loopback server, prints the address with a
@@ -157,8 +157,15 @@ terminal/browser continuation and stale-copy refusal); a live Claude Code
 question through the API (six tool calls, saved); a live cancel (nothing
 saved, no CLI process left); the same conversation continued from the
 terminal and read back by the page; the wheel installed outside the checkout
-serves the page and API; screenshots at desktop width and 540 px reviewed
-(headless Edge clamps below about 500 px).
+serves the page and API; screenshots at desktop width and 540–560 px reviewed
+(headless Edge clamps below about 500 px). For 0.6.0 (2026-10-21): live
+questions with both CLIs in the terminal and the browser, a conversation
+continued across them, a keyboard pass through the DevTools protocol (Tab
+order, panel focus and return, arrow keys over the tabs, unverified marks
+reachable, send, cancel, delete) and a physical keyboard check by the owner;
+a workspace whose CLIs see no sign-in ("No signed-in CLI", the official
+sign-in command shown); WCAG contrast of the color tokens (text at least
+4.5:1).
 
 Conversations can be deleted from the sidebar (the × beside each one, with a
 confirmation). A deleted conversation leaves both the browser's list and
@@ -169,9 +176,9 @@ running in that conversation, and a terminal that had it open can no longer
 save to it.
 
 Not yet: Windows-native locking (the conversation lock uses fcntl; on native
-Windows only the conditional save protects), keyboard-only and contrast
-review, an empty/disconnected-CLI review with a real signed-out CLI, the old
-hosted store's conversations (kept, not migrated), and release documentation.
+Windows only the conditional save protects), the old hosted store's
+conversations (kept, not migrated), delete or restore from the terminal, and
+an automatic purge of `.deleted`.
 
 ## Delivery order and acceptance
 

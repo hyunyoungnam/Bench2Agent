@@ -25,7 +25,7 @@ from bench2agent.core.benchmarks import BenchmarkStore, build_revision
 OLD_META_KEYS = ["db_schema_version", "generated_at", "registry_checked", "schema_version", "snapshot_id", "source", "source_sha256"]
 PUBLIC_BUNDLE = Path(os.environ.get("BENCH2AGENT_TEST_BUNDLE") or Path(__file__).resolve().parents[1] / "dist/bench2agent-data-20261013.tar.gz")
 PUBLIC_V1_SHA256 = "9195fce6afd7e4ae7448be67bd9a6f17e5374bbbbe602f3900737088f69d3af2"   # data-20261013, no longer the default
-RELEASE_BUNDLE = Path(os.environ.get("BENCH2AGENT_TEST_RELEASE_BUNDLE") or Path(__file__).resolve().parents[1] / "data/releases/data-20261019/bench2agent-data.tar.gz")
+RELEASE_BUNDLE = Path(os.environ.get("BENCH2AGENT_TEST_RELEASE_BUNDLE") or Path(__file__).resolve().parents[1] / "data/releases/data-20261021/bench2agent-data.tar.gz")
 
 
 def legacy_database(json_path: Path, db_path: Path) -> None:
@@ -579,16 +579,17 @@ class StorageTests(Fixture):
                          [("iclr-2024", 178, 1888), ("iclr-2025", 197, 3038), ("iclr-2026", 165, 4237)])
         self.assertEqual(BenchmarkStore(second).usage({"topic": "robotics"})["results"][0]["papers"], 80)
 
-    @unittest.skipUnless(RELEASE_BUNDLE.is_file(), "release bundle data-20261019 not present locally")
+    @unittest.skipUnless(RELEASE_BUNDLE.is_file(), "release bundle data-20261021 not present locally")
     def test_the_release_bundle_is_the_default_checksum_and_serves_its_pinned_figures(self):
         installed = data_module.install(self.root / "release", file=str(RELEASE_BUNDLE), sha256=data_module.DEFAULT_SHA256)
         self.assertEqual((installed["revision"], installed["outcome"], installed["files"]),
-                         ("8503cf1b1f7bee99", "installed", ["benchmark_snapshot.sqlite"]))
-        self.assertIn("/data-20261019/", data_module.DEFAULT_URL)
+                         ("1e1fa171722da693", "installed", ["benchmark_snapshot.sqlite"]))
+        self.assertIn("/data-20261021/", data_module.DEFAULT_URL)
         store = BenchmarkStore(self.root / "release")
         usage = store.usage({"topic": "robotics"})
         self.assertEqual((usage["coverage"]["parsed_papers"], [(r["name"], r["papers"]) for r in usage["results"][:3]]),
                          (513, [("LIBERO", 82), ("SIMPLER", 41), ("Meta-World", 29)]))
+        self.assertEqual(usage["results"][0]["share_percent"], 16.0)
 
     def test_schema_1_files_are_still_read_without_labels(self):
         old = self.root / "schema1.sqlite"
