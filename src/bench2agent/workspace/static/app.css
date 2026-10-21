@@ -30,6 +30,7 @@
   --hl: #ffe27a;
   --hl-soft: #fff1b8;
   --pencil: #a8711c;
+  --pencil-ink: #8f5e17;      /* the pencil as text: 5.5:1 on paper (the line colour stays lighter) */
   --pencil-soft: #f7ead2;
   --plum: #7b4f8e;
   --plum-soft: #f1e7f5;
@@ -99,7 +100,7 @@ button, select, textarea { font: inherit; color: inherit; }
 .sources li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px; margin: 5px 0; }
 .sources .n { font-weight: 700; color: var(--pen); }
 .sources .meta { color: var(--ink-3); }
-.sources .unfound { color: var(--pencil); font-weight: 600; }
+.sources .unfound { color: var(--pencil-ink); font-weight: 600; }
 
 .check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-2); font: 13px/1.5 var(--sans); color: var(--ink-2); }
 .check .item b { font-weight: 700; color: var(--ink); }

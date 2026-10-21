@@ -144,7 +144,7 @@ function renderAnswer(turn) {
     const s = tokens[+k];
     if (s.t === "n") {
       return UNVERIFIED.has(s.v)
-        ? `<span class="fig unv" title="${s.kind === "date" ? "This date" : "This figure"} could not be matched to this answer's tool results">${esc(s.s)}</span>`
+        ? `<span class="fig unv" tabindex="0" title="${s.kind === "date" ? "This date" : "This figure"} could not be matched to this answer's tool results" aria-label="${esc(s.s)}, ${s.kind === "date" ? "a date" : "a figure"} not matched to this answer's tool results">${esc(s.s)}</span>`
         : `<span class="fig">${esc(s.s)}</span>`;
     }
     cites.push(s);
@@ -172,6 +172,11 @@ async function loadState() {
   }
   const usable = S.connectors.filter((c) => c.connected);
   if (usable.length) sel.value = usable[0].name;
+  else {
+    const none = document.createElement("option");
+    none.textContent = "No signed-in CLI"; none.value = ""; none.disabled = true; none.selected = true;
+    sel.prepend(none);
+  }
   $("new-chat").disabled = !usable.length;
   if (!usable.length) $("composer-note").textContent = "No signed-in AI CLI found. Run claude auth login or codex login, then reload this page.";
   $("data-badge").innerHTML = st.available
@@ -268,9 +273,20 @@ function newRequestId() {
 function savePending(p) { try { p ? sessionStorage.setItem("ws-pending", JSON.stringify(p)) : sessionStorage.removeItem("ws-pending"); } catch (e) { /* ignore */ } }
 function readPending() { try { return JSON.parse(sessionStorage.getItem("ws-pending") || "null"); } catch (e) { return null; } }
 
+/* the official CLI's own sign-in is the only route: say which one and how, never relay a login here */
+function signInHint(name) {
+  const cmd = name === "codex" ? "codex login" : name === "claude" ? "claude auth login" : "claude auth login or codex login";
+  return `${CLIENTS[name] || "No AI CLI"} is not signed in on this computer. Run ${cmd} in a terminal, then reload this page.`;
+}
+function signedOut(name) {
+  const c = S.connectors.find((x) => x.name === name);
+  return S.connectors.length > 0 && (!c || !c.connected);
+}
 async function ask(question) {
   question = question.trim();
   if (!question) return;
+  const name = S.chatId ? S.chat && S.chat.connector : $("connector").value;
+  if (signedOut(name)) { showNotice(signInHint(name), "bad"); return; }
   if (!S.chatId) {
     const { id } = await api("/api/chats", { connector: $("connector").value });
     S.chatId = id;
@@ -353,7 +369,10 @@ async function follow(jobId, question) {
   }
   if (missing) showNotice("The workspace was restarted while this question ran. Its answer was not saved; ask again.", "warn");
   else if (view && view.state === "cancelled") showNotice(`Cancelled, nothing saved: “${String(view.question || "").replace(/[.?!]+$/, "")}”. The next question sees only the saved answers.`, "warn");
-  else if (view && view.state === "failed") showNotice(view.error || "The question failed.", "bad");
+  else if (view && view.state === "failed") {
+    const err = view.error || "The question failed.";
+    showNotice(/not logged in|\/login|log in|sign in/i.test(err) ? `${err} ${signInHint(S.chat && S.chat.connector)}` : err, "bad");
+  }
 }
 async function cancel(jobId) {
   const btn = $("cancel");
@@ -473,11 +492,17 @@ function introducingHtml(c) {
 function paperLinksHtml(links, title) {
   if (!Array.isArray(links) || !links.length) return "";
   return `<div class="paper-links"><div class="paper-links-title">${esc(title)}, not a confirmed location</div>` + links.map((l) => {
-    const fixed = l.corrected ? `<span class="status-note">Printed address could not be opened; ${link(l.corrected.url, "a corrected address")} exists: ${esc(l.corrected.observed || "")}. ${esc(l.corrected.note || "")}</span>` : "";
+    const cap = (t) => t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+    const fixed = l.corrected ? `<span class="status-note">Corrected address (${esc(l.corrected.rule || "repaired")}): ${link(l.corrected.url, l.corrected.url.replace(/^https?:\/\//, ""))}</span>` +
+      `<span class="status-note">Seen there: ${esc(l.corrected.observed || "not checked")}</span>` +
+      (l.corrected.note ? `<span class="status-note">${esc(cap(l.corrected.note))}</span>` : "") : "";
     const paper = l.paper_id && title.startsWith("Links another") ? ` <span class="muted">arXiv ${esc(l.paper_id)}</span>` : "";
     return `<div class="paper-link"><span class="muted">${esc(l.label || "Link")}</span> ${link(l.url, l.url.replace(/^https?:\/\//, ""))}${paper}` +
       `<span class="status-note">Seen: ${esc(l.observed || "not checked")}</span>` +
-      (l.not_confirmed_because ? `<span class="status-note">Not a location: ${esc(l.not_confirmed_because)}</span>` : "") + fixed + `</div>`;
+      (l.not_confirmed_because ? `<span class="status-note">Not a location: ${esc(l.not_confirmed_because)}</span>` : "") +
+      (Array.isArray(l.paths_containing_the_name) && l.paths_containing_the_name.length
+        ? `<span class="status-note">Paths with the name in the file list: ${esc(l.paths_containing_the_name.join(", "))} (not reviewed as its location)</span>` : "") +
+      fixed + `</div>`;
   }).join("") + `</div>`;
 }
 function roleLabel(role) {
@@ -601,6 +626,11 @@ async function openDetails(index, tab) {
   $("details-sub").textContent = `${plural(S.details.model.calls.length, "lookup")} on data revision ${rev || "unknown"}`;
   renderDetails();
   setHash({ chat: S.chat.id, turn: index, tab });
+  const from = document.activeElement;
+  if (from && from !== document.body && !$("details").contains(from)) {
+    S.opener = from;                               // keyboard users land in the panel and return here on Close/Escape
+    $("details-title").focus();
+  }
 }
 function renderDetails() {
   const d = S.details;
@@ -616,6 +646,8 @@ function renderDetails() {
   }
 }
 function closeDetails() {
+  const back = S.opener; S.opener = null;
+  if (back && document.contains(back) && $("details").contains(document.activeElement)) setTimeout(() => back.focus(), 0);
   $("details").hidden = true;
   $("app").classList.remove("with-details");
   S.details = null;
@@ -646,6 +678,14 @@ async function main() {
     if (!S.details) return;
     S.details.tab = b.dataset.tab; S.details.only = null; renderDetails();
     setHash({ chat: S.chat.id, turn: S.details.index, tab: b.dataset.tab });
+  });
+  const tabs = [...document.querySelectorAll(".tab")];
+  for (const b of tabs) b.addEventListener("keydown", (e) => {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = tabs[(tabs.indexOf(b) + step + tabs.length) % tabs.length];
+    next.focus(); next.click();
   });
   $("toggle-sidebar").addEventListener("click", () => {
     const open = $("sidebar").classList.toggle("open");
