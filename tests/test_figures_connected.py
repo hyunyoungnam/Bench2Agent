@@ -114,6 +114,22 @@ class ConnectedFigureTests(unittest.TestCase):
         rate = "ToyBench:\n\n| Analysed edition | Papers evaluating on the benchmark | Evaluation papers per 1,000 parsed |\n|---|---:|---:|\n| ICLR 2026 | 12 | 2.822 |\n"
         self.assertEqual(verdicts(rate, lg), [("12", "ok"), ("2.822", "ok")])
 
+    def test_a_benchmark_column_whose_header_mentions_its_paper_is_still_the_identity(self):
+        # the live Codex answer that followed (2026-10-21): "Benchmark — location; introducing paper"
+        text = ("| Benchmark — location; introducing paper | Evaluation papers: other / self / undetermined authors; unresolved using papers |\n|---|---|\n"
+                "| **ToyBench** — no confirmed location | 5 other / 0 self / 0 undetermined; 0 unresolved |\n")
+        self.assertEqual(verdicts(text, self.lg)[:3], [("5", "ok"), ("0", "ok"), ("0", "ok")])
+        self.assertEqual(verdicts(text.replace("5 other", "7 other"), self.lg)[0], ("7", "no"))   # 7 is ToyBench's training use
+
+    def test_a_pair_inside_a_table_cell_reads_its_denominator_as_one(self):
+        # the live robotics answer (2026-10-21): "| LIBERO | 82 of 513 (159.844) |" under a header naming the
+        # rate; the 513 was judged as a rate and contradicted in every row
+        lg = log(("benchmark_usage", {"topic": "robotics"}, {"role": "evaluates_on", "coverage": {"parsed_papers": 513}, "results": [
+            {"id": "libero", "name": "LIBERO", "papers": 82, "per_1000": 159.844}]}))
+        text = "| Benchmark | Papers evaluating on it, per 1,000 |\n|---|---|\n| LIBERO | 82 of 513 (159.844) |\n"
+        self.assertEqual(verdicts(text, lg), [("82", "ok"), ("513", "ok"), ("159.844", "ok")])
+        self.assertEqual(verdicts(text.replace("82 of 513", "82 of 514"), lg)[1], ("514", "no"))
+
     def test_a_section_heading_names_the_benchmark(self):
         text = "### OtherBench\n- 타저자 3편, 자기 2편\n### ToyBench\n- 타저자 3편"
         self.assertEqual(verdicts(text, self.lg), [("3", "ok"), ("2", "ok"), ("3", "no")])

@@ -584,10 +584,14 @@ def _tables(text: str) -> list[dict]:
     while i < len(lines) - 1:
         if lines[i].strip().startswith("|") and re.fullmatch(r"\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*", lines[i + 1]):
             header = [h.strip() for h in lines[i].strip().strip("|").split("|")]
-            # an identity column names the thing; "Papers evaluating on the benchmark" is a figure column
-            ident = next((j for j, h in enumerate(header) if re.search(r"benchmark|벤치마크|dataset|데이터셋|(?<![A-Za-z])name(?![A-Za-z])|이름", h, re.I)
-                          and not re.search(r"papers?(?![A-Za-z])|편|논문\s*수|(?<![A-Za-z])count|share|rate|per\s*1,?000|‰|%|(?<![A-Za-z])uses?(?![A-Za-z])|사용", h, re.I)), None)
+            names = [j for j, h in enumerate(header) if re.search(r"benchmark|벤치마크|dataset|데이터셋|(?<![A-Za-z])name(?![A-Za-z])|이름", h, re.I)]
+            # a header that also says what it counts ("Papers evaluating on the benchmark") is a figure column
+            counted = {j for j in names if re.search(r"papers(?![A-Za-z])|편|논문\s*수|(?<![A-Za-z])counts?(?![A-Za-z])|share|(?<![A-Za-z])rate|per\s*1,?000|‰|%|"
+                                                      r"(?<![A-Za-z])uses(?![A-Za-z])|사용", header[j], re.I)}
             ed_col = next((j for j, h in enumerate(header) if re.search(r"edition|회차|에디션|venue|학회", h, re.I)), None)
+            ident = next((j for j in names if j not in counted), None)
+            if ident is None and ed_col is None and names:
+                ident = names[0]                                # no other identity: as before
             k = i + 2
             while k < len(lines) and lines[k].strip().startswith("|"):
                 cells, start = [], offs[k] + lines[k].index("|") + 1
@@ -630,6 +634,13 @@ def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
     if not (any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY)):
         return "na", "no cue says what it counts"
     cand = [f for f in fs if _satisfies(f, c)]
+    if not cand and c.get("benchmark_ids") and "metric" in c and c["metric"] <= DENOM:
+        # "| LIBERO | 82 of 513 |": a denominator named as such, in a benchmark's row, when that benchmark has none of
+        # its own: the scope-wide one of the SAME call that returned the benchmark's row (never another call's)
+        calls = {(f["ctx"].get("tool"), f["ctx"].get("args")) for f in fs if f["ctx"].get("benchmark_id") in c["benchmark_ids"]}
+        scoped = {k: x for k, x in c.items() if k != "benchmark_ids"}
+        cand = [f for f in fs if f["ctx"].get("benchmark_id") is None and (f["ctx"].get("tool"), f["ctx"].get("args")) in calls
+                and _satisfies(f, scoped)]
     fams = {family(f["metric"]) for f in cand}
     if {"usage", "adoption"} <= fams and "metric" in c and c["metric"] >= _COUNTS:
         return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
@@ -723,9 +734,16 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set,
                 out.append((m.start(), m.end(), raw, "na", "a table this check cannot read (no benchmark or edition column)"))
                 continue
             head = row["header"][cell[0]] if cell[0] < len(row["header"]) else ""
-            before, after = head + " ", text[m.end():cell[1][1]]
+            before, after = head + " " + text[cell[1][0]:m.start()], text[m.end():cell[1][1]]   # "82 of 513": the cell's own words count
             c = {"metric": _metric_cues(before, after)} if _metric_cues(before, after) else {}
             c.update(_context_cues(head, after))
+            words = re.split(r"\d", after, maxsplit=1)[0]          # the cell's own words up to its next number
+            own = next((val for rx, kind, val in _CONTEXT_WORDS if kind == "group" and re.search(rx, words, re.I)), None)
+            if own:                                             # "5 other / 0 self": the cell's own word beats a header naming every group
+                c["group"], c["metric"] = own, set(ADOPTION) - {"unattributed_using_papers", "before_claim"}
+            elif re.match(r"\s*(?:unresolved|unattributed|미귀속|미해소)", words, re.I):
+                c.pop("group", None)
+                c["metric"] = {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS
             if "group" in c:
                 c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
             if row["edition"]:
