@@ -231,8 +231,8 @@ def check(tool: str, arg: str, claim: str, cache: dict | None = None, log: TurnL
     nums = claimed(claim)
     if log is not None:
         vals = log.pool(tool, arg)
-        if vals is None:
-            return {"state": "no", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
+        if vals is None:                               # not called with these arguments: no evidence, not a contradiction
+            return {"state": "na", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
                     "why": "this turn did not call the tool with these arguments"}
     else:
         vals = recompute(tool, arg, cache)

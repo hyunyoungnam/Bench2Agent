@@ -193,14 +193,18 @@ def segment(text: str, store: Store, ver: Verifier,
                          "url": "https://arxiv.org/abs/" + arg if valid_id else None,
                          "venue": _VENUE.get(venue, venue), "year": year})
             continue
-        fig = (_anchored_connected(tool, arg, claim, log, (inline_text, spans.get(m.start()))) if log is not None and _benchmark_only(log)
-               and figures.RECOMPUTABLE.get(tool) == "json" else figures.check(tool, arg, claim, fcache, log))
+        if log is not None and not log.entries:          # nothing was looked up this turn: no evidence, not a contradiction
+            nums = figures.claimed(claim)
+            fig = {"state": "na", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums], "why": "no tool was called in this turn"}
+        elif log is not None and _benchmark_only(log) and figures.RECOMPUTABLE.get(tool) == "json":
+            fig = _anchored_connected(tool, arg, claim, log, (inline_text, spans.get(m.start())))
+        else:
+            fig = figures.check(tool, arg, claim, fcache, log)
         if fig["state"] == "na" and not fig.get("n"):
             segs.append({"t": "p", "s": claim})          # an anchor with no number in it states no figure: plain text, unmarked
             continue
-        if fig["state"] != "na":                         # 'na' claims nothing
-            v["fchecked"] += 1
-            v["fpassed"] += fig["state"] == "ok"
+        v["fchecked"] += 1                               # every anchored figure counts: unverified is not left out
+        v["fpassed"] += fig["state"] == "ok"
         segs.append({"t": "n", "s": claim, "v": fig["state"], "tool": tool,
                      "arg": arg, "missing": fig.get("missing") or [],
                      "why": fig.get("why")})
@@ -222,8 +226,8 @@ def _anchored_connected(tool: str, arg: str, claim: str, log, context=None) -> d
     key = figures.canonical_args(arg)
     fs = [f for f in figures.facts(log) if f["ctx"].get("tool") == tool and f["ctx"].get("args") == key]
     nums = figures.claimed(claim)
-    if not fs:
-        return {"state": "no", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
+    if not fs:                                           # no call with these arguments: no evidence, not a contradiction
+        return {"state": "na", "tool": tool, "arg": arg, "n": len(nums), "missing": [raw for raw, _ in nums],
                 "why": "this turn did not call the tool with these arguments"}
     if context and context[1]:
         whole, (a0, b0) = context
@@ -244,8 +248,8 @@ def _auto_figures(segs: list, v: dict, trail, fcache: dict, log=None, inline_tex
     is in no tool result and is not arithmetic over two of them is wrapped so
     the reader can see WHICH one it is. The mark states a fact — this number is
     not in what the tools returned — and accuses the sentence of nothing."""
-    if log is not None and _benchmark_only(log):
-        return _auto_connected(segs, v, log, inline_text)
+    if log is not None and (_benchmark_only(log) or not log.entries):
+        return _auto_connected(segs, v, log, inline_text)   # no call at all: every statistic is unverified, still counted
     vals, used = figures.turn_pool(trail, fcache, log)
     if not vals:
         return segs
@@ -301,9 +305,11 @@ def _auto_connected(segs: list, v: dict, log, inline_text: str | None = None) ->
                 continue
             if a > pos:
                 out.append({"t": "p", "s": text[pos:a]})
-            out.append({"t": "n", "s": raw, "v": "no" if verdict in ("no", "date-no") else "na", "auto": True,
+            if not log.entries and verdict != "date-no":
+                why = "no tool was called in this turn"
+            out.append({"t": "n", "s": raw, "v": "no" if verdict == "no" else "na", "auto": True,   # a date not returned is unverified
                         "kind": "date" if verdict == "date-no" else "figure", "tool": "this turn's tools", "arg": "",
-                        "missing": [raw], "why": why})
+                        "missing": [raw], "why": why if verdict != "date-no" else "this date is not in this turn's tool results"})
             pos = b
         out.append({"t": "p", "s": text[pos:]})
     return out
