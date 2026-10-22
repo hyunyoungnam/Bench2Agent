@@ -257,6 +257,30 @@ class Review061(unittest.TestCase):
         self.assertEqual(list(self.verdicts("ICLR 2024–2026 covers 3 editions.", self.SCOPE)), ["3"])   # a year span is not a range of values
 
 
+class SavedBeforeTheFix(unittest.TestCase):
+    """Turns saved by 0.6.0 stored a number with no tool call, and a date, as "no". They read as unverified in the
+    terminal, the browser and its count of differing numbers; the saved file is not changed."""
+    LEGACY = {"segs": [{"t": "n", "s": "LIBERO 13 of 237 parsed papers", "v": "no", "why": "this turn did not call the tool with these arguments"},
+                       {"t": "p", "s": " "}, {"t": "n", "s": "2026-10-21", "v": "no", "kind": "date", "why": "date"},
+                       {"t": "p", "s": " "}, {"t": "n", "s": "63", "v": "no", "auto": True, "why": "the tool results for this context say 61"}]}
+
+    def test_legacy_no_evidence_and_dates_read_as_unverified_and_a_real_difference_stays(self):
+        from bench2agent.cli import render
+        self.assertEqual(render(self.LEGACY), "LIBERO 13 of 237 parsed papers [unverified figure] 2026-10-21 [unverified date] 63 [differs from tool result]")
+        self.assertEqual([figures.shown_state(s) for s in self.LEGACY["segs"] if s["t"] == "n"], ["na", "date", "no"])
+
+    def test_the_browser_uses_the_same_legacy_reasons(self):
+        import pathlib
+        js = (pathlib.Path(figures.__file__).parents[1] / "workspace/static/app.js").read_text()
+        for why in figures.LEGACY_NO_EVIDENCE:
+            self.assertIn(json_str(why), js)
+
+
+def json_str(s):
+    import json
+    return json.dumps(s)
+
+
 class TerminalMarks(unittest.TestCase):
     def test_only_a_contradiction_reads_as_a_difference(self):
         from bench2agent.cli import render

@@ -158,11 +158,23 @@ function markdown(src) {
 const WHY = {
   "no cue says what it counts": "the sentence does not say what it counts",
   "no tool result has this context": "no lookup returned a value for this context",
+  "this turn did not call the tool with these arguments": "this answer did not call the lookup it names",
+  "the part of this pair is not connected, so what its whole counts is not stated": "the count it is a total of is not matched, so what the total counts is not clear",
+  "the share is not in the lookup its count came from": "the share does not come from the same lookup as its count",
+  "a total, but whether of listed, analyzed or in-scope papers is not stated": "the sentence does not say whether the total is of listed, analyzed or in-scope papers",
   "connected": "",
 };
+/* the same reading as figures.shown_state: answers saved before 0.6.1 stored a number with no evidence, and a
+   date, as "no"; they are unverified, not contradicted. The saved answer itself is not changed. */
+const LEGACY_NO_EVIDENCE = new Set(["this turn did not call the tool with these arguments"]);
+function shown(s) {
+  if (s.v === "ok") return "ok";
+  if (s.kind === "date") return "date";
+  return s.v === "no" && !LEGACY_NO_EVIDENCE.has(s.why) ? "no" : "na";
+}
 function figNote(s) {
   const why = s.why ? (WHY[s.why] ?? s.why) : "";
-  if (s.v === "no" && s.kind !== "date") return `Differs from this answer's tool results${why ? `: ${why}` : ""}`;   // a date never contradicts
+  if (shown(s) === "no") return `Differs from this answer's tool results${why ? `: ${why}` : ""}`;
   return `${s.kind === "date" ? "Date" : "Number"} not verified${why ? `: ${why}` : ""}`;
 }
 function sourceUrl(s) { return safeUrl(s.url) || (s.paper_id ? `https://arxiv.org/abs/${encodeURIComponent(s.paper_id)}` : null); }
@@ -177,7 +189,7 @@ function renderAnswer(turn) {
     const s = tokens[+k];
     if (s.t === "n") {
       return UNVERIFIED.has(s.v)
-        ? `<span class="fig unv${s.v === "no" && s.kind !== "date" ? " differs" : ""}" tabindex="0" data-why="${esc(figNote(s))}" aria-label="${esc(s.s)}. ${esc(figNote(s))}">${esc(s.s)}</span>`
+        ? `<span class="fig unv${shown(s) === "no" ? " differs" : ""}" tabindex="0" data-why="${esc(figNote(s))}" aria-label="${esc(s.s)}. ${esc(figNote(s))}">${esc(s.s)}</span>`
         : `<span class="fig">${esc(s.s)}</span>`;
     }
     cites.push(s);
@@ -305,7 +317,7 @@ function turnNode(t) {
   }
   if (!t.unverifiable && v.fchecked) {
     html += `<span class="item${v.fpassed === v.fchecked ? " all" : ""}"><b>${fmt(v.fpassed)} of ${fmt(v.fchecked)}</b> numbers matched to the evidence</span>`;
-    const differs = (t.segs || []).filter((s) => s.t === "n" && s.v === "no" && s.kind !== "date").length;
+    const differs = (t.segs || []).filter((s) => s.t === "n" && UNVERIFIED.has(s.v) && shown(s) === "no").length;
     if (differs) html += `<span class="item"><b>${fmt(differs)}</b> ${differs === 1 ? "differs" : "differ"} from the evidence</span>`;
   }
   check.innerHTML = html;

@@ -1117,6 +1117,23 @@ def _settle(part: dict, whole: dict, share: dict | None, out: list, fs: list[dic
                        else "the share is not in the lookup its count came from")
 
 
+# Saved before 0.6.1: a number with no evidence was stored as "no" with one of these reasons, and a date not
+# found verbatim as "no". Neither is a contradiction; the saved turn is kept as it is and shown as unverified.
+LEGACY_NO_EVIDENCE = {"this turn did not call the tool with these arguments"}
+
+
+def shown_state(seg: dict) -> str:
+    """How a saved number reads: 'ok', 'no' (differs from the tool results), 'na' (unverified) or 'date'."""
+    v = seg.get("v")
+    if v == "ok":
+        return "ok"
+    if seg.get("kind") == "date":
+        return "date"
+    if v == "no" and seg.get("why") not in LEGACY_NO_EVIDENCE:
+        return "no"
+    return "na"
+
+
 def date_strings(log: TurnLog) -> set[str]:
     out: set[str] = set()
 

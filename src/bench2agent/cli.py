@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, providers
+from .core import figures
 from .session import Session, conversations, write_json
 
 HELP = "/new  /chats  /resume ID  /sources  /status  /help  /exit"
@@ -34,9 +35,8 @@ def render(turn: dict, *, sources: bool = False) -> str:
         if seg.get("t") == "p":
             pieces.append(seg.get("s", ""))
         elif seg.get("t") == "n":
-            marked = seg.get("v") in {"no", "na", "unconnected"}
-            mark = ("" if not marked else " [unverified date]" if seg.get("kind") == "date"     # a date never contradicts (older saves stored "no")
-                    else " [differs from tool result]" if seg.get("v") == "no" else " [unverified figure]")
+            state = figures.shown_state(seg) if seg.get("v") in {"no", "na", "unconnected"} else "ok"
+            mark = {"ok": "", "date": " [unverified date]", "no": " [differs from tool result]"}.get(state, " [unverified figure]")
             pieces.append(seg.get("s", "") + mark)
         elif seg.get("t") == "c":
             evidence.append(seg)
