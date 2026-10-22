@@ -278,6 +278,63 @@ class Review061(unittest.TestCase):
         self.assertEqual(list(self.verdicts("ICLR 2024–2026 covers 3 editions.", self.SCOPE)), ["3"])   # a year span is not a range of values
 
 
+class ShareDenominators(unittest.TestCase):
+    """Codex, 2026-10-22, on 1e1fa171722da693: robotics at ICLR 2026 has 183 analyzed papers in the filter and 4,252
+    in the edition; LIBERO's 26 is 14.2% of the 183. A share and a use count's whole connect only to the field the
+    tool computed the share over (benchmark_usage: the call's coverage.parsed_papers; benchmark_trend: the row's)."""
+    USAGE = ("benchmark_usage", {"topic": "robotics", "edition": "iclr-2026"}, {"role": "evaluates_on", "coverage": {
+        "parsed_papers": 183, "editions": {"iclr-2026": {"total_papers": 5468, "parsed_papers": 4252, "in_scope_parsed": 183}}},
+        "results": [{"id": "libero", "name": "LIBERO", "papers": 26, "share_percent": 14.2}]})
+    TREND = ("benchmark_trend", {"benchmark": "libero", "topic": "robotics"}, {"id": "libero", "name": "LIBERO", "role": "evaluates_on",
+             "coverage": {"editions": {"iclr-2026": {"parsed_papers": 4252, "in_scope_parsed": 183}}},
+             "results": [{"edition": "iclr-2026", "papers": 26, "parsed_papers": 183}]})
+
+    def verdicts(self, text, entry=None):
+        lg = log(entry or self.USAGE)
+        return dict((r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set()))
+
+    def test_a_share_beside_a_wider_denominator_is_not_confirmed(self):
+        out = self.verdicts("ICLR 2026 분석 논문 4252편 중 26편(14.2%)이 LIBERO로 평가했습니다.")
+        self.assertEqual((out["4252"], out["26"], out["14.2"]), ("ok", "ok", "na"))     # 4,252 is the edition's; 14.2% is of 183
+        out = self.verdicts("ICLR 2026 분석 논문 183편 중 26편(14.2%)이 LIBERO로 평가했습니다.")
+        self.assertEqual((out["183"], out["26"], out["14.2"]), ("ok", "ok", "ok"))
+        out = self.verdicts("LIBERO: 26 of 4252 analyzed papers (14.2%) in ICLR 2026.")
+        self.assertEqual(out["14.2"], "na")
+        out = self.verdicts("LIBERO: 26 of 183 analyzed papers (14.2%) in ICLR 2026.")
+        self.assertEqual((out["26"], out["183"], out["14.2"]), ("ok", "ok", "ok"))
+
+    def test_a_use_counts_unstated_whole_is_its_own_denominator(self):
+        out = self.verdicts("ICLR 2026 4252편 중 26편(14.2%)이 LIBERO로 평가했습니다.")
+        self.assertEqual((out["4252"], out["14.2"]), ("na", "na"))      # a true count of the edition, not this ratio's whole
+        out = self.verdicts("LIBERO: 26 of 4252 papers (14.2%).")
+        self.assertEqual((out["4252"], out["14.2"]), ("na", "na"))
+        out = self.verdicts("LIBERO: 26 of 183 papers (14.2%).")
+        self.assertEqual((out["183"], out["14.2"]), ("ok", "ok"))
+        self.assertEqual(self.verdicts("LIBERO: 26 of 184 papers (14.2%).")["184"], "no")   # a mistyped denominator differs
+
+    def test_a_benchmark_rows_denominator_cell_is_the_field_its_share_used(self):
+        row = "| Benchmark | Papers | Analyzed papers | Share |\n|---|---|---|---|\n| LIBERO | 26 | {} | 14.2% |"
+        out = self.verdicts(row.format("4,252"))
+        self.assertEqual((out["4,252"], out["14.2"]), ("na", "ok"))     # the share stands alone; 4,252 is not its denominator
+        self.assertEqual(self.verdicts(row.format("183"))["183"], "ok")
+        self.assertEqual(self.verdicts(row.format("190"))["190"], "no")
+
+    def test_an_editions_coverage_below_a_benchmark_is_not_that_benchmarks_denominator(self):
+        # saved robotics answer: a coverage table after a "**LIBERO** —" line; its edition rows are the editions' counts
+        text = ("- **LIBERO** — 82 of 513 papers (16.0%)\n\nCoverage for the contributing editions:\n\n"
+                "| Edition | Parsed papers | Robotics papers in denominator |\n|---|---:|---:|\n"
+                "| ICLR 2026 | 4,252 | 183 |\n| ICML 2026 | 4,863 | 167 |\n")
+        lg = log(PooledAndDiagnosticWords.USAGE)
+        out = [(r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
+        self.assertEqual(out, [("82", "ok"), ("513", "ok"), ("16.0", "ok"), ("4,252", "ok"), ("183", "ok"), ("4,863", "ok"), ("167", "ok")])
+
+    def test_a_trend_rows_share_uses_that_rows_denominator(self):
+        out = self.verdicts("ICLR 2026: LIBERO 26 of 183 papers (14.2%).", self.TREND)
+        self.assertEqual((out["26"], out["183"], out["14.2"]), ("ok", "ok", "ok"))
+        out = self.verdicts("ICLR 2026: LIBERO 26 of 4252 papers (14.2%).", self.TREND)
+        self.assertNotIn("ok", (out["4252"], out["14.2"]))
+
+
 class SavedBeforeTheFix(unittest.TestCase):
     """Turns saved by 0.6.0 stored a number with no tool call, and a date, as "no". They read as unverified in the
     terminal, the browser and its count of differing numbers; the saved file is not changed."""

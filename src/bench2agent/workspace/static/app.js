@@ -162,6 +162,9 @@ const WHY = {
   "the part of this pair is not connected, so what its whole counts is not stated": "the count it is a total of is not matched, so what the total counts is not clear",
   "the share is not in the lookup its count came from": "the share does not come from the same lookup as its count",
   "the share is of analyzed papers, and this pair's whole is another measure": "the share is computed over analyzed papers, not over the total it is written beside",
+  "the share is computed over another denominator than the whole written beside it": "the share is computed over a different number of papers than the one written beside it",
+  "a count of a wider scope in this lookup, not the denominator of this count": "a true count, but of a wider scope than the papers this count is out of",
+  "a count of a wider scope in this lookup, not this benchmark's denominator": "a true count, but of a wider scope than this benchmark's denominator",
   "a total, but whether of listed, analyzed or in-scope papers is not stated": "the sentence does not say whether the total is of listed, analyzed or in-scope papers",
   "connected": "",
 };

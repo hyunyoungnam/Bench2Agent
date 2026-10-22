@@ -381,7 +381,7 @@ _SPECIFIC_WORDS = [
     (r"‰|per\s*1,?000(?:\s+(?:parsed(?:\s+papers?)?|papers?))?|1,?000\s*(?:편|개)?\s*당|천\s*편당", RATE),   # "per 1,000 parsed (papers)" is one rate phrase
     (r"%|percent(?:age)?|백분율|퍼센트|비율|share(?:\s+of\s+(?:(?:analy[sz]ed|parsed)\s+)?papers?)?", PERCENT),
     (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
-    (r"분모|파싱|분석|parsed|analy[sz]ed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
+    (r"분모|파싱|분석|parsed|analy[sz]ed|denominator", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"(?<![A-Za-z])listed|수록|목록", {"total_papers"}),
     (r"(?<!학회 )(?<!학회)전체(?!\s*(?:에서|의|적으로|대비|를|로))|(?<![A-Za-z])total(?![A-Za-z])|총", {"__total__", "total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
@@ -476,7 +476,9 @@ def facts(log: TurnLog) -> list[dict]:
                 out.append({"value": float(fixed["n_files"]), "metric": "n_files",
                             "ctx": {**c, "link_url": _norm_url(fixed.get("url")), "address": "corrected"}})
 
-    def walk(o, ctx, key, denominator=None):
+    def walk(o, ctx, key, denominator=None, path=""):
+        """`path` locates each value in its call's result; a share records the count and the denominator it was
+        computed from, so a ratio can be checked against those exact fields (never a same-named one beside them)."""
         if isinstance(o, dict):
             c = dict(ctx)
             if isinstance(o.get("id"), str) and isinstance(o.get("name"), str):
@@ -489,8 +491,9 @@ def facts(log: TurnLog) -> list[dict]:
             # Usage rows share ONLY their own call's denominator. Trend rows
             # carry their edition's denominator; never borrow from another row/call.
             if c.get("tool") == "benchmark_usage" and isinstance(o.get("coverage"), dict):
-                denominator = o["coverage"].get("parsed_papers")
-            n = o.get("parsed_papers") if "parsed_papers" in o else denominator if c.get("tool") == "benchmark_usage" else None
+                denominator = (o["coverage"].get("parsed_papers"), f"{path}.coverage.parsed_papers")
+            n, n_path = ((o.get("parsed_papers"), f"{path}.parsed_papers") if "parsed_papers" in o
+                         else denominator if c.get("tool") == "benchmark_usage" and denominator else (None, None))
             p = o.get("papers")
             has_percentage = (c.get("tool") in {"benchmark_usage", "benchmark_trend"} and c.get("benchmark_id")
                               and isinstance(p, (int, float)) and not isinstance(p, bool)
@@ -498,9 +501,10 @@ def facts(log: TurnLog) -> list[dict]:
             if has_percentage:
                 # Also works on saved pre-percentage tool logs. Use counts,
                 # not the rounded per_1000 value or arbitrary pooled values.
-                out.append({"value": percentage(p, n, places=None), "metric": "share_percent", "ctx": dict(c)})
+                out.append({"value": percentage(p, n, places=None), "metric": "share_percent", "ctx": dict(c),
+                            "path": f"{path}.share_percent", "count_path": f"{path}.papers", "denominator_path": n_path})
             if key in {"editions", "by_edition", "by_year"} or (o and all(_EDITION.fullmatch(str(k)) for k in o)):
-                out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c})
+                out.append({"value": float(len(o)), "metric": f"count:{key}" if key else "count:editions", "ctx": c, "path": f"{path}#len"})
             for k, v in o.items():
                 if k == "share_percent" and has_percentage:
                     continue                           # the exact ratio above avoids rounding a share twice
@@ -520,20 +524,20 @@ def facts(log: TurnLog) -> list[dict]:
                     cc["role"] = k
                 if k in _GROUP_KEYS:
                     cc["group"] = k
-                walk(v, cc, k, denominator)
+                walk(v, cc, k, denominator, f"{path}.{k}")
         elif isinstance(o, list):
             if key:
-                out.append({"value": float(len(o)), "metric": f"count:{key}", "ctx": ctx})
-            for v in o:
-                walk(v, ctx, key, denominator)
+                out.append({"value": float(len(o)), "metric": f"count:{key}", "ctx": ctx, "path": f"{path}#len"})
+            for j, v in enumerate(o):
+                walk(v, ctx, key, denominator, f"{path}[{j}]")
         elif isinstance(o, (int, float)) and not isinstance(o, bool):
             if key in UNATTRIBUTED_OBSERVATIONS:
                 # Coverage spans all benchmarks and roles, even when nested
                 # in a single-benchmark or evaluation/training result.
                 ctx = {k: v for k, v in ctx.items() if k not in {"benchmark_id", "surfaces", "role"}}
-            out.append({"value": float(o), "metric": key or "", "ctx": ctx})
+            out.append({"value": float(o), "metric": key or "", "ctx": ctx, "path": path})
 
-    for e in log.entries:
+    for i, e in enumerate(log.entries):
         if RECOMPUTABLE.get(e.get("name")) != "json":
             continue
         base = {"tool": e.get("name"), "args": canonical_args(e.get("arguments") or {}), "revision": e.get("revision"),
@@ -544,7 +548,7 @@ def facts(log: TurnLog) -> list[dict]:
         args = e.get("arguments") or {}
         if isinstance(args, dict) and isinstance(args.get("role"), str):
             base["role"] = args["role"]
-        walk(e.get("result"), base, None)
+        walk(e.get("result"), base, None, None, f"{i}:")
     # the attributed total of one role (others + self + undetermined), within one object
     groups: dict = {}
     for f in out:
@@ -877,10 +881,14 @@ def _judge_full(raw: str, v: float, c: dict, fs: list[dict], within=None) -> tup
     if named_denominator:
         # "| LIBERO | 513 |" under an analyzed-papers column: the scope-wide denominator of a call that counted
         # this benchmark's use (the usage call's pooled 513); a call with no use count for it (evidence) never
+        dpaths = {f["denominator_path"] for f in fs if f["metric"] == "share_percent" and f.get("denominator_path")
+                  and f["ctx"].get("benchmark_id") in c["benchmark_ids"]}
         calls = {_call(f) for f in fs if f["ctx"].get("benchmark_id") in c["benchmark_ids"] and f["metric"] in USAGE}
         scoped = {**{k: x for k, x in c.items() if k != "benchmark_ids"}, "metric": denominators}
-        cand += [f for f in fs if f["ctx"].get("benchmark_id") is None and _call(f) in calls
+        cand += [f for f in fs if f["ctx"].get("benchmark_id") is None and f.get("path") in dpaths
                  and _satisfies(f, scoped) and f not in cand]
+        wider = [f for f in fs if f["ctx"].get("benchmark_id") is None and _call(f) in calls and f.get("path") not in dpaths
+                 and f["metric"] in denominators and _satisfies(f, {k: x for k, x in scoped.items() if k != "edition"})]
     if cand and c.get("metric") == {"n_files"}:
         if len({(f["ctx"].get("link_url"), f["ctx"].get("address")) for f in cand}) > 1:
             return "na", "which link or address the file count is for is not stated", [], cand
@@ -906,6 +914,8 @@ def _judge_full(raw: str, v: float, c: dict, fs: list[dict], within=None) -> tup
         return "na", "the value belongs to several benchmarks and the text names none", [], cand
     if hits:
         return "ok", "connected", hits, cand
+    if named_denominator and any(rounded(f["value"]) == rounded(v) for f in wider):
+        return "na", "a count of a wider scope in this lookup, not this benchmark's denominator", [], cand
     if cand and guessed:
         return "na", "only a generic word says what it counts", [], cand
     if whole:
@@ -919,7 +929,8 @@ def _judge_full(raw: str, v: float, c: dict, fs: list[dict], within=None) -> tup
     # clause, so a different value there is unverified, never contradicted.
     if cand and not (c.get("benchmark_ids") or "edition" in c or within is not None or ("metric" in c and set(c["metric"]) <= _SCOPE_WIDE)):
         return "na", "which benchmark or edition this number is for is not stated", [], cand
-    if cand and within is None and not c.get("benchmark_ids") and all(f["ctx"].get("benchmark_id") for f in cand):
+    if cand and within is None and not c.get("benchmark_ids") and all(f["ctx"].get("benchmark_id") for f in cand) \
+            and any(family(f["metric"]) not in ("denominator", "editions") for f in cand):   # a trend row's denominator is the edition's
         return "na", "the values in this context are a benchmark's, and the text names none", [], cand
     if cand:
         vals = sorted({rounded(f["value"]) for f in cand})[:4]
@@ -1019,6 +1030,7 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
                 if ids is not None:
                     c["benchmark_ids"] = ids
                     c["ambiguous_name"] = len(ids) > 1
+                    c["inherited"] = True
         else:
             before, after = _clause(text, m.start(), m.end())
             if _YEAR.fullmatch(raw) and _metric_cues(before, after) is None:
@@ -1032,6 +1044,7 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
                 c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
             ids = _mentions(before + " " + after, surf, raw_names)
             if ids is None and not (c.get("metric") and c["metric"] <= EDITIONS):
+                c["inherited"] = True
                 para_start = max(text.rfind("\n\n", 0, m.start()), text.rfind("\n#", 0, m.start()))
                 ids = _mentions(text[para_start + 1 if para_start >= 0 else 0:m.start()], surf)   # the paragraph so far
                 if ids is None:
@@ -1039,6 +1052,13 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
             if ids is not None:
                 c["benchmark_ids"] = ids
                 c["ambiguous_name"] = len(ids) > 1
+            else:
+                c.pop("inherited", None)
+        if c.pop("inherited", False) and c.get("metric") and c["metric"] <= DENOM:
+            # a benchmark only inferred from the paragraph or section does not make an edition's coverage count that
+            # benchmark's denominator ("| ICML 2026 | 6,629 | 4,893 | 4,863 |" below a LIBERO table)
+            c.pop("benchmark_ids", None)
+            c.pop("ambiguous_name", None)
         if c.get("metric") == {"n_files"}:
             c.update(_link_cues(text, m.start(), m.end(), fs))   # which link, which address: from the claim's own line
         verdict, why, hits, cand = _judge_full(raw, v, c, fs)
@@ -1110,16 +1130,39 @@ def _settle(part: dict, whole: dict, share: dict | None, out: list, fs: list[dic
     if not metric:
         out[whole["i"]] = (a, b, raw, "na", "a whole of this measure does not fit the part's measure")
         return
+    # the shares computed from the part's own count, and the denominator field each was computed over
+    paths = {x.get("path") for x in anchors if x.get("path")}
+    shares = [f for f in fs if f["metric"] == "share_percent" and f.get("count_path") in paths and f.get("denominator_path")]
+    dpaths = {f["denominator_path"] for f in shares}
     if fams == {"denominator"} and all(f["ctx"].get("edition") for f in anchors):
         eds = {f["ctx"]["edition"] for f in anchors}       # one edition's coverage is the same in every lookup
         within = lambda f: f["ctx"].get("edition") in eds
+    elif implied and dpaths and "usage" in fams:
+        within = lambda f: f.get("path") in dpaths          # "183편 중 26편": the count's own denominator, nothing beside it
     else:
         within = _same_lookup(anchors)
     wv, why, hits, _ = _judge_full(raw, whole["v"], {**whole["c"], "metric": metric}, fs, within)
+    if wv != "ok" and implied and dpaths and "usage" in fams:
+        inside, dp = _same_lookup(anchors), len(raw.split(".")[1]) if "." in raw else 0
+        if any(inside(f) and f["metric"] in _SHARE_OF and round(f["value"], dp) == round(whole["v"], dp) for f in fs):
+            wv, why = "na", "a count of a wider scope in this lookup, not the denominator of this count"   # 4,252 analyzed in the edition, 183 in the filter
     out[whole["i"]] = (a, b, raw, wv, why)
     if share is None:
         return
     sa, sb, sraw = out[share["i"]][:3]
+    if dpaths and "usage" in fams:
+        # a share is checked against the count's own computed shares, and only when the whole written beside it is
+        # that share's denominator field (or a mistyped value of it): never a same-named count of another scope
+        at_denominator = wv == "ok" and any(h.get("path") in dpaths for h in hits)
+        if not (at_denominator or (wv == "no" and (implied or metric & _SHARE_OF))):
+            out[share["i"]] = (sa, sb, sraw, "na", "the share is computed over another denominator than the whole written beside it")
+            return
+        used = {h.get("path") for h in hits} if at_denominator else dpaths
+        own = {id(f) for f in shares if f["denominator_path"] in used}
+        sv, swhy, _, _ = _judge_full(sraw, share["v"], {**share["c"], "metric": set(PERCENT)}, fs, lambda f: id(f) in own)
+        out[share["i"]] = (sa, sb, sraw, sv, swhy if sv != "na" or swhy != "no tool result has this context"
+                           else "the share is not in the lookup its count came from")
+        return
     # a share is of the analyzed papers: its whole must be that field, not the listed or matched total of the same lookup
     measures = {h["metric"] for h in hits} if wv == "ok" else metric
     if not measures & _SHARE_OF:
