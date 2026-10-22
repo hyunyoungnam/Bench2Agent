@@ -148,20 +148,113 @@ class PooledAndDiagnosticWords(unittest.TestCase):
         self.assertEqual(self.verdicts("ICLR 2026 has 184 parsed papers in scope.")["184"], "no")      # one named edition: still contradicted
 
     def test_a_row_denominator_is_the_usage_calls_pooled_one_even_when_evidence_calls_carry_their_own(self):
-        evidence = ("benchmark_evidence", {"benchmark": "libero"}, {"id": "libero", "name": "LIBERO",
+        evidence = ("benchmark_evidence", {"benchmark": "libero", "role": "evaluates_on"}, {"id": "libero", "name": "LIBERO", "role": "evaluates_on",
                     "coverage": {"parsed_papers": 4252, "editions": {"iclr-2026": {"parsed_papers": 4252}}}, "results": []})
         lg = log(self.USAGE, evidence)
         out = lambda text: dict((r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set()))
         row = "| Benchmark | Papers evaluating on it |\n|---|---|\n| LIBERO | 82 of {} papers (16.0%) |\n"
         self.assertEqual(out(row.format(513))["513"], "ok")
         self.assertEqual(out(row.format(514))["514"], "no")              # only the usage call fits "evaluating": still contradicted
-        plain = "LIBERO: 82 of {} papers."                                  # no role named: both lookups fit, so not stated which
+        plain = "LIBERO: 82 of {} papers."                                  # the evidence lookup counts no use: its denominator is not this pair's
         self.assertEqual(out(plain.format(513))["513"], "ok")
-        self.assertEqual(out(plain.format(514))["514"], "na")
+        self.assertEqual(out(plain.format(514))["514"], "no")
+        self.assertEqual(out(plain.format(4252))["4252"], "no")
 
     def test_papers_with_unresolved_mentions_are_the_scope_diagnostic(self):
         self.assertEqual(self.verdicts("There are also 221 papers with unresolved benchmark mentions.")["221"], "ok")
         self.assertNotEqual(self.verdicts("LIBERO: 82 of 513 papers. There are also 222 papers with unresolved benchmark mentions.")["222"], "ok")
+
+
+class Review061(unittest.TestCase):
+    """Codex's review of the 0.6.1 candidate (2026-10-22): four false confirmations, each beside the correct
+    statement that must still connect. A value is confirmed only by a fact of the same lookup and scope."""
+    USAGE = PooledAndDiagnosticWords.USAGE
+    EVIDENCE = ("benchmark_evidence", {"benchmark": "libero", "role": "evaluates_on"}, {
+        "id": "libero", "name": "LIBERO", "role": "evaluates_on",
+        "coverage": {"parsed_papers": 4252, "editions": {"iclr-2026": {"parsed_papers": 4252}}}, "results": []})
+    ICLR = ("benchmark_usage", {"edition": "iclr-2026"}, {"role": "evaluates_on", "coverage": {"parsed_papers": 4252, "editions": {
+        "iclr-2026": {"total_papers": 5468, "parsed_papers": 4252, "in_scope_parsed": 4252}}},
+        "results": [{"id": "libero", "name": "LIBERO", "papers": 82}]})
+    SCOPE = ("benchmark_scope", {}, {"editions": {f"iclr-{y}": {"parsed_papers": 80} for y in range(1965, 2026)}})
+    NEW = ("new_benchmarks", {}, {"results": [{"id": "toybench", "name": "ToyBench", "adoption": {"evaluates_on": {
+        "by_edition": {f"iclr-{y}": {"others": 1} for y in (2024, 2025, 2026)}}}}]})
+    TWO = ("benchmark_usage", {"topic": "robotics", "venue": "iclr"}, {"role": "evaluates_on", "coverage": {
+        "parsed_papers": 300, "editions": {"iclr-2025": {"in_scope_parsed": 120}, "iclr-2026": {"in_scope_parsed": 180}}}, "results": []})
+
+    def verdicts(self, text, *entries):
+        lg = log(*entries)
+        return dict((r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set()))
+
+    def test_a_pooled_value_fits_only_the_editions_it_was_pooled_over(self):
+        self.assertNotEqual(self.verdicts("ICLR 2026 and ICML 2026 together have 513 parsed papers.", self.USAGE)["513"], "ok")
+        self.assertNotEqual(self.verdicts("LIBERO was used by 82 papers in ICLR 2026 and ICML 2026.", self.USAGE)["82"], "ok")
+        # the whole list, after the number past the 30-character clause or before it across commas, connects
+        self.assertEqual(self.verdicts("The robotics filter yields 513 parsed papers across ICLR 2026, ICML 2026 and NeurIPS 2025.", self.USAGE)["513"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026, ICML 2026 and NeurIPS 2025 together have 513 parsed papers.", self.USAGE)["513"], "ok")
+        # editions with no in-scope papers add nothing: a filter over 11 latest editions, labeled in three
+        wide = (self.USAGE[0], self.USAGE[1], {**self.USAGE[2], "coverage": {**self.USAGE[2]["coverage"], "editions": {
+            **self.USAGE[2]["coverage"]["editions"], "aaai-2026": {"parsed_papers": 2823, "in_scope_parsed": 0}}}})
+        self.assertEqual(self.verdicts("The robotics filter yields 513 parsed papers across ICLR 2026, ICML 2026 and NeurIPS 2025.", wide)["513"], "ok")
+        self.assertNotEqual(self.verdicts("ICLR 2026 and ICML 2026 together have 513 parsed papers.", wide)["513"], "ok")
+        # a single-edition lookup's pooled value is that edition's
+        self.assertEqual(self.verdicts("ICLR 2026에서 LIBERO로 평가한 논문은 82편입니다.", self.ICLR)["82"], "ok")
+
+    def test_an_edition_list_is_read_only_as_far_as_its_own_claim(self):
+        out = self.verdicts("ICLR 2026과 ICML 2026에서 분석한 논문은 합쳐서 350편이고, NeurIPS 2025에서 분석한 논문은 163편입니다.", self.USAGE)
+        self.assertEqual((out["163"], out["350"] != "ok"), ("ok", True))
+        out = self.verdicts("There are 513 parsed papers in ICLR 2026 and ICML 2026, and 163 in NeurIPS 2025.", self.USAGE)
+        self.assertNotEqual(out["513"], "ok")
+        text = "ICLR 2026 has 183 analyzed papers in scope and ICML 2026 has {} analyzed papers in scope."
+        self.assertEqual(self.verdicts(text.format(167), self.USAGE)["167"], "ok")
+        self.assertEqual(self.verdicts(text.format(183), self.USAGE), {"183": "no"})   # ICLR 2026 is the first number's
+
+    def test_a_stated_measure_decides_and_an_unstated_one_is_not_guessed(self):
+        out = self.verdicts("ICLR 2026 수록 논문 4252편 중 82편이 LIBERO로 평가했습니다.", self.ICLR)
+        self.assertEqual((out["4252"], out["82"]), ("no", "ok"))                 # 수록 = listed: 5,468
+        self.assertEqual(self.verdicts("ICLR 2026 수록 논문 5468편 중 82편이 LIBERO로 평가했습니다.", self.ICLR)["5468"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026 분석 논문 4,252편 중 82편이 LIBERO로 평가했습니다.", self.ICLR)["4,252"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026 4,252편 중 82편이 LIBERO로 평가했습니다.", self.ICLR)["4,252"], "ok")   # a use count's whole is analyzed
+        # "학회 전체" says where, not what: the measure word that follows decides; none leaves a total unverified
+        self.assertEqual(self.verdicts("ICLR 2026 학회 전체에서 분석한 논문은 4,252편입니다.", self.ICLR)["4,252"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026 학회 전체에서 LIBERO로 평가한 논문은 82편입니다.", self.ICLR)["82"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026 학회 전체에서 LIBERO로 평가한 논문은 83편입니다.", self.ICLR)["83"], "no")
+        self.assertEqual(self.verdicts("ICLR 2026 학회 전체 논문은 4,252편입니다.", self.ICLR)["4,252"], "na")
+        # a part that connects nowhere leaves its implied whole unverified
+        self.assertEqual(self.verdicts("ICLR 2026 4,252편 중 타 저자 7편이 LIBERO를 썼습니다.", self.ICLR)["4,252"], "na")   # no adoption result
+        self.assertEqual(self.verdicts("ICLR 2026 4,252편 중 7편이 LIBERO로 평가했습니다.", self.ICLR)["7"], "no")   # a wrong part keeps its context
+
+    def test_a_ratio_connects_inside_one_lookup(self):
+        row = "| Benchmark | Papers evaluating on it |\n|---|---|\n| LIBERO | 82 of {} papers ({}%) |\n"
+        out = self.verdicts(row.format(4252, "16.0"), self.USAGE, self.EVIDENCE)
+        self.assertEqual((out["82"], out["4252"], out["16.0"]), ("ok", "no", "ok"))
+        out = self.verdicts(row.format(513, "16.0"), self.USAGE, self.EVIDENCE)
+        self.assertEqual((out["82"], out["513"], out["16.0"]), ("ok", "ok", "ok"))
+        # both lookups return 13, over 237 and over 500: the whole and the share must come from the same one
+        out = self.verdicts("LIBERO: 13 of 500 papers (2.6%).", USAGE, OTHER)
+        self.assertEqual((out["13"], out["500"], out["2.6"]), ("ok", "ok", "ok"))
+        self.assertNotEqual(self.verdicts("LIBERO: 13 of 237 papers (2.6%).", USAGE, OTHER)["2.6"], "ok")
+        self.assertNotEqual(self.verdicts("LIBERO: 13 of 500 papers (5.5%).", USAGE, OTHER)["5.5"], "ok")
+        self.assertEqual(self.verdicts("LIBERO: 500편 중 13편(2.6%)", USAGE, OTHER)["2.6"], "ok")
+
+    def test_installed_data_query_scope_and_a_benchmarks_editions_stay_apart(self):
+        self.assertEqual(self.verdicts("The installed data covers 3 editions.", self.SCOPE, self.NEW)["3"], "no")
+        self.assertEqual(self.verdicts("The installed data covers 61 editions.", self.SCOPE, self.NEW)["61"], "ok")
+        self.assertEqual(self.verdicts("The data covers 63 editions.", self.SCOPE, self.NEW)["63"], "no")    # a real error stays one
+        self.assertEqual(self.verdicts("ToyBench was adopted in 3 editions.", self.SCOPE, self.NEW)["3"], "ok")
+        self.assertEqual(self.verdicts("설치 데이터는 2개 회차입니다.", self.SCOPE, self.TWO)["2"], "no")
+        self.assertEqual(self.verdicts("이번 조회는 2개 회차입니다.", self.SCOPE, self.TWO)["2"], "ok")
+        self.assertEqual(self.verdicts("설치 데이터는 61개 회차입니다.", self.SCOPE, self.TWO)["61"], "ok")
+
+
+    def test_a_restated_figure_and_a_range_are_not_contradicted(self):
+        # saved robotics answers (2026-10-21): "Of those 513 papers" read as LIBERO's use count; "60–90%" as editions
+        lg = (self.USAGE[0], self.USAGE[1], {**self.USAGE[2], "results": [{"id": "libero", "name": "LIBERO", "papers": 82}]})
+        out = self.verdicts("LIBERO 82 of 513 parsed papers. Of those 513 papers, 221 have an unresolved mention.", lg)
+        self.assertEqual(out["513"], "ok")
+        self.assertEqual(self.verdicts("LIBERO 82 of 513 parsed papers. Of those 514 papers, few say so.", lg)["514"], "na")
+        out = self.verdicts("Each edition covers roughly 60–90% of that venue's papers.", self.SCOPE)
+        self.assertEqual((out["60"], out["90"]), ("na", "na"))
+        self.assertEqual(list(self.verdicts("ICLR 2024–2026 covers 3 editions.", self.SCOPE)), ["3"])   # a year span is not a range of values
 
 
 class TerminalMarks(unittest.TestCase):

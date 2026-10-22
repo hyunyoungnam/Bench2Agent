@@ -383,12 +383,12 @@ _SPECIFIC_WORDS = [
     (r"(?<![A-Za-z])z(?![A-Za-z])|z-?값", {"z"}),
     (r"분모|파싱|분석|parsed|analy[sz]ed", {"parsed_papers", "in_scope_parsed"}), (r"매칭|matched", {"arxiv_matched"}),
     (r"(?<![A-Za-z])listed|수록|목록", {"total_papers"}),
-    (r"전체|(?<![A-Za-z])total(?![A-Za-z])|총", {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
+    (r"(?<!학회 )(?<!학회)전체(?!\s*(?:에서|의|적으로|대비|를|로))|(?<![A-Za-z])total(?![A-Za-z])|총", {"__total__", "total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}),
     (r"미라벨|라벨\s*없|unlabell?ed", {"unlabelled_papers"}), (r"(?<!미)라벨(?!\s*없)|(?<!un)labell?ed", {"field_labelled_papers"}),
     (r"미귀속|미해소|unattributed|unresolved", {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS),
     (r"papers_with_unattributed_benchmark_mentions|unattributed_papers", UNATTRIBUTED_OBSERVATIONS),
     (r"(?<!미)귀속|(?<!un)attributed|채택|adoption|고유|unique|중복\s*제거", ADOPTION - {"unattributed_using_papers", "before_claim"}),
-    (r"이전|before[_ ]claim", {"before_claim"}), (r"학회|venues?", {"count:venues"}),
+    (r"이전|before[_ ]claim", {"before_claim"}), (r"학회(?!\s*(?:전체|에서|별))|venues?", {"count:venues"}),
     (r"파일|(?<![A-Za-z])files?(?![A-Za-z])", {"n_files"})]
 _GENERIC_WORDS = [(r"사용|(?<![A-Za-z])uses?(?![A-Za-z])|usage|관측|observations?", USAGE)]
 _CONTEXT_WORDS = [(r"타\s*저자|다른\s*저자|(?<![A-Za-z])others?(?![A-Za-z])", "group", "others"), (r"자기|자체\s*저자|(?<![A-Za-z])self(?![A-Za-z])", "group", "self"),
@@ -436,6 +436,24 @@ def _link_cues(text: str, a: int, b: int, fs: list[dict]) -> dict:
     elif seen:
         cues["link_urls"] = {min(seen)[1]}
     return cues
+
+
+def _call_editions(result, in_scope: bool = False) -> tuple | None:
+    """The editions one call covers, from its coverage (or, for benchmark_scope, its own edition list). With
+    `in_scope`, only those with in-scope papers: an edition with none adds nothing to a value pooled in scope
+    (a field filter's latest editions where only three venues carry the label)."""
+    if not isinstance(result, dict):
+        return None
+    for o in (result.get("coverage"), result):
+        eds = o.get("editions") if isinstance(o, dict) else None
+        if isinstance(eds, dict) and eds and all(_EDITION.fullmatch(str(k)) for k in eds):
+            if not in_scope:
+                return tuple(sorted(str(k).lower() for k in eds))
+            counts = [(str(k).lower(), (x or {}).get("in_scope_parsed") if isinstance(x, dict) else None) for k, x in eds.items()]
+            if not all(isinstance(n, int) and not isinstance(n, bool) for _, n in counts):
+                return None                        # no in-scope count for every edition: no support set
+            return tuple(sorted(k for k, n in counts if n > 0))
+    return None
 
 
 def facts(log: TurnLog) -> list[dict]:
@@ -518,7 +536,11 @@ def facts(log: TurnLog) -> list[dict]:
     for e in log.entries:
         if RECOMPUTABLE.get(e.get("name")) != "json":
             continue
-        base = {"tool": e.get("name"), "args": canonical_args(e.get("arguments") or {}), "revision": e.get("revision")}
+        base = {"tool": e.get("name"), "args": canonical_args(e.get("arguments") or {}), "revision": e.get("revision"),
+                # a value with no edition of its own is pooled over the editions this call covers; benchmark_scope
+                # describes the installed data, every other call one query's scope
+                "edition_set": _call_editions(e.get("result")), "edition_support": _call_editions(e.get("result"), in_scope=True),
+                "scope": "installed" if e.get("name") == "benchmark_scope" else "query"}
         args = e.get("arguments") or {}
         if isinstance(args, dict) and isinstance(args.get("role"), str):
             base["role"] = args["role"]
@@ -601,27 +623,54 @@ def _section(text: str, a: int, surf, raw=None) -> set[str] | None:
     return None
 
 
+_TOTAL_MEASURES = {"total_papers", "parsed_papers", "in_scope_parsed", "total", "catalogue_entries"}
+
+
 def _metric_cues(before: str, after: str) -> set | None:
+    """What a number counts, from its unit and the words before it. "__total__": only "전체"/"total" says so, and a
+    total of listed, analyzed or in-scope papers is not told apart."""
+    r = _metric_words(before, after)
+    if r and len(r & _TOTAL_MEASURES) > 1:
+        best = None
+        for rx, fam in _SPECIFIC_WORDS:
+            for m in re.finditer(rx, before, re.I):
+                if best is None or m.end() > best[0]:
+                    best = (m.end(), fam)
+        if best and "__total__" in best[1]:
+            r = r | {"__total__"}
+    return r
+
+
+def _metric_words(before: str, after: str) -> set | None:
+    if re.search(r"(?:(?<![A-Za-z])(?:those|these)|이\s*중|그\s*중|해당)\s*$", before, re.I):
+        # "Of those 513 papers": a figure stated before, restated; which one is not said here
+        return {"__generic__"} | set(USAGE) | set(DENOM)
     unit = next((set(fam) for rx, fam in _UNIT_AFTER if re.match(rx, after, re.I)), None)
     if unit == PERCENT:
         return set(PERCENT)                            # a percent is never a paper count or a per-1,000 rate
     # Korean pairs run whole-then-part: "2,296편 중 1,894편". The whole is a denominator or listed total; the part
     # is a use count or an analyzed count, whichever the edition's own values hold (never a third measure).
     if re.match(r"\s*편\s*중\s*\d", after):
-        return set(DENOM) | {"__whole__"}            # listed or analyzed: confirmed when it matches, never contradicted
+        # a measure word right before the whole is the whole's ("수록 논문 5,468편 중"); one that ends in a topic
+        # ("분석된 논문 수는 2,296편 중 1,894편") is the part's. Otherwise the part decides (see _pairs)
+        adjacent = re.search(r"(수록|listed|분석|파싱|analy[sz]ed|parsed|매칭|matched)\S{0,2}\s*(?:논문\s*)?$", before, re.I)
+        if adjacent:
+            w = adjacent.group(1).lower()
+            return {"total_papers"} if w in ("수록", "listed") else {"arxiv_matched"} if w in ("매칭", "matched") else {"parsed_papers", "in_scope_parsed"}
+        return set(DENOM) | {"__whole__"}
     if re.search(r"\d\s*편\s*중\s*$", before) and not re.search(r"(?:분모|파싱|분석|parsed|analy[sz]ed|매칭|matched)", before.split("중")[-1], re.I):
         return set(USAGE) | {"parsed_papers", "in_scope_parsed", "arxiv_matched"}
     if unit is None and re.match(r"\s*(?:/|of(?![A-Za-z]))\s*\d", after) and not re.search(r"(?:분모|파싱|parsed|매칭|matched)\s*$", before, re.I):
         return set(USAGE)                                      # "0/547", "82 of 513": an edition's use count ...
         # ... unless a word right before says what it is ("parsed 1894 of 2296 accepted")
     if (unit is None or unit == _COUNTS) and re.search(r"\d\s*(?:/|(?<![A-Za-z])of)\s*$", before):
-        return set(DENOM)                                      # ... over its denominator ("13 of 237 papers": 237 is the denominator)
+        return set(DENOM) | {"__whole__"}                      # ... over its denominator ("13 of 237 papers"), which the part pins down
     best = None
     for rx, fam in _SPECIFIC_WORDS:
         for m in re.finditer(rx, before, re.I):
             if best is None or m.end() > best[0]:
                 best = (m.end(), fam)
-    word = set(best[1]) if best else None
+    word = set(best[1]) - {"__total__"} if best else None
     if word and word <= EDITIONS and re.match(r"\s*(?:건|편|papers?(?![A-Za-z]))", after):
         word = None                                    # "세 에디션을 합쳐 4,185건": an edition word does not say what 4,185 items are
     if re.match(r"\s*(?:건|편|papers?)?\s*(?:의\s*)?(?:논문[-\s]?에디션\s*관측|paper-edition\s+observations?)\S*\s*(?:에\s*)?(?:해결되지\s*않은|미해소|미귀속|unresolved)", after, re.I) \
@@ -646,23 +695,89 @@ def _metric_cues(before: str, after: str) -> set | None:
     return set(word) if set(word) <= TOTALS and (unit == _COUNTS or unit == _ANY) else unit
 
 
-def _context_cues(before: str, after: str) -> dict:
+_ED_RX = r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)"
+_ED_SEP = r"\s*(?:,|、|·|&|(?<![a-z])and(?![a-z])|(?<![a-z])or(?![a-z])|및|와|과|그리고)\s*(?:and\s+)?"
+_CLAUSE_BREAKS = ("\n", ". ", "。", "|", ";", ", ", "(", ")", " — ", " – ", ": ")
+
+
+def _edition_run(low: str, at: int) -> tuple[set, int]:
+    """An enumeration of editions starting at `at` ("ICLR 2026, ICML 2026 and NeurIPS 2025"): its editions and end."""
+    m = re.compile(_ED_RX).match(low, at)
+    eds, end = {f"{m.group(1)}-{m.group(2)}"}, m.end()
+    nxt = re.compile(_ED_SEP + _ED_RX)
+    while (r := nxt.match(low, end)):
+        eds.add(f"{r.group(1)}-{r.group(2)}")
+        end = r.end()
+    return eds, end
+
+
+def _editions_near(text: str, a: int, b: int, before: str, after: str) -> set:
+    """The editions this number is stated for. Before it: those in its clause, with an enumeration cut by the
+    clause's start read back to its first edition. After it: an enumeration that starts inside the clause, read
+    to its end, unless another number follows it in the same clause (then the editions are that number's)."""
+    low = text.lower()
+    start = a - len(before)
+    eds: set = set()
+    own: set = set()
+    for m in re.finditer(_ED_RX, before.lower()):
+        ed = f"{m.group(1)}-{m.group(2)}"
+        eds.add(ed)
+        if not re.search(r"\d", re.sub(_ED_RX, " ", before.lower()[m.end():])):
+            own.add(ed)                            # no other number between this edition and this number
+    if own and own != eds:
+        eds = set(own)                             # "ICLR 2026 has 183 …, ICML 2026 has 167": ICLR 2026 is the 183's
+    if eds and re.match(r"\s*" + _ED_RX, before.lower()):
+        p = start
+        while (r := re.search(_ED_RX + r"\s*(?:,|、|·)\s*$", low[:p])):
+            eds.add(f"{r.group(1)}-{r.group(2)}")  # "ICLR 2026, ICML 2026 and NeurIPS 2025 together have 513"
+            p = r.start()
+    window = b + len(after)
+    sentence_end = min([i for i in (text.find(ch, b) for ch in ("\n", ". ", "。", "|", ";")) if i >= 0] or [len(text)])
+    after_eds: set = set()
+    pos = b
+    while (m := re.compile(_ED_RX).search(low, pos, sentence_end)) and m.start() < window:
+        run, end = _edition_run(low, m.start())
+        clause_end = min([i for i in (text.find(ch, end) for ch in _CLAUSE_BREAKS) if i >= 0] or [len(text)])
+        if not re.search(r"\d", re.sub(_ED_RX, " ", low[end:min(clause_end, sentence_end)])):
+            after_eds |= run                        # "513 parsed papers across ICLR 2026, ICML 2026 and NeurIPS 2025."
+        pos = end
+    return eds | after_eds
+
+
+def _context_cues(before: str, after: str, text: str | None = None, a: int | None = None, b: int | None = None) -> dict:
     right_after = re.split(r"\d", after, maxsplit=1)[0][:12]
     c: dict = {}
     for rx, kind, val in _CONTEXT_WORDS:
         if re.search(rx, before + " " + right_after, re.I):
             c[kind] = val
-    rx = r"(?<![a-z])(" + "|".join(_VENUES) + r")[\s-]?((?:19|20)\d\d)(?!\d)"
-    eds = {f"{v}-{y}" for v, y in re.findall(rx, before.lower())}
-    # after the number, an edition followed by another number is that number's ("…before_claim 0
-    # 에디션별로는 neurips-2025에 타 저자 3편": neurips-2025 is the 3's); a trailing one is this one's
-    low = after.lower()
-    for m in re.finditer(rx, low):
-        if not re.search(r"\d", re.sub(rx, " ", low[m.end():])):
-            eds.add(f"{m.group(1)}-{m.group(2)}")
+    if text is not None:
+        eds = _editions_near(text, a, b, before, after)
+    else:
+        eds = {f"{v}-{y}" for v, y in re.findall(_ED_RX, before.lower())}
+        # after the number, an edition followed by another number is that number's ("…before_claim 0
+        # 에디션별로는 neurips-2025에 타 저자 3편": neurips-2025 is the 3's); a trailing one is this one's
+        low = after.lower()
+        for m in re.finditer(_ED_RX, low):
+            if not re.search(r"\d", re.sub(_ED_RX, " ", low[m.end():])):
+                eds.add(f"{m.group(1)}-{m.group(2)}")
     if eds:
         c["edition"] = eds
+    scope = _scope_cue(before + " " + right_after)
+    if scope:
+        c["scope"] = scope
     return c
+
+
+_INSTALLED_WORDS = re.compile(r"설치(?:된|돼\s*있는|되어\s*있는)?\s*(?:데이터|전체|코퍼스)|(?<![A-Za-z])installed(?![A-Za-z])|전체\s*데이터|데이터\s*전체|"
+                              r"(?:whole|entire|full)\s+(?:corpus|data(?:set|base)?)|(?<![A-Za-z])corpus(?![A-Za-z])|코퍼스", re.I)
+_QUERY_WORDS = re.compile(r"이번\s*(?:조회|질의|검색|조건)|조회\s*(?:범위|결과)|(?:this|the)\s+(?:query|lookup|search)|"
+                          r"(?<![A-Za-z])filter(?:ed)?(?![A-Za-z])|필터", re.I)
+
+
+def _scope_cue(words: str) -> str | None:
+    """Installed data (benchmark_scope) or one query's scope; the nearer word wins, none gives no cue."""
+    found = [(m.end(), "installed") for m in _INSTALLED_WORDS.finditer(words)] + [(m.end(), "query") for m in _QUERY_WORDS.finditer(words)]
+    return max(found)[1] if found else None
 
 
 def _tables(text: str) -> list[dict]:
@@ -689,7 +804,7 @@ def _tables(text: str) -> list[dict]:
                 cells, start = [], offs[k] + lines[k].index("|") + 1
                 for part in lines[k].strip().strip("|").split("|"):
                     cells.append((start, start + len(part), part)); start += len(part) + 1
-                out.append({"span": (offs[k], offs[k] + len(lines[k])), "header": header, "cells": cells,
+                out.append({"span": (offs[k], offs[k] + len(lines[k])), "header": header, "cells": cells, "top": offs[i],
                             "ident": cells[ident][2].strip() if ident is not None and ident < len(cells) else None,
                             "edition": cells[ed_col][2].strip() if ed_col is not None and ed_col < len(cells) else None,
                             "supported": ident is not None or ed_col is not None, "ident_col": ident, "ed_col": ed_col})
@@ -708,8 +823,10 @@ def _satisfies(f: dict, c: dict) -> bool:
     if ids is not None and ctx.get("benchmark_id") not in ids:
         return False                                   # a named benchmark: its own values only, never a scope-wide one
     if "edition" in c and ctx.get("edition") not in c["edition"]:
-        if not (len(c["edition"]) > 1 and ctx.get("edition") is None):
-            return False                               # several named editions: their pooled value (no edition) also fits
+        if not (ctx.get("edition") is None and any(ctx.get(k) and set(ctx[k]) == c["edition"] for k in ("edition_set", "edition_support"))):
+            return False                               # a pooled value fits only the very editions it was pooled over
+    if "scope" in c and ctx.get("scope") != c["scope"]:
+        return False                                   # the installed data (benchmark_scope) or one query's scope
     if "role" in c and ctx.get("role") != c["role"]:
         return False
     if "group" in c and ctx.get("group") != c["group"]:
@@ -721,65 +838,86 @@ def _satisfies(f: dict, c: dict) -> bool:
     return True
 
 
+def _call(f: dict) -> tuple:
+    return (f["ctx"].get("tool"), f["ctx"].get("args"))
+
+
 def _judge(raw: str, v: float, c: dict, fs: list[dict]) -> tuple[str, str]:
+    return _judge_full(raw, v, c, fs)[:2]
+
+
+def _judge_full(raw: str, v: float, c: dict, fs: list[dict], within=None) -> tuple[str, str, list, list]:
+    """(verdict, why, hits, candidates). `within`, when given, admits only the facts it accepts and replaces the
+    benchmark test: a pair's denominator or share is judged inside its part's own lookup (see _pairs)."""
     dp = len(raw.split(".")[1]) if "." in raw else 0
-    guessed = "metric" in c and "__generic__" in c["metric"]
-    if guessed:
-        c = {**c, "metric": c["metric"] - {"__generic__"}}
-    whole = "metric" in c and "__whole__" in c["metric"]
-    if whole:
-        c = {**c, "metric": c["metric"] - {"__whole__"}}
-    if c.get("ambiguous_name"):
-        return "na", "the name means several benchmark ids"
+    flags = {x for x in (c.get("metric") or ()) if x.startswith("__")}
+    if flags:
+        c = {**c, "metric": c["metric"] - flags}
+    guessed, whole, total = "__generic__" in flags, "__whole__" in flags, "__total__" in flags
+    if c.get("ambiguous_name") and within is None:
+        return "na", "the name means several benchmark ids", [], []
     if not (any(k in c for k in ("role", "group")) or ("metric" in c and c["metric"] != _ANY)):
-        return "na", "no cue says what it counts"
-    cand = [f for f in fs if _satisfies(f, c)]
-    named_denominator = bool(c.get("benchmark_ids")) and "metric" in c and c["metric"] <= DENOM
-    if named_denominator:
-        # "| LIBERO | 82 of 513 |": a denominator named as such, in a benchmark's row, may be the scope-wide one of a
-        # call that returned that benchmark (the usage call's pooled 513), never another call's
-        calls = {(f["ctx"].get("tool"), f["ctx"].get("args")) for f in fs if f["ctx"].get("benchmark_id") in c["benchmark_ids"]}
+        return "na", "no cue says what it counts", [], []
+    if within is not None:
         scoped = {k: x for k, x in c.items() if k != "benchmark_ids"}
-        cand += [f for f in fs if f["ctx"].get("benchmark_id") is None and (f["ctx"].get("tool"), f["ctx"].get("args")) in calls
+        cand = [f for f in fs if within(f) and _satisfies(f, scoped)]
+    else:
+        cand = [f for f in fs if _satisfies(f, c)]
+    if c.get("benchmark_ids") is None and "metric" in c and c["metric"] <= _SCOPE_WIDE:
+        cand = [f for f in cand if not f["ctx"].get("benchmark_id")]   # "3 editions" with no benchmark: never one benchmark's subset
+    denominators = set(c.get("metric") or ()) & DENOM if (c.get("metric") and (c["metric"] <= DENOM or guessed)) else set()
+    named_denominator = within is None and bool(c.get("benchmark_ids")) and bool(denominators)   # a restated figure may be one too
+    if named_denominator:
+        # "| LIBERO | 513 |" under an analyzed-papers column: the scope-wide denominator of a call that counted
+        # this benchmark's use (the usage call's pooled 513); a call with no use count for it (evidence) never
+        calls = {_call(f) for f in fs if f["ctx"].get("benchmark_id") in c["benchmark_ids"] and f["metric"] in USAGE}
+        scoped = {**{k: x for k, x in c.items() if k != "benchmark_ids"}, "metric": denominators}
+        cand += [f for f in fs if f["ctx"].get("benchmark_id") is None and _call(f) in calls
                  and _satisfies(f, scoped) and f not in cand]
     if cand and c.get("metric") == {"n_files"}:
         if len({(f["ctx"].get("link_url"), f["ctx"].get("address")) for f in cand}) > 1:
-            return "na", "which link or address the file count is for is not stated"
+            return "na", "which link or address the file count is for is not stated", [], cand
         if "address" not in c and any(f["ctx"].get("address") == "corrected" for f in cand):
-            return "na", "the printed or the corrected address is not stated"
+            return "na", "the printed or the corrected address is not stated", [], cand
     fams = {family(f["metric"]) for f in cand}
     if {"usage", "adoption"} <= fams and "metric" in c and c["metric"] >= _COUNTS:
-        return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated"
+        return "na", "usage (paper-edition observations) or adoption (unique papers) is not stated", [], cand
     if {"unattributed_observations", "adoption"} <= fams:
-        return "na", "scope-wide unresolved observations or a benchmark's unique unattributed papers is not stated"
+        return "na", "scope-wide unresolved observations or a benchmark's unique unattributed papers is not stated", [], cand
+
     def rounded(value):
         if c.get("metric") and c["metric"] <= PERCENT:
             return float(Decimal(str(value)).quantize(Decimal(1).scaleb(-dp), rounding=ROUND_HALF_UP))
         return round(value, dp)
+    if total and len({rounded(f["value"]) for f in cand if f["metric"] in _TOTAL_MEASURES}) > 1:
+        return "na", "a total, but whether of listed, analyzed or in-scope papers is not stated", [], cand
     hits = [f for f in cand if rounded(f["value"]) == rounded(v)]
     benchmark_stat = any(family(f["metric"]) not in ("denominator", "editions") for f in hits)
-    if c.get("benchmark_ids") is None and benchmark_stat and len({f["ctx"].get("benchmark_id") for f in hits if f["ctx"].get("benchmark_id")}) > 1 \
+    if c.get("benchmark_ids") is None and within is None and benchmark_stat \
+            and len({f["ctx"].get("benchmark_id") for f in hits if f["ctx"].get("benchmark_id")}) > 1 \
             and all(f["ctx"].get("benchmark_id") for f in hits):
-        return "na", "the value belongs to several benchmarks and the text names none"
+        return "na", "the value belongs to several benchmarks and the text names none", [], cand
     if hits:
-        return "ok", "connected"
+        return "ok", "connected", hits, cand
     if cand and guessed:
-        return "na", "only a generic word says what it counts"
+        return "na", "only a generic word says what it counts", [], cand
     if whole:
-        return "na", "the whole of a pair can be a listed or an analyzed total"
-    if named_denominator and len({(f["ctx"].get("tool"), f["ctx"].get("args")) for f in cand}) > 1:
-        return "na", "several lookups returned a denominator for this benchmark; which one is not stated"
+        return "na", "the whole of a pair can be a listed or an analyzed total", [], cand
+    if named_denominator and len({_call(f) for f in cand}) > 1:
+        return "na", "several lookups returned a denominator for this benchmark; which one is not stated", [], cand
     if len(c.get("edition") or ()) > 1:
-        return "na", "several editions are named: a pooled value or one edition's is not stated"
+        return "na", "several editions are named: a pooled value or one edition's is not stated", [], cand
     # a contradiction needs a fixed context: what is counted, and for which benchmark or edition (a scope-wide
     # measure such as the number of editions needs neither). "ICLR 2026 (183 papers)" names neither inside its
     # clause, so a different value there is unverified, never contradicted.
-    if cand and not (c.get("benchmark_ids") or "edition" in c or ("metric" in c and set(c["metric"]) <= _SCOPE_WIDE)):
-        return "na", "which benchmark or edition this number is for is not stated"
+    if cand and not (c.get("benchmark_ids") or "edition" in c or within is not None or ("metric" in c and set(c["metric"]) <= _SCOPE_WIDE)):
+        return "na", "which benchmark or edition this number is for is not stated", [], cand
+    if cand and within is None and not c.get("benchmark_ids") and all(f["ctx"].get("benchmark_id") for f in cand):
+        return "na", "the values in this context are a benchmark's, and the text names none", [], cand
     if cand:
         vals = sorted({rounded(f["value"]) for f in cand})[:4]
-        return "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}"
-    return "na", "no tool result has this context"
+        return "no", f"the tool results for this context say {', '.join(f'{x:g}' for x in vals)}", [], cand
+    return "na", "no tool result has this context", [], cand
 
 
 def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set) -> list[tuple]:
@@ -790,7 +928,7 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
     text = text.translate(_MINUS)
     surf, raw_names = _surfaces(fs), None
     tables = _tables(text)
-    out, taken = [], []
+    out, taken, judged = [], [], []
     for m in _DATE.finditer(text):
         raw = m.group(0)
         out.append((m.start(), m.end(), raw, "date-ok" if raw[:10] in date_strings else "date-no", "date"))
@@ -813,6 +951,10 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
         if re.match(r"\s*(?:percentage\s+points?|percent\s+points?|%p\b|퍼센트\s*포인트)", text[m.end():], re.I):
             out.append((m.start(), m.end(), m.group(0), "na", "a percentage-point change is not a usage share"))
             continue
+        if not _YEAR.fullmatch(m.group(0).lstrip("-")) and (re.match(r"\s*(?:–|—|~|-(?=\d))\s*\d", text[m.end():m.end() + 4]) or re.search(r"\d\s*(?:–|—|~)\s*$", text[max(0, m.start() - 4):m.start()])
+                or (m.group(0).startswith("-") and re.search(r"\d$", text[max(0, m.start() - 1):m.start()]))):
+            out.append((m.start(), m.end(), m.group(0), "na", "a range, not a stated value"))
+            continue                                            # "roughly 60–90%": neither end is a reported value
         if re.search(r"(?:more|fewer|less)\s+than\s*$|at\s+(?:least|most)\s*$|[<>≤≥]=?\s*$", text[max(0, m.start() - 14):m.start()], re.I) \
                 or re.match(r"\s*(?:편|개|건)?\s*(?:이상|이하|초과|미만)", text[m.end():m.end() + 8]):
             out.append((m.start(), m.end(), m.group(0), "na", "a comparison, not a stated value"))
@@ -863,6 +1005,13 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
                     out.append((m.start(), m.end(), raw, "na", "the row's benchmark is not in this turn's results")); continue
                 c["benchmark_ids"] = ids
                 c["ambiguous_name"] = len(ids) > 1
+            elif row["ident_col"] is None:
+                above = text[:row["top"]].rstrip("\n").rsplit("\n", 1)[-1]   # "ToyBench at ICLR:" introducing the table
+                ids = _mentions(above, surf) if above.strip() and not above.lstrip().startswith("|") else None
+                ids = ids or _section(text, row["top"], surf)
+                if ids is not None:
+                    c["benchmark_ids"] = ids
+                    c["ambiguous_name"] = len(ids) > 1
         else:
             before, after = _clause(text, m.start(), m.end())
             if _YEAR.fullmatch(raw) and _metric_cues(before, after) is None:
@@ -871,7 +1020,7 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
             mc = _metric_cues(before, after)
             if mc:
                 c["metric"] = mc
-            c.update(_context_cues(before, after))
+            c.update(_context_cues(before, after, text, m.start(), m.end()))
             if "group" in c:                                    # an author group only exists for adoption counts
                 c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
             ids = _mentions(before + " " + after, surf, raw_names)
@@ -885,9 +1034,87 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
                 c["ambiguous_name"] = len(ids) > 1
         if c.get("metric") == {"n_files"}:
             c.update(_link_cues(text, m.start(), m.end(), fs))   # which link, which address: from the claim's own line
-        verdict, why = _judge(raw, v, c, fs)
+        verdict, why, hits, cand = _judge_full(raw, v, c, fs)
+        judged.append({"i": len(out), "a": m.start(), "b": m.end(), "raw": raw, "v": v, "c": c, "hits": hits, "cand": cand})
         out.append((m.start(), m.end(), raw, verdict, why))
+    _pairs(text, judged, out, fs)
     return sorted(out)
+
+
+def _same_lookup(anchors: list[dict]):
+    """A fact of the same call and the same pooled or per-edition scope as one of `anchors`, for its benchmark or none."""
+    keys = {(_call(x), _editions_of(x), x["ctx"].get("benchmark_id")) for x in anchors}
+    return lambda f: any((_call(f), _editions_of(f)) == k[:2] and f["ctx"].get("benchmark_id") in (None, k[2]) for k in keys)
+
+
+def _editions_of(f: dict) -> tuple | None:
+    """The editions a value covers: its own, or those its call pooled over (one edition pooled is that edition)."""
+    return (f["ctx"]["edition"],) if f["ctx"].get("edition") else f["ctx"].get("edition_set")   # the call's whole set: support is a claim-side match only
+
+
+def _pairs(text: str, judged: list[dict], out: list, fs: list[dict]) -> None:
+    """A ratio is one claim: "82 of 513 papers (16.0%)", "4,252편 중 82편(1.9%)". Its whole and its share are
+    re-judged inside the lookup the part connected to (or, for a wrong part, the lookup that has the part's
+    context), so a part, whole and share are never confirmed from three different calls. When the part connects
+    nowhere, a whole that only "of"/"중" calls a whole says nothing checkable."""
+    order = sorted(judged, key=lambda x: x["a"])
+    for k in range(len(order) - 1):
+        x, y = order[k], order[k + 1]
+        gap = text[x["b"]:y["a"]]
+        if re.fullmatch(r"\s*(?:/|of(?![A-Za-z]))\s*", gap):
+            part, whole = x, y
+        elif re.fullmatch(r"\s*편\s*중\s*", gap):
+            whole, part = x, y
+        else:
+            continue
+        last = max(part, whole, key=lambda z: z["a"])
+        share = order[k + 2] if k + 2 < len(order) else None
+        if share is not None and not (re.fullmatch(r"\s*(?:(?:analy[sz]ed|parsed|listed)\s+)?(?:papers?|편)?\s*(?:이|가)?\s*[(,:]?\s*(?:or\s+|즉\s*)?",
+                                                   text[last["b"]:share["a"]]) and re.match(r"\s*%", text[share["b"]:])):
+            share = None
+        _settle(part, whole, share, out, fs)
+
+
+def _settle(part: dict, whole: dict, share: dict | None, out: list, fs: list[dict]) -> None:
+    verdict = out[part["i"]][3]
+    anchors = part["hits"] if verdict == "ok" else part["cand"] if verdict == "no" else []
+    wm = set(whole["c"].get("metric") or ())
+    implied = "__whole__" in wm                        # only "of"/"중" says it is a whole: the part says of what
+    wm = {x for x in wm if not x.startswith("__")}
+    a, b, raw = out[whole["i"]][:3]
+    if not anchors:
+        if implied:
+            out[whole["i"]] = (a, b, raw, "na", "the part of this pair is not connected, so what its whole counts is not stated")
+        return
+    fams = {family(f["metric"]) for f in anchors}
+    if fams & {"usage", "adoption"}:
+        allowed = {"parsed_papers", "in_scope_parsed"} | (set(USAGE) if "adoption" in fams else set())
+    elif fams == {"denominator"}:
+        allowed = set()
+        for f in anchors:
+            allowed |= {"total_papers"} if f["metric"] == "arxiv_matched" else \
+                {"total_papers", "arxiv_matched", "parsed_papers"} if f["metric"] in ("parsed_papers", "in_scope_parsed") else set()
+    else:
+        allowed = None
+    metric = (wm & allowed if allowed is not None else wm) if implied else wm
+    if not metric:
+        out[whole["i"]] = (a, b, raw, "na", "a whole of this measure does not fit the part's measure")
+        return
+    if fams == {"denominator"} and all(f["ctx"].get("edition") for f in anchors):
+        eds = {f["ctx"]["edition"] for f in anchors}       # one edition's coverage is the same in every lookup
+        within = lambda f: f["ctx"].get("edition") in eds
+    else:
+        within = _same_lookup(anchors)
+    wv, why, hits, _ = _judge_full(raw, whole["v"], {**whole["c"], "metric": metric}, fs, within)
+    out[whole["i"]] = (a, b, raw, wv, why)
+    if share is None:
+        return
+    base = [f for f in anchors if wv != "ok" or any(_call(f) == _call(h) for h in hits)]
+    sa, sb, sraw = out[share["i"]][:3]
+    sv, swhy, _, _ = _judge_full(sraw, share["v"], {**share["c"], "metric": set(PERCENT)}, fs,
+                                 lambda f, inside=_same_lookup(base): inside(f) and f["ctx"].get("benchmark_id") is not None)
+    out[share["i"]] = (sa, sb, sraw, sv, swhy if sv != "na" or swhy != "no tool result has this context"
+                       else "the share is not in the lookup its count came from")
 
 
 def date_strings(log: TurnLog) -> set[str]:
