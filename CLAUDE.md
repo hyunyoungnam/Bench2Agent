@@ -1,6 +1,6 @@
 # Bench2Agent: product direction and verified state
 
-Updated 2026-10-21 after publication of 0.6.0 and data-20261021. Read with
+Updated 2026-10-22 after publication of 0.6.1 (data-20261021 unchanged). Read with
 [AGENTS.md](AGENTS.md) for working rules and checks. Current state, follow-up
 work and history are separated below; dated task logs and old instruction
 backups do not override this document. Public references:
@@ -50,12 +50,14 @@ cancellation and conditional saves across both interfaces.
 
 ## Current released state
 
-**Bench2Agent 0.6.0 was published on 2026-10-21** on
-[PyPI](https://pypi.org/project/bench2agent/0.6.0/) and
-[GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.0).
-The accompanying [data-20261021 release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261021)
-is public. Both tags point to release commit `60873ad`; the data tag is
-lightweight and the code tag annotated. Later main commits do not move them.
+**Bench2Agent 0.6.1 was published on 2026-10-22** on
+[PyPI](https://pypi.org/project/bench2agent/0.6.1/) and
+[GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.1)
+(annotated tag `v0.6.1` at `de08604`). It is a code-only update: stricter,
+clearer number checks on the same data. 0.6.0 (2026-10-21) introduced the
+browser workspace. Its [data-20261021 release](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261021)
+remains the default data. The data tag (lightweight) and `v0.6.0`
+(annotated) point to `60873ad`. Later main commits do not move tags.
 
 | Area | Verified state |
 |---|---|
@@ -64,7 +66,7 @@ lightweight and the code tag annotated. Later main commits do not move them.
 | Evidence panel | Benchmarks, Compare, Evidence and Data coverage are built from the answer's own tool log; resource links and paper-provided links are separate |
 | Six read-only stdio MCP tools | Coverage, usage, trends, introductions, adoption and evidence; one counting implementation in `BenchmarkStore` |
 | SQLite data | Direct database builder, schema 2, manifest format v2, content-based revision IDs; legacy v1 revisions/bundles remain supported |
-| Answer checks | Quotes matched to their source paper; figures checked against the turn's tool values and context; incomplete tool trails remain visibly unverifiable and do not enter later model context |
+| Answer checks | Quotes matched to their source paper. Each number is confirmed, contradicted (same context, another value) or unverified. A value must come from the same lookup, scope, edition set and, for a ratio, the denominator field the tool used. Saved 0.6.0 no-call marks read as unverified. Incomplete tool trails stay visibly unverifiable and do not enter later model context |
 | Usage shares | Percentages in answers and panels, one decimal; `<0.1%` for small positive shares; missing denominator means unavailable; `per_1000` retained for compatibility |
 | HTTP MCP and hosted visitor code | Optional `server` extra, deferred prototypes; no verified public multi-user operation or strong visitor isolation |
 | Platforms | Linux/WSL tested; macOS uses the implemented POSIX/default-browser paths but needs a full device check; native Windows unvalidated |
@@ -102,7 +104,20 @@ introduction sentence.
 
 ### Release verification
 
-CI passed on `60873ad`. Python 3.10/3.14 and server-extra checks each passed
+0.6.1: CI passed on `de08604` (Python 3.10 and 3.14). Local checks also
+passed: 290 Python tests (also with the server extra and on Python 3.10),
+Node 12 and the regression figures. A fresh wheel install outside the checkout
+passed the smoke test. Data installed from a local URL with its checksum, from
+the default URL, and over a home with older data. A saved conversation pinned
+to `8503cf1b1f7bee99` continued on that revision. Live questions through
+Claude Code and Codex worked. The browser page and keyed API were served from
+the installed wheel. Published 0.6.1 hashes (identical on GitHub and PyPI):
+wheel `e684e0adccefa4c613790e7d66f0f13eb406b8529f969ef968999c61d08088f1`,
+sdist `5717472b69ae2d408119e426b8125b6d0e13d34268bc77b8ec68985278cf6a53`.
+A fresh PyPI install downloaded the default data and returned the figures
+below.
+
+0.6.0: CI passed on `60873ad`. Python 3.10/3.14 and server-extra checks each passed
 257 tests; Node checks passed 10 tests. Published wheel/sdist checksums match
 the release assets and PyPI records:
 
@@ -244,29 +259,38 @@ active data; leave it off when the authorized task is candidate preparation.
 
 ## Follow-up work
 
-1. **Verifier context:** a correct anchored follow-up without a new tool call
-   can be marked contradicted; parenthesized values and sums across editions
-   can also fail to connect. Fix with focused regression cases, preserving
-   the distinction between contradictory values, absent evidence and
-   unsupported wording. Keep old per-1,000 conversations readable.
-2. **Platform checks:** actual macOS and native Windows testing. Existing
+1. **Paper key sentences (0.7.0):** for analyzed papers, three of the authors'
+   own sentences: why the work was needed, its key method, its result. They are
+   shown as three labeled highlights (not color alone) and called through a
+   read-only tool only when asked. Build them from a new extraction over the
+   current corpus. The August local-model `facts_*` files cover six editions
+   in an older layout and are not reused as data. A model selects the
+   sentences, code verifies each one verbatim against the source, and the
+   record keeps source, method and date. This is AI selection, not a human
+   summary. A paper without them is "not available", never empty. Needs a new
+   data release. The plan and pilot results live in ignored work notes.
+2. **Verifier context:** 0.6.1 binds values to lookup, scope, edition set and
+   denominator field. The checker reads a fixed cue list, so some correct
+   numbers stay unverified. Add new cases as fixed-log regressions with
+   their correct counterparts. Keep old per-1,000 conversations readable.
+3. **Platform checks:** actual macOS and native Windows testing. Existing
    browser automation and the owner's physical-keyboard check cover the
    tested setup, not every platform or screen reader.
-3. **Automatic update acceptance:** candidate validation tied to the exact
+4. **Automatic update acceptance:** candidate validation tied to the exact
    database/checksum, expected-change rules and failure behavior before
    unattended activation; then scheduling/recovery. Do not register a timer
    as a side effect of another task.
-4. **Retention/leases:** planned, not delivered. Keep recent N plus active,
+5. **Retention/leases:** planned, not delivered. Keep recent N plus active,
    referenced and in-use revisions; leases outside immutable directories
    carry host/PID/start identity, with one lock for leases and deletion.
-5. **Metadata/records:** benchmark, release and paper-specific setup levels;
+6. **Metadata/records:** benchmark, release and paper-specific setup levels;
    begin GSM8K/MATH-500 with pinned revision/config/split, complete files,
    schema/row/value/checksum validation and retrieval manifests. Existing
    resource links and file observations are not this end-to-end capability.
-6. **Configuration hygiene:** distinguish project MCP using the checkout
+7. **Configuration hygiene:** distinguish project MCP using the checkout
    (`.mcp.json`) from user MCP using an installed package. Preserve intentional
    development registrations; remove/switch only in the authorized scope.
-7. **Deferred deployments:** revisit isolation, provider conditions and
+8. **Deferred deployments:** revisit isolation, provider conditions and
    approvals only if public multi-user hosting is resumed. Exact evaluation
    execution adapters and the VS Code Marketplace are separate later work.
 
@@ -310,3 +334,5 @@ in ignored backup directories; only current policy belongs here.
   shared history, percentages and separate paper-provided links released.
 - 2026-10-21: owner requested synchronized CLAUDE.md/AGENTS.md updates and a
   commit/push; these files became shared public repository instructions.
+- 2026-10-22: 0.6.1 published at `de08604` after three Codex reviews of the
+  number checker; paper key sentences planned for 0.7.0 with a new extraction.

@@ -1,6 +1,6 @@
 # Working in Bench2Agent
 
-Updated 2026-10-21 after the 0.6.0 release. This is the working guide;
+Updated 2026-10-22 after the 0.6.1 release. This is the working guide;
 [CLAUDE.md](CLAUDE.md) records product direction, current state and follow-up
 work. Public references: [browser workspace](docs/browser-interface.md),
 [data design](docs/database-and-hosting.md), [counting rules](docs/benchmark-chat.md)
@@ -28,9 +28,10 @@ explains; code counts and verifies.
 
 ## Released state
 
-- **Code:** 0.6.0, published on GitHub and PyPI on 2026-10-21.
+- **Code:** 0.6.1, published on GitHub and PyPI on 2026-10-22 (tag `v0.6.1`
+  at `de08604`). It is a code-only update to 0.6.0 (stricter number checks).
 - **Data:** `data-20261021`, revision `1e1fa171722da693`, schema 2 and manifest
-  format v2. Both release tags point to commit `60873ad`.
+  format v2, unchanged since 0.6.0. The data tag and `v0.6.0` point to `60873ad`.
 - **Coverage:** 61 editions of 11 conferences, 88,172 analyzed paper-edition
   observations and 9,334 catalog entries. Individually reviewed resource
   locations cover 315 benchmarks (336 entries); 70 unique paper-provided links
@@ -112,23 +113,30 @@ the active data as part of an unrelated task.
 
 ## Follow-up work and boundaries
 
-1. Improve verifier context handling: a correct anchored follow-up without a
-   tool call may be marked contradicted; some parenthesized and summed values
-   cannot be connected. Keep mismatch, missing evidence and unsupported
-   wording separate; do not fix these by loosening identity/scope checks.
-2. Validate macOS and native Windows on actual devices. Browser keyboard
+1. Verifier: 0.6.1 keeps confirmed, contradicted and unverified apart and binds
+   a value to its lookup, scope, edition set and denominator field. The checker
+   still reads a fixed list of cues, so some correct numbers stay unverified.
+   Add each new case as a fixed-log regression test with its correct
+   counterpart; never fix a false mark by loosening identity or scope checks.
+2. Paper key sentences (planned for 0.7.0): for each analyzed paper, three of
+   the authors' own sentences (why the work was needed, its key method, its
+   result). They are selected by a model, verified verbatim against the
+   source and labeled as AI selection. They come from a new extraction, not
+   the August local-model files. They need a new data release and a tool
+   called only when asked.
+3. Validate macOS and native Windows on actual devices. Browser keyboard
    automation and the owner's physical-keyboard check are complete for the
    existing setup; they are not cross-platform validation.
-3. The incremental pipeline is implemented, but the OS timer remains
+4. The incremental pipeline is implemented, but the OS timer remains
    unregistered. Automatic pre-activation acceptance is still a follow-up;
    manual candidate comparisons used for releases are not that automatic gate.
-4. Retention and leases remain planned: preserve recent N, active, referenced
+5. Retention and leases remain planned: preserve recent N, active, referenced
    and in-use revisions, with leases outside immutable revision directories
    and one lock for reader registration and deletion decisions.
-5. Exact task/config/split/revision metadata and file-verified benchmark
+6. Exact task/config/split/revision metadata and file-verified benchmark
    record downloads remain separate future work (start with GSM8K/MATH-500).
    Existing resource links do not mean this work is complete.
-6. Keep MCP registration scopes explicit: a project config may use the checkout
+7. Keep MCP registration scopes explicit: a project config may use the checkout
    while a user config uses an installed package. Do not remove either or
    switch the connector silently. Restart an MCP client after upgrading its
    installed server.
