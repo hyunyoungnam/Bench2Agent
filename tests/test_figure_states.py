@@ -199,6 +199,27 @@ class Review061(unittest.TestCase):
         # a single-edition lookup's pooled value is that edition's
         self.assertEqual(self.verdicts("ICLR 2026에서 LIBERO로 평가한 논문은 82편입니다.", self.ICLR)["82"], "ok")
 
+    def test_a_total_over_named_editions_never_takes_one_members_value(self):
+        # Codex follow-up (2026-10-22): the two-edition subtotal is 350; each member's own value is not it
+        for n in (183, 167):
+            self.assertNotEqual(self.verdicts(f"ICLR 2026 and ICML 2026 together have {n} parsed papers.", self.USAGE)[str(n)], "ok")
+            self.assertNotEqual(self.verdicts(f"ICLR 2026과 ICML 2026을 합쳐 분석 논문은 {n}편입니다.", self.USAGE)[str(n)], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026, ICML 2026 and NeurIPS 2025 together have 513 parsed papers.", self.USAGE)["513"], "ok")
+        self.assertEqual(self.verdicts("ICLR 2026에서 분석한 논문은 183편입니다.", self.USAGE)["183"], "ok")      # one edition: its own value
+        out = self.verdicts("There are 183 analyzed papers in scope at ICLR 2026 and another 167 analyzed papers in scope at ICML 2026.", self.USAGE)
+        self.assertEqual(out["167"], "ok")                                      # ICLR 2026 there belongs to the 183
+
+    def test_a_share_is_confirmed_only_beside_its_own_denominator(self):
+        # 82/5,468 listed is 1.5%; the tool's 1.9% is of the 4,252 analyzed papers
+        out = self.verdicts("ICLR 2026 수록 논문 5468편 중 82편(1.9%)이 LIBERO로 평가했습니다.", self.ICLR)
+        self.assertEqual((out["5468"], out["82"], out["1.9"]), ("ok", "ok", "na"))
+        self.assertNotEqual(self.verdicts("ICLR 2026 수록 논문 5468편 중 82편(1.5%)이 LIBERO로 평가했습니다.", self.ICLR)["1.5"], "ok")
+        out = self.verdicts("ICLR 2026 분석 논문 4252편 중 82편(1.9%)이 LIBERO로 평가했습니다.", self.ICLR)
+        self.assertEqual((out["4252"], out["82"], out["1.9"]), ("ok", "ok", "ok"))
+        out = self.verdicts("LIBERO: 82 of 4252 analyzed papers (1.9%) in ICLR 2026.", self.ICLR)
+        self.assertEqual((out["82"], out["4252"], out["1.9"]), ("ok", "ok", "ok"))
+        self.assertEqual(self.verdicts("LIBERO: 82 of 5468 listed papers (1.9%) in ICLR 2026.", self.ICLR)["1.9"], "na")
+
     def test_an_edition_list_is_read_only_as_far_as_its_own_claim(self):
         out = self.verdicts("ICLR 2026과 ICML 2026에서 분석한 논문은 합쳐서 350편이고, NeurIPS 2025에서 분석한 논문은 163편입니다.", self.USAGE)
         self.assertEqual((out["163"], out["350"] != "ok"), ("ok", True))

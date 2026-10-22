@@ -719,11 +719,14 @@ def _editions_near(text: str, a: int, b: int, before: str, after: str) -> set:
     start = a - len(before)
     eds: set = set()
     own: set = set()
+    leading: set = set()
     for m in re.finditer(_ED_RX, before.lower()):
         ed = f"{m.group(1)}-{m.group(2)}"
         eds.add(ed)
         if not re.search(r"\d", re.sub(_ED_RX, " ", before.lower()[m.end():])):
             own.add(ed)                            # no other number between this edition and this number
+        if not re.search(r"\d", re.sub(_ED_RX, " ", before.lower()[:m.start()])):
+            leading.add(ed)                        # no other number before it in the clause
     if own and own != eds:
         eds = set(own)                             # "ICLR 2026 has 183 …, ICML 2026 has 167": ICLR 2026 is the 183's
     if eds and re.match(r"\s*" + _ED_RX, before.lower()):
@@ -741,6 +744,9 @@ def _editions_near(text: str, a: int, b: int, before: str, after: str) -> set:
         if not re.search(r"\d", re.sub(_ED_RX, " ", low[end:min(clause_end, sentence_end)])):
             after_eds |= run                        # "513 parsed papers across ICLR 2026, ICML 2026 and NeurIPS 2025."
         pos = end
+    if after_eds:
+        # "12 at ICLR 2026 and another 70 at ICML 2026": the 70 has its own edition; ICLR 2026 follows the 12
+        eds = {e for e in eds if e in leading}
     return eds | after_eds
 
 
@@ -822,7 +828,8 @@ def _satisfies(f: dict, c: dict) -> bool:
     ids = c.get("benchmark_ids")
     if ids is not None and ctx.get("benchmark_id") not in ids:
         return False                                   # a named benchmark: its own values only, never a scope-wide one
-    if "edition" in c and ctx.get("edition") not in c["edition"]:
+    if "edition" in c and (ctx.get("edition") not in c["edition"] or (len(c["edition"]) > 1 and ctx.get("edition") is not None)):
+        # several named editions: only a value pooled over exactly those, never one member's own value
         if not (ctx.get("edition") is None and any(ctx.get(k) and set(ctx[k]) == c["edition"] for k in ("edition_set", "edition_support"))):
             return False                               # a pooled value fits only the very editions it was pooled over
     if "scope" in c and ctx.get("scope") != c["scope"]:
@@ -1075,6 +1082,9 @@ def _pairs(text: str, judged: list[dict], out: list, fs: list[dict]) -> None:
         _settle(part, whole, share, out, fs)
 
 
+_SHARE_OF = {"parsed_papers", "in_scope_parsed"}          # what share_percent is computed over
+
+
 def _settle(part: dict, whole: dict, share: dict | None, out: list, fs: list[dict]) -> None:
     verdict = out[part["i"]][3]
     anchors = part["hits"] if verdict == "ok" else part["cand"] if verdict == "no" else []
@@ -1109,8 +1119,13 @@ def _settle(part: dict, whole: dict, share: dict | None, out: list, fs: list[dic
     out[whole["i"]] = (a, b, raw, wv, why)
     if share is None:
         return
-    base = [f for f in anchors if wv != "ok" or any(_call(f) == _call(h) for h in hits)]
     sa, sb, sraw = out[share["i"]][:3]
+    # a share is of the analyzed papers: its whole must be that field, not the listed or matched total of the same lookup
+    measures = {h["metric"] for h in hits} if wv == "ok" else metric
+    if not measures & _SHARE_OF:
+        out[share["i"]] = (sa, sb, sraw, "na", "the share is of analyzed papers, and this pair's whole is another measure")
+        return
+    base = [f for f in anchors if wv != "ok" or any(_call(f) == _call(h) for h in hits if h["metric"] in _SHARE_OF)]
     sv, swhy, _, _ = _judge_full(sraw, share["v"], {**share["c"], "metric": set(PERCENT)}, fs,
                                  lambda f, inside=_same_lookup(base): inside(f) and f["ctx"].get("benchmark_id") is not None)
     out[share["i"]] = (sa, sb, sraw, sv, swhy if sv != "na" or swhy != "no tool result has this context"
