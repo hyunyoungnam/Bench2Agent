@@ -36,7 +36,9 @@ alternative. See [the terminal guide](terminal.md) and
   lookup and the same denominator field. The installed data and one query's
   scope are kept apart. A stated measure ("listed", "analyzed", "matched")
   decides what a whole counts; without one, a total stays unverified.
-  `benchmark_scope` also returns explicit sums over the editions it lists.
+  A table cell such as "4 / 0 / 0" under "other / same / undetermined" is read
+  by position. `benchmark_scope` also returns explicit sums over the editions
+  it lists.
 - **Saved answers.** Answers saved by 0.6.0 with "no tool call" numbers or
   unmatched dates now read as unverified in the terminal, the browser and its
   count of differing numbers. The saved files are not changed.
