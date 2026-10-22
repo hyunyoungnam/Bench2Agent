@@ -95,7 +95,10 @@ The terminal uses the same tools and checks; `/sources` opens the evidence.
 Quotes are matched to their source paper, and numbers are checked against the
 same turn's tool results. A dotted underline in the browser, or an
 `[unverified figure]` in the terminal, means the checker could not connect a
-number to the evidence; it does not necessarily mean the number is wrong.
+number to the evidence; it does not necessarily mean the number is wrong. A
+number that differs from a tool value in the same context is marked as such
+(`[differs from tool result]`, red in the browser); hover or focus a marked
+number in the browser to see why.
 
 Verified resource links and **links printed in a paper** are shown separately.
 The latter do not establish a benchmark connection. Resource observations say
@@ -220,8 +223,9 @@ The 2026-10-21 bundle (data format v2) installs with Bench2Agent 0.5.0 or later
 
 ## Updates
 
-Version **0.6.0** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.6.0/)
-and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.0).
+Version **0.6.1** is distributed on [PyPI](https://pypi.org/project/bench2agent/0.6.1/)
+and [GitHub](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.1). It uses the same
+2026-10-21 data as 0.6.0, so no new data download is needed when upgrading from 0.6.0.
 Code and research data update separately:
 
 1. Update the code with your installation method (rerun its install command).

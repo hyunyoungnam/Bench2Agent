@@ -344,7 +344,9 @@ bench2agent ask 'And which are new?' --resume CHAT_ID --json
 ```
 
 Ctrl+C cancels a request without saving an unfinished turn. Quotes that fail
-matching and figures absent from tool results are marked in the answer.
+matching are marked in the answer. A number that differs from a tool value
+in the same context reads `[differs from tool result]`; one the checker cannot
+connect to this turn's tool results reads `[unverified figure]`.
 A matched quote or number does not prove the surrounding interpretation.
 
 ## Use within Codex or Claude Code

@@ -1,16 +1,15 @@
 # Bench2Agent releases
 
-Code and research data are distributed separately. Version **0.6.0** adds a
-local browser workspace (`bench2agent --web`) over the same conversation
-engine, data and checks as the terminal, reports usage shares as percentages
-of the analyzed papers, and shows the links an introducing paper prints even
-when they are not confirmed as the benchmark's resource. Its data release adds
-reviewed resource links for 226 more benchmarks.
+Code and research data are distributed separately. Version **0.6.1** is a
+code-only update to 0.6.0: it makes the number checks stricter and clearer
+and uses the same data release (data-20261021). Version 0.6.0 added the local
+browser workspace (`bench2agent --web`), usage shares as percentages and the
+links an introducing paper prints.
 
 | Artifact | Contents |
 |---|---|
-| [PyPI 0.6.0](https://pypi.org/project/bench2agent/0.6.0/) | Standard-library terminal, browser workspace and stdio MCP; optional `server` dependencies |
-| [GitHub v0.6.0](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.0) | Identical wheel and source archive, checksums and release notes |
+| [PyPI 0.6.1](https://pypi.org/project/bench2agent/0.6.1/) | Standard-library terminal, browser workspace and stdio MCP; optional `server` dependencies |
+| [GitHub v0.6.1](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/v0.6.1) | Identical wheel and source archive, checksums and release notes |
 | [Data 2026-10-21](https://github.com/hyunyoungnam/Bench2Agent/releases/tag/data-20261021) | SQLite database and manifest (data format v2), archive checksum and per-edition coverage CSV |
 
 Install with `python -m pip install --upgrade bench2agent`, then `bench2agent`
@@ -19,6 +18,34 @@ CLI must be installed and signed in separately. First launch downloads data
 automatically. Both logins are supported; API keys are an explicit
 alternative. See [the terminal guide](terminal.md) and
 [the browser workspace](browser-interface.md).
+
+## What changed in 0.6.1
+
+- **Three number states, kept apart.** A number is *confirmed* when a tool
+  value in the same context matches it. It is *differs from the tool result*
+  when that context holds another value. It is *unverified* when the context
+  cannot be fixed or no tool call supports it. A number restated without a
+  tool call in its turn, and a date not found in the tool results, are
+  unverified, never contradicted. Unverified numbers are counted, not left
+  out. The browser shows each marked number's reason on hover and keyboard
+  focus.
+- **Same lookup, same scope.** A value pooled over editions connects only
+  when the answer names exactly those editions; one edition's own value never
+  stands in for a total. A ratio such as "82 of 513 papers (16.0%)" is judged
+  as one claim: its count, denominator and share must come from the same
+  lookup and the same denominator field. The installed data and one query's
+  scope are kept apart. A stated measure ("listed", "analyzed", "matched")
+  decides what a whole counts; without one, a total stays unverified.
+  `benchmark_scope` also returns explicit sums over the editions it lists.
+- **Saved answers.** Answers saved by 0.6.0 with "no tool call" numbers or
+  unmatched dates now read as unverified in the terminal, the browser and its
+  count of differing numbers. The saved files are not changed.
+- **Browser example and docs.** A new example question on the start screen.
+  The docs now say which code and data a Bench2Agent MCP server uses, and add
+  a device checklist for macOS and native Windows (not yet checked).
+
+0.6.1 uses data-20261021 unchanged; `bench2agent data install` is only needed
+on a computer without that data.
 
 ## What changed in 0.6.0
 
@@ -99,9 +126,10 @@ The browser workspace was checked with keyboard use and at desktop and narrow
 widths. HTTP MCP and the earlier web host are optional development
 prototypes; hosted sign-in, visitor isolation and public operation are not
 completed. A number the checker cannot connect to a tool value is marked
-unverified, which is not a finding that it is wrong; in some parenthesized
-contexts and in totals summed over several editions it can fail to connect a
-correct number or judge it contradicted.
+unverified, which is not a finding that it is wrong. The checker reads a fixed
+list of cues near each number, so some correct numbers stay unverified. A
+confirmed number matches a tool value in context; this does not guarantee
+that the surrounding sentence interprets it correctly.
 
 ## Release checklist
 
