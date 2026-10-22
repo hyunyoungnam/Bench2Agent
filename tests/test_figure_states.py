@@ -335,6 +335,23 @@ class ShareDenominators(unittest.TestCase):
         self.assertNotIn("ok", (out["4252"], out["14.2"]))
 
 
+class GroupColumns(unittest.TestCase):
+    # 0.6.1 release check (2026-10-22, Claude Code, CoRL 2025): "4 / 0 / 0" under "other / same / undetermined" was read
+    # as three undetermined counts and marked as differing; the tool said 4 others, 0 self, 0 undetermined
+    ADOPTION = ("benchmark_adoption", {"benchmark": "libero", "edition": "corl-2025"}, {"id": "libero", "name": "LIBERO", "adoption": {
+        "evaluates_on": {"others": 13, "self": 0, "undetermined": 0}, "trains_on": {"others": 4, "self": 1, "undetermined": 0}}})
+
+    def verdicts(self, text):
+        lg = log(self.ADOPTION)
+        return [(r[2], r[3]) for r in figures.scan_connected(text, figures.facts(lg), figures.date_strings(lg), set())]
+
+    def test_a_cell_of_slashed_counts_takes_each_group_by_position(self):
+        table = "| Benchmark | Papers training on it: other / same / undetermined |\n|---|---|\n| LIBERO | {} |\n"
+        self.assertEqual(self.verdicts(table.format("4 / 1 / 0")), [("4", "ok"), ("1", "ok"), ("0", "ok")])
+        self.assertEqual(self.verdicts(table.format("4 / 0 / 0")), [("4", "ok"), ("0", "no"), ("0", "ok")])   # self is 1
+        self.assertNotIn("ok", [v for _, v in self.verdicts(table.format("4 or 1"))])                          # does not line up
+
+
 class SavedBeforeTheFix(unittest.TestCase):
     """Turns saved by 0.6.0 stored a number with no tool call, and a date, as "no". They read as unverified in the
     terminal, the browser and its count of differing numbers; the saved file is not changed."""

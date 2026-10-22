@@ -790,6 +790,21 @@ def _scope_cue(words: str) -> str | None:
     return max(found)[1] if found else None
 
 
+_HEADER_GROUPS = [(r"(?<![A-Za-z])others?(?![A-Za-z])|타\s*저자|다른\s*저자", "others"),
+                  (r"(?<![A-Za-z])(?:self|same)(?![A-Za-z])|자기|자체\s*저자|같은\s*저자", "self"),
+                  (r"(?<![A-Za-z])(?:undetermined|unknown)(?![A-Za-z])|미확정|불명", "undetermined")]
+
+
+def _header_groups(head: str) -> list[str]:
+    """The author groups a column header names, in the order it names them ("other / same / undetermined")."""
+    found = sorted((m.start(), g) for rx, g in _HEADER_GROUPS for m in re.finditer(rx, head, re.I))
+    out: list[str] = []
+    for _, g in found:
+        if g not in out:
+            out.append(g)
+    return out
+
+
 def _tables(text: str) -> list[dict]:
     """Markdown tables whose header names an identity column (benchmark or edition): per data
     row its span, the identity cell, and each cell's span with its column header."""
@@ -1013,6 +1028,17 @@ def scan_connected(text: str, fs: list[dict], date_strings: set[str], skip: set)
             elif re.match(r"\s*(?:unresolved|unattributed|미귀속|미해소)", words, re.I):
                 c.pop("group", None)
                 c["metric"] = {"unattributed_using_papers"} | UNATTRIBUTED_OBSERVATIONS
+            elif len(groups := _header_groups(head)) > 1:
+                # "other / same / undetermined" over "4 / 0 / 0": a header naming several groups gives each number the
+                # group at its position, never the last one it names; a cell that does not line up gives none
+                cell_text = cell[1][2]
+                nums = [x for x in _NUM.finditer(cell_text) if not _identifier_number(cell_text, x)]
+                at = next((j for j, x in enumerate(nums) if cell[1][0] + x.start() == m.start()), None)
+                if len(nums) == len(groups) and re.fullmatch(r"\s*\d[\d,]*(?:\s*/\s*\d[\d,]*)+\s*", cell_text) and at is not None:
+                    c["group"] = groups[at]
+                else:
+                    out.append((m.start(), m.end(), raw, "na", "the column names several author groups; which one this number is is not stated"))
+                    continue
             if "group" in c:
                 c["metric"] = (c.get("metric", ADOPTION) & ADOPTION) or set(ADOPTION)
             if row["edition"]:
